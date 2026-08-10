@@ -118,3 +118,22 @@ herdr agent start --help
 git --version
 grep -n 'pi-herdr' ~/.pi/agent/settings.json ~/.pi/agent/npm/package.json
 ```
+
+## Codex overlay
+
+The existing repository root remains the Pi skill unchanged. Codex uses the
+additive entrypoint under `codex/`; it loads the same workflow and replaces only
+Pi-specific control and worker-launch details.
+
+Install the Codex entrypoint in a project-visible Agent Skills directory:
+
+```bash
+ln -s /home/duongvm/projects/herdr-orchestrator/codex \
+  <project>/.agents/skills/herdr-orchestrator
+```
+
+Invoke it explicitly as `$herdr-orchestrator`. The overlay reuses route
+selection from `workers.toml`, resolves Codex models from `codex/profiles.toml`,
+controls Herdr through its CLI wrappers, and always launches Codex workers with
+`multi_agent` disabled. Root's own Codex feature configuration remains
+user-owned.
