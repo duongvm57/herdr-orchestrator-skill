@@ -1,0 +1,30 @@
+version = 1
+
+# Replace these model IDs when the available catalog changes.
+[profiles.reasoner]
+kind = "pi"
+model = "openai-codex/gpt-5.6-sol"
+
+[profiles.implementer]
+kind = "pi"
+model = "openai-codex/gpt-5.6-luna"
+
+[profiles.fast]
+kind = "pi"
+model = "opencode-go/deepseek-v4-flash"
+
+[selection]
+default = "implement.bounded"
+
+# Select another route only when its `when` condition explicitly matches.
+[routes]
+"plan.standard" = { profile = "reasoner", effort = "high", when = "planning or architecture sequencing without implementation" }
+"plan.critical" = { profile = "reasoner", effort = "max", when = "high-consequence or unusually ambiguous planning" }
+"review.standard" = { profile = "reasoner", effort = "xhigh", when = "independent correctness, security, architecture, or spec review" }
+"inspect.standard" = { profile = "reasoner", effort = "high", when = "read-only diagnosis or consequential code inspection" }
+"implement.bounded" = { profile = "fast", effort = "high", when = "default coding route: bounded change, known scope or pattern, focused validation" }
+"implement.standard" = { profile = "implementer", effort = "medium", when = "substantial cross-file implementation or nontrivial integration" }
+"implement.hard" = { profile = "implementer", effort = "high", when = "difficult context-heavy implementation" }
+"implement.critical" = { profile = "implementer", effort = "max", when = "high-consequence implementation requiring maximum reasoning" }
+"bulk.mechanical" = { profile = "fast", effort = "off", when = "high-volume mechanical edits with no judgment" }
+"bulk.judgment" = { profile = "fast", effort = "high", when = "high-volume edits needing local judgment" }
