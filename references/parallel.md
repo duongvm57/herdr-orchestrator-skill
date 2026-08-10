@@ -34,10 +34,9 @@ removes worktrees.
 ## Dispatch and decisions
 
 For up to four synchronous agents, keep Root and workers in the current tab.
-Create each pane with `herdr_layout` action `pane_split`, set `cwd` to its
-checkout, and omit `direction` so Herdr chooses from the geometry. Use dedicated
-tabs for detached or long-running units, larger groups, or an explicit user
-layout request.
+Create each pane with the parent skill's balanced `pane_split` and set `cwd` to
+its checkout. Use dedicated tabs for detached or long-running units, larger
+groups, or an explicit user layout request.
 
 Give each unit a named session and a context pack containing the accepted base,
 branch and worktree, ownership, resources, dependencies, relevant peers, and

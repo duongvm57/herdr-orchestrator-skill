@@ -66,12 +66,15 @@ path is Git-ignored, then pass its path and SHA-256. Use `.pi/herdr/`, not
 Preparation is complete when one route, checkout, outcome, and context pack are
 fixed.
 
+A **balanced split** targets the largest pane in the current tab, breaking ties
+with the newest pane, and omits `direction` so Herdr uses source geometry.
+
 ## Open the session
 
 1. Name it `w-<unit>-continue`, lowercase and at most 32 characters.
 2. For synchronous work, keep Root and the continuation in the current tab.
-   Split Root's pane with `herdr_layout` action `pane_split`, set `cwd` to the
-   selected checkout, and omit `direction` so Herdr chooses from the geometry.
+   Create the continuation pane with a balanced `pane_split` and set `cwd` to
+   the selected checkout.
 3. Use a dedicated unfocused tab only for detached or long-running work, or an
    explicit user layout request.
 4. Start the agent in the prepared pane with the adapter's explicit arguments.

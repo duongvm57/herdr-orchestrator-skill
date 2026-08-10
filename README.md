@@ -24,18 +24,20 @@ references contain only host-specific control and launch behavior.
 ## Install
 
 Install with the open [`skills` CLI](https://github.com/vercel-labs/skills).
-After this repository is published, replace `<owner>` with its GitHub owner:
 
 ```bash
-npx skills add <owner>/herdr-orchestrator --agent pi --agent codex
+npx skills add duongvm57/herdr-orchestrator --agent pi --agent codex
 ```
 
 Install globally with `--global`:
 
 ```bash
-npx skills add <owner>/herdr-orchestrator \
+npx skills add duongvm57/herdr-orchestrator \
   --agent pi --agent codex --global
 ```
+
+`npx` downloads and runs the `skills` CLI; this skill itself is installed from
+GitHub. It does not require a `package.json` or a separate npm publication.
 
 For local development, run the command from a consuming project and pass the
 skill repository as a local source:
