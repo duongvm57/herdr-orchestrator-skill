@@ -1,6 +1,0 @@
-interface:
-  display_name: "Herdr Orchestrator"
-  short_description: "Continue work through a Herdr Codex worker"
-  default_prompt: "Use $herdr-orchestrator to continue the next work unit through Herdr."
-policy:
-  allow_implicit_invocation: false

@@ -1,7 +1,6 @@
 ---
 name: herdr-orchestrator
-description: Continue one work unit in one named Herdr session.
-disable-model-invocation: true
+description: Continue one repository work unit in one named Herdr session. Use when coordinating a continuation worker through Herdr from Pi or Codex Root.
 ---
 
 # Herdr continuation
@@ -28,6 +27,21 @@ default WIP.
 **Checkout.** Use the current checkout. Create a worktree only for the parallel
 branch, an explicit user request, or an already-selected checkout.
 
+**Runtime branch.** Select one branch before preparation:
+
+- **Pi Root:** when typed `herdr_layout`, `herdr_pane`, and `herdr_agent` tools
+  are available, read [`references/pi.md`](references/pi.md) and resolve both
+  routes and profiles from [`workers.toml`](workers.toml).
+- **Codex Root:** when Codex runs inside a Herdr-managed pane with the `herdr`
+  CLI available, read [`references/codex.md`](references/codex.md). Resolve
+  selection and routes from `workers.toml`, profiles and effort aliases from
+  [`workers.codex.toml`](workers.codex.toml). The Codex adapter replaces every
+  typed Herdr operation named below and in the parallel branch with its CLI
+  mapping.
+
+Stop when neither branch qualifies. Runtime selection is complete when one
+adapter, one route table, and one host profile table are fixed.
+
 ## Prepare the continuation
 
 1. Call `herdr_agent` with `action: "list"`. Reuse the live continuation for
@@ -39,9 +53,9 @@ branch, an explicit user request, or an already-selected checkout.
 3. Read [`workers.toml`](workers.toml). Start with `selection.default`; select
    another route only when its `when` condition matches explicitly. Resolve the
    profile, runtime, model, and effort from that route.
-4. Read the selected runtime adapter. For Pi, read
-   [`references/pi.md`](references/pi.md). A runtime without an accepted adapter
-   requires a user decision; CLI defaults are not authority.
+4. Read the selected runtime adapter: Pi uses `references/pi.md`; Codex uses
+   `references/codex.md`. A runtime without an accepted adapter requires a user
+   decision; CLI defaults are not authority.
 5. Build one compact context pack with:
    - outcome and current state;
    - primary authority paths;

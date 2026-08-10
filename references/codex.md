@@ -1,6 +1,6 @@
 # Codex Root and worker adapter
 
-The parent [`../../SKILL.md`](../../SKILL.md) owns orchestration. This adapter
+The parent [`../SKILL.md`](../SKILL.md) owns orchestration. This adapter
 maps its Pi-specific control calls to Herdr CLI commands and fixes Codex worker
 launch arguments.
 
