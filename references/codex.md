@@ -1,8 +1,8 @@
 # Codex Root and worker adapter
 
-The parent [`../SKILL.md`](../SKILL.md) owns orchestration. This adapter
-maps its Pi-specific control calls to Herdr CLI commands and fixes Codex worker
-launch arguments.
+The parent [`../SKILL.md`](../SKILL.md) owns orchestration. This adapter maps
+every typed Herdr operation in the parent and its parallel branch to a Herdr
+CLI command and fixes Codex worker launch arguments.
 
 ## Qualify Root
 
@@ -50,7 +50,12 @@ has recorded every created topology ID.
 
 ## Launch a Codex worker
 
-Resolve the selected profile and route before start:
+Read [`../workers.codex.toml`](../workers.codex.toml). Resolve `route.profile`
+from its `profiles` table and translate `route.effort` through
+`effort_aliases`, falling back to the route value. Resolution is complete when
+the worker kind, model, and Codex effort are fixed.
+
+Build the launch arguments before start:
 
 ```text
 workerEffort = effort_aliases[route.effort] ?? route.effort

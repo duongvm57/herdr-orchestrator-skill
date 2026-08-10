@@ -6,6 +6,10 @@ this adapter owns Pi launch and optional direct transport.
 
 ## Launch arguments
 
+Read [`../workers.pi.toml`](../workers.pi.toml). Resolve `route.profile` from
+its `profiles` table and use `route.effort` as Pi's thinking level. Resolution
+is complete when the worker kind, model, and effort are fixed.
+
 Use the Herdr session name as Pi's display name:
 
 ```text
