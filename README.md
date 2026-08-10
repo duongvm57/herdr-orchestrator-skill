@@ -15,10 +15,10 @@ activation:
 
 | Root | Herdr control | Worker profiles | Worker isolation |
 | --- | --- | --- | --- |
-| Pi | Typed `herdr_layout`, `herdr_pane`, and `herdr_agent` tools | `workers.toml` | Excludes Herdr, interactive-question, and installed agent-spawn tools |
+| Pi | Typed `herdr_layout`, `herdr_pane`, and `herdr_agent` tools | `workers.pi.toml` | Excludes Herdr, interactive-question, and installed agent-spawn tools |
 | Codex | Herdr CLI wrappers | `workers.codex.toml` | Launches every worker with `--disable multi_agent` |
 
-Route names and selection conditions remain shared in `workers.toml`. Runtime
+Route names and selection conditions remain shared in `routes.toml`. Runtime
 references contain only host-specific control and launch behavior.
 
 ## Install
@@ -108,15 +108,15 @@ WIP-one.
 
 ## Routing
 
-`workers.toml` owns:
+`routes.toml` owns:
 
 - the default route;
-- route names and selection conditions; and
-- Pi profiles.
+- route names and selection conditions.
 
-`workers.codex.toml` owns Codex profiles and effort aliases. Codex reuses every
-route from `workers.toml`; only profile resolution changes. The current alias
-maps the Pi effort name `off` to Codex `none`.
+`workers.pi.toml` owns Pi profiles. `workers.codex.toml` owns Codex profiles and
+effort aliases. Both runtimes reuse every route from `routes.toml`; only profile
+resolution changes. The current alias maps the shared effort name `off` to
+Codex `none`.
 
 Every Codex worker launch must prove its model, effort, checkout, and
 `--disable multi_agent` arguments before Root delivers work. This worker-level
@@ -145,7 +145,8 @@ evidence agree.
 .
 ├── SKILL.md                 Portable workflow and runtime selection
 ├── agents/openai.yaml       Codex interface and invocation policy
-├── workers.toml             Shared routes and Pi profiles
+├── routes.toml              Shared routes and selection conditions
+├── workers.pi.toml          Pi profiles
 ├── workers.codex.toml       Codex profiles and effort aliases
 └── references/
     ├── pi.md                Pi control and worker adapter
@@ -173,7 +174,7 @@ skills-ref validate .
 Check configuration and Markdown integrity:
 
 ```bash
-python3 -c 'import tomllib; tomllib.load(open("workers.toml", "rb")); tomllib.load(open("workers.codex.toml", "rb"))'
+python3 -c 'import tomllib; [tomllib.load(open(path, "rb")) for path in ("routes.toml", "workers.pi.toml", "workers.codex.toml")]'
 git diff --check
 ```
 

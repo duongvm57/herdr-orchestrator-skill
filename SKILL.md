@@ -30,11 +30,12 @@ branch, an explicit user request, or an already-selected checkout.
 **Runtime branch.** Select one branch before preparation:
 
 - **Pi Root:** when typed `herdr_layout`, `herdr_pane`, and `herdr_agent` tools
-  are available, read [`references/pi.md`](references/pi.md) and resolve both
-  routes and profiles from [`workers.toml`](workers.toml).
+  are available, read [`references/pi.md`](references/pi.md). Resolve routes
+  from [`routes.toml`](routes.toml) and profiles from
+  [`workers.pi.toml`](workers.pi.toml).
 - **Codex Root:** when Codex runs inside a Herdr-managed pane with the `herdr`
   CLI available, read [`references/codex.md`](references/codex.md). Resolve
-  selection and routes from `workers.toml`, profiles and effort aliases from
+  selection and routes from `routes.toml`, profiles and effort aliases from
   [`workers.codex.toml`](workers.codex.toml). The Codex adapter replaces every
   typed Herdr operation named below and in the parallel branch with its CLI
   mapping.
@@ -50,7 +51,7 @@ adapter, one route table, and one host profile table are fixed.
 2. Select one unblocked next outcome from repository authority and current
    state. Fix its edit scope, constraints, open decisions, and acceptance
    evidence.
-3. Read [`workers.toml`](workers.toml). Start with `selection.default`; select
+3. Read [`routes.toml`](routes.toml). Start with `selection.default`; select
    another route only when its `when` condition matches explicitly. Resolve the
    profile, runtime, model, and effort from that route.
 4. Read the selected runtime adapter: Pi uses `references/pi.md`; Codex uses

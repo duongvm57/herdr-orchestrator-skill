@@ -1,18 +1,5 @@
 version = 1
 
-# Replace these model IDs when the available catalog changes.
-[profiles.reasoner]
-kind = "pi"
-model = "openai-codex/gpt-5.6-sol"
-
-[profiles.implementer]
-kind = "pi"
-model = "openai-codex/gpt-5.6-luna"
-
-[profiles.fast]
-kind = "pi"
-model = "opencode-go/deepseek-v4-flash"
-
 [selection]
 default = "implement.bounded"
 
