@@ -1,6 +1,6 @@
 interface:
   display_name: "Herdr Orchestrator"
-  short_description: "Coordinate work through Herdr worker sessions"
-  default_prompt: "Use $herdr-orchestrator to coordinate this work through named Herdr worker sessions."
+  short_description: "Launch governed project teams through Herdr"
+  default_prompt: "Use $herdr-orchestrator to launch a fresh Project Lead for this repository task."
 policy:
   allow_implicit_invocation: false

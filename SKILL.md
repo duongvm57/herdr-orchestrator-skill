@@ -1,136 +1,76 @@
 ---
 name: herdr-orchestrator
-description: Continue one repository work unit in one named Herdr session. Use when coordinating a continuation worker through Herdr from Pi or Codex Root.
+description: Set up or launch a Human-led, Lead-and-Peer project workflow through Herdr.
 ---
 
-# Herdr continuation
+# Herdr Orchestrator
 
-## Contract
+Run only when the current user message explicitly invokes `$herdr-orchestrator`.
+Otherwise do not inspect, create, prompt, focus, wait for, or close Herdr agents.
 
-**Root** is the current session. The **continuation** performs one next unit of
-work. Root owns Herdr layout, user decisions, and acceptance.
+The invoking session is the **Launcher**, never the Project Lead. For a project
+task, create a fresh Lead, deliver the Human task and a role-specific context
+pack, then focus the Human on that Lead. Herdr is the only agent control plane.
+Spawned agents receive their instructions inline and never invoke this skill.
 
-Default WIP is one:
+## Modes and required loads
 
-```text
-active continuation sessions = 1
-active writers = 1
-```
+Read each listed file completely before acting. Do not load other role manuals
+unless a listed file explicitly requires their contents in a context pack.
 
-Open or resume exactly one continuation in the current checkout. Reuse it for
-questions and corrections until Root accepts or abandons the unit.
+| Mode | Required files | Trigger |
+| --- | --- | --- |
+| Setup or update | `references/setup.md`, `references/workspace-protocol.md`, `assets/config.toml`, `assets/workspace-protocol.md` | The Human asks to create, repair, or update project orchestration files |
+| Launch | `references/launcher.md` | The Human gives a project task to orchestrate |
+| Lead pack | `references/roles/lead.md`, `references/topology.md`, `references/anti-patterns.md`, `references/assignments-and-evidence.md`, `references/roles/peer.md`, project config, full project Workspace Protocol, Human task | Before starting every Lead |
+| Peer pack | `references/roles/peer.md` plus one concrete disposition/assignment and only the relevant protocol constraints extracted by Lead | Before starting every Peer |
+| Supervisor pack | `references/roles/supervisor.md`, `references/anti-patterns.md`, exact Lead binding, full project Workspace Protocol, evidence/notebook contract | Only after the Human explicitly requests a Supervisor |
+| Maintenance audit | `references/orchestration-invariant-coverage.md` | Editing this package or auditing invariant ownership and behavioral coverage |
 
-**Parallel branch.** When the user explicitly requests concurrent work, read
-[`references/parallel.md`](references/parallel.md). That branch alone may raise
-default WIP.
+`README.md` is for humans, not a runtime instruction source.
 
-**Checkout.** Use the current checkout. Create a worktree only for the parallel
-branch, an explicit user request, or an already-selected checkout.
+## Invariants
 
-**Runtime adapter.** Select and read one adapter before preparation:
+Every agent context has three layers in this order:
 
-- **Pi Root:** when typed `herdr_layout`, `herdr_pane`, and `herdr_agent` tools
-  are available, read [`references/pi.md`](references/pi.md) for Herdr control,
-  transport, and Pi worker launch.
-- **Codex Root:** when Root runs inside a Herdr-managed pane and the `herdr` CLI
-  is available, read [`references/codex.md`](references/codex.md) for
-  qualification, CLI control, and Codex worker launch.
+1. **Role Profile** — durable identity and authority.
+2. **Workspace Protocol** — repository tactics; only Lead and an explicitly
+   requested Supervisor receive it in full.
+3. **Assignment** — one run's objective, scope, authority, verification, and
+   handoff.
 
-Stop when neither branch qualifies. Runtime selection is complete when one
-adapter is fixed.
+The Lead owns project framing, topology, dependencies, integration,
+verification, and the project verdict. The Lead creates Peers. A Supervisor is
+fresh and independent, observes governance, and exists only on explicit Human
+request. Reviewer, Supervisor, Architect council seats, and other independent
+judgment sessions are fresh rather than forks. Corrections return to the same
+Engineer session.
 
-## Prepare the continuation
+Treat `idle`, `done`, successful exit, and passing tests as attention signals.
+Acceptance requires an exact stable candidate, inspected evidence, the required
+independent review, and a decision by the role with authority. Human-only
+product, cost, irreversible, external-effect, publication, and protocol-change
+decisions remain with the Human.
 
-1. Call `herdr_agent` with `action: "list"`. Reuse the live continuation for
-   this repository. If several candidates exist, ask the user which one to
-   resume.
-2. Select one unblocked next outcome from repository authority and current
-   state. Fix its edit scope, constraints, open decisions, and acceptance
-   evidence.
-3. Read [`routes.toml`](routes.toml). Start with `selection.default`; select
-   another route only when its `when` condition matches explicitly. Use the
-   selected adapter to resolve the runtime profile, model, and effort. CLI
-   defaults are not authority.
-4. Build one compact context pack with:
-   - outcome and current state;
-   - primary authority paths;
-   - accepted decisions and open questions;
-   - edit scope and constraints;
-   - required evidence; and
-   - the HANDOFF format below.
+Herdr supplies terminal/agent lifecycle truth. Git and the filesystem supply
+workspace and artifact truth. This static skill does not claim semantic
+parentage, authorization enforcement, queues, retries, schedules, or protocol
+enforcement that Herdr does not provide.
 
-Inline the pack. If it is too long, write it under `.pi/herdr/` only when that
-path is Git-ignored, then pass its path and SHA-256. Use `.pi/herdr/`, not
-`/tmp`, for continuation handoffs.
+## Completion gates
 
-Preparation is complete when one route, checkout, outcome, and context pack are
-fixed.
+**Setup/update is complete** only when the new schema parses; both tracked
+project files exist; every configured kind, executable, native argument, and
+selected model is validated against live local capabilities; no credential is
+stored; the protocol has all twelve required sections; the Human has reviewed
+the diff; and no legacy schema was retained.
 
-A **balanced split** targets the largest pane in the current tab, breaking ties
-with the newest pane, and omits `direction` so Herdr uses source geometry.
+**Launch is complete** only when preflight passes without fallback, a fresh Lead
+has the exact saved context pack, the launch event is recorded, the Lead has
+received the task once, and focus has moved to the Lead. Existing agents,
+panes, worktrees, and user-owned changes remain intact.
 
-## Open the session
-
-1. Name it `w-<unit>-continue`, lowercase and at most 32 characters.
-2. For synchronous work, keep Root and the continuation in the current tab.
-   Create the continuation pane with a balanced `pane_split` and set `cwd` to
-   the selected checkout.
-3. Use a dedicated unfocused tab only for detached or long-running work, or an
-   explicit user layout request.
-4. Start the agent in the prepared pane with the adapter's explicit arguments.
-   Restore Root focus if launch moved it, unless the user requested continuation
-   focus.
-5. Deliver the context pack with `herdr_agent` action `prompt` and
-   `wait: false`.
-
-The continuation becomes active when the prompt is delivered. Keep it as the
-sole live continuation.
-
-## Continue the conversation
-
-Use the same session until Root accepts or abandons the unit:
-
-```text
-prompt -> wait -> read HANDOFF -> decide -> resume or accept
-```
-
-- **working:** wait on the continuation. A timeout triggers inspection.
-- **blocked:** read the question, decide from accepted authority or ask the
-  user, then prompt the same session with `wait: false`.
-- **idle or done:** read the latest result. Settlement means ready for review.
-- **error or stopped:** preserve the latest output and recover the same session.
-  Replace it only after it is no longer live and its useful context is durable.
-
-A complete HANDOFF received through an optional direct transport is canonical.
-Otherwise read `recent-unwrapped` with enough lines to capture it. If HANDOFF is
-missing, ask the same session once to resend only HANDOFF. If recovery still
-fails, ask it to write the full reply under `.pi/herdr/` and return the path.
-
-## HANDOFF
-
-Require every final or blocking reply to end with at most 12 lines:
-
-```text
-HANDOFF
-state: done | blocked
-outcome: <completed result or decision needed>
-evidence: <commands and paths, or none>
-artifact: <.pi/herdr path, or none>
-next: <next action, or numbered options with a recommendation>
-```
-
-HANDOFF stays self-contained; `artifact` carries overflow detail.
-
-## Accept and clean up
-
-Treat `state: done` as a proposal. Inspect changed files and run or observe the
-required evidence. Send corrections to the same continuation. Accept only when
-repository authority, changed state, and evidence agree.
-
-After acceptance or abandonment:
-
-1. preserve the useful HANDOFF or artifact durably;
-2. confirm no uncommitted work would be lost;
-3. release the continuation's edit scope and resources;
-4. close only the pane Root created, when safe; and
-5. report outcome, evidence, and remaining risk to the user.
+**Handoff is complete** only when the Human is interacting with the fresh Lead,
+the Lead can locate its run evidence directory, and the Launcher reports the
+Lead name, repository, run ID, and preserved pre-existing state. The Launcher
+does not remain an orchestration proxy after focus transfer.
