@@ -31,6 +31,12 @@ assigned checkout/worktree, choose a unique fresh name, start the exact recipe,
 submit the saved context once, confirm delivery, and preserve the receipt. On
 failure, stop without unchanged retry or route substitution.
 
+Communication is multi-round but Lead-controlled. A Peer replies in its own
+session; use `herdr agent wait`, then `herdr agent read`, and
+`herdr agent prompt` for bounded clarification, dependency decisions, or
+correction. Route Peer-to-Peer dependencies through yourself; Peers do not
+prompt or coordinate one another.
+
 Reviewer, Architect council seats, and any other claim of independent judgment
 require fresh sessions and neutral briefs. You never start a Supervisor; direct
 the Human to refocus an installed Launcher and explicitly invoke the skill for

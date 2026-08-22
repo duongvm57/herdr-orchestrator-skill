@@ -108,7 +108,9 @@ owner-only decisions. Never derive one link from Herdr status or test success.
 
 ## Semantic event ledger
 
-Append-only `events.jsonl` uses one object per milestone:
+Append-only `events.jsonl` uses one object per milestone. Every event carries
+`schema_version`, UTC `timestamp`, `run_id`, `type`, `actor`, and
+event-specific evidence references:
 
 ```json
 {"schema_version":1,"timestamp":"<UTC RFC3339>","run_id":"<id>","type":"candidate","actor":"<lead>","task_id":"<id>","candidate":"<exact identity>","evidence":["<relative run path>"]}

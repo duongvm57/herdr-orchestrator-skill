@@ -67,14 +67,12 @@ task in the run directory.
 
 The Lead Assignment requires waiting for `launcher-handoff.md` before
 orchestrating or appending events. The Launcher owns initial evidence until that
-marker transfers ledger ownership, preventing concurrent writers.
+marker transfers ledger ownership, preventing concurrent ledger writers.
 
-Append semantic events as one valid JSON object per line. Each event has
-`schema_version`, UTC `timestamp`, `run_id`, `type`, `actor`, and
-event-specific evidence references. Allowed milestone types are `launch`,
-`assignment`, `report`, `candidate`, `verification`, `review`,
-`human_decision_request`, `verdict`, and `finish`. Do not encode current agent
-status, a queue, retry counters, or acceptance inferred from status.
+Follow the semantic event ledger contract in
+`references/assignments-and-evidence.md` for every append. The Launcher writes
+only the initial `launch` milestone; the Lead writes later milestones after
+handoff. The ledger never represents current status or inferred acceptance.
 
 Evidence preparation is complete when the directory is outside the checkout,
 all five entries exist, and before-state plus Human task are durable.

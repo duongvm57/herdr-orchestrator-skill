@@ -42,7 +42,7 @@ Operational pointers may refer to an owner but must not redefine its contract.
 | Project config has complete native recipes | `references/setup.md` | Setup Launcher, launch Launcher | Setup and preflight | FT-16: two temp repos parse with different kinds/models/routes and no shared profile lookup |
 | Model/effort follows task risk and live availability | `.orchestration/workspace-protocol.md` in consuming project | Lead | Full Lead pack | FT-17: bounded and architecture task select different configured native recipes |
 | Agent creation contract is complete | `references/assignments-and-evidence.md` | Lead for Peers; Launcher for Supervisor | Before each Peer or Supervisor | FT-18: dispatch missing ownership, authority, verification, or handoff is rejected |
-| Monitoring is event-driven | `references/roles/lead.md` | Lead | Lead creation | FT-19: Lead uses `herdr agent wait`; unchanged prerequisite is not polled/retried |
+| Event-driven monitoring and Peer round-trips | `references/roles/lead.md` | Lead | Lead creation | FT-19: Lead waits, reads responses, prompts bounded follow-up, and routes dependencies; unchanged state is not polled |
 | Herdr limitations are stated honestly | `SKILL.md` | Launcher; Lead receives projections in its role and evidence contract | Invocation and Lead pack | FT-20: ledger is not treated as parentage, queue, enforcement, or live status |
 
 ## Workspace Protocol

@@ -131,6 +131,12 @@ Run evidence is stored outside the checkout at:
 <git-common-dir>/herdr-orchestrator/runs/<run-id>/
 ```
 
+This evidence is local and untracked: it does not follow a clone and is absent
+from backups that capture only tracked content. Exact tasks and context may be
+sensitive, so protect, retain, export, or remove each run under project policy.
+`launcher-handoff.md` transfers ledger ownership from Launcher to Lead; it is
+not a general filesystem lock.
+
 It records intended context, delivery receipts, assignments, Peer reports,
 stable candidates, verification, review, Human decision requests, Supervisor
 observations, and the Lead verdict. These records are assertions to compare with

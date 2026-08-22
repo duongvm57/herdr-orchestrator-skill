@@ -56,26 +56,9 @@ proven available on this machine.
 
 ## 2. Write the config
 
-Copy `assets/config.toml` to
+Copy the authoritative table-shape template at `assets/config.toml` to
 `.orchestration/herdr-orchestrator.toml`, then replace every example and
-placeholder. The accepted schema is:
-
-```toml
-version = 1
-default_peer = "general"
-
-[lead]
-kind = "codex"
-args = ["--model", "model-id", "<native-lead-policy>", "--disable", "multi_agent"]
-
-[supervisor] # optional; configuration is not launch authority
-kind = "claude"
-args = ["--model", "model-id", "<native-supervisor-policy>", "--disallowedTools", "Task"]
-
-[peer.general]
-kind = "codex"
-args = ["--model", "model-id", "<native-peer-policy>", "--disable", "multi_agent"]
-```
+placeholder.
 
 Each `[peer.<route>]` is a complete launch recipe. Route names are local to the
 project. `default_peer` must resolve to one peer table. `kind` and every `args`

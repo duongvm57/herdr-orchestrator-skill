@@ -13,10 +13,13 @@ task, create a fresh Lead, deliver the Human task and a role-specific context
 pack, then focus the Human on that Lead. Herdr is the only agent control plane.
 Spawned agents receive their instructions inline and never invoke this skill.
 
-## Modes and required loads
+## Load routing
 
 Read each listed file completely before acting. Do not load other role manuals
 unless a listed file explicitly requires their contents in a context pack.
+Rows compose when their triggers fire: task launch also applies the Lead-pack
+row, Supervisor attachment applies the Supervisor-pack row, and each Peer
+creation applies the Peer-pack row.
 
 | Mode | Required files | Trigger |
 | --- | --- | --- |
