@@ -151,3 +151,7 @@ $herdr-orchestrator update this repository's orchestration protocol
 
 A Supervisor observation remains evidence. It becomes policy only through an
 explicit update invocation and a Human-reviewed tracked diff.
+
+## License
+
+Released under the [MIT License](LICENSE).
