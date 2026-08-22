@@ -14,11 +14,15 @@
 - Dominant risks:
 - Expensive-to-reverse decisions:
 - External side effects:
+- Model/cost budget:
 
 ## 3. Authority and Human decision boundaries
 
 - Lead may decide:
 - Human must decide:
+- Edit/commit/push/deploy/publish authority:
+- Scope-expansion boundary:
+- Architecture contracts reserved for Human review:
 - Prohibited without explicit Human authority:
 
 ## 4. Task classes and smallest useful topology
@@ -59,6 +63,7 @@
 - Checks by task class:
 - Independent falsification expectations:
 - Subjective/Human evidence:
+- Minimum evidence required for Lead verdict:
 - Residual risk reporting:
 
 ## 10. Escalation requests
@@ -71,6 +76,7 @@
 
 - Signal, evidence, suspected mechanism, open question, allowed response:
 - Supervisor observation/notebook location:
+- Supervisor project-read/notebook-write boundary:
 - Repeated-failure prerequisite check:
 
 ## 12. Protocol evolution

@@ -33,18 +33,22 @@ Ask the Human in plain language for:
 - the default ordinary implementation preference;
 - which genuinely distinct task classes need another Peer route;
 - whether a Supervisor recipe should be configured; and
-- project risk, review, external-effect, and Human-only boundaries.
+- project risk, costly reversals, review triggers, and minimum verdict evidence;
+- edit, commit, push, deploy, publish, and other external-effect authority; and
+- scope-expansion, reserved architecture, model-budget, and Human-only boundaries.
 
 Translate those answers into each harness's current native arguments. Do not
 invent a shared effort vocabulary. Do not store API keys, tokens, credential
 paths, environment values, or secret-bearing arguments.
 
-For every role, inspect the harness's current agent-spawn facilities and add its
-native flags/tool exclusions to disable them. The Lead creates Peers by issuing
-Herdr commands itself; a native subagent tree would create a second control
-plane. Validate the actual installed feature/tool names instead of copying the
-asset examples. Treat this as behavior shaping, not a claim that prompts or CLI
-flags provide process, filesystem, identity, or authorization isolation.
+For every role, inspect native sandbox, approval, tool, and spawn controls. The
+Lead needs bounded project plus run-evidence writes; Engineer routes need only
+their owned workspace; Architect/Reviewer routes are read-only; Supervisor is
+project-read-only and notebook-write-only. Disable native agent spawning: the
+Lead creates Peers through Herdr, and a native subagent tree would create a
+second control plane. Validate installed controls rather than copying examples;
+do not configure a route whose required boundary cannot be enforced, and record
+any softer behavioral limitation honestly.
 
 Discovery is complete when every proposed recipe names an installed Herdr kind,
 an installed executable, native arguments accepted by current help, and a model
@@ -62,15 +66,15 @@ default_peer = "general"
 
 [lead]
 kind = "codex"
-args = ["--model", "model-id", "--config", "model_reasoning_effort=\"high\"", "--disable", "multi_agent"]
+args = ["--model", "model-id", "<native-lead-policy>", "--disable", "multi_agent"]
 
 [supervisor] # optional; configuration is not launch authority
 kind = "claude"
-args = ["--model", "model-id", "--effort", "medium"]
+args = ["--model", "model-id", "<native-supervisor-policy>", "--disallowedTools", "Task"]
 
 [peer.general]
 kind = "codex"
-args = ["--model", "model-id", "--config", "model_reasoning_effort=\"medium\"", "--disable", "multi_agent"]
+args = ["--model", "model-id", "<native-peer-policy>", "--disable", "multi_agent"]
 ```
 
 Each `[peer.<route>]` is a complete launch recipe. Route names are local to the
@@ -103,8 +107,9 @@ and stable-candidate rules are explicit, and the Human-only boundary is clear.
 
 Parse TOML with the standard library or equivalent and check the schema, not
 only syntax. Re-run live availability checks for every final entry. Check that
-the project diff contains only the intended two files and no credential-like
-value. Present the diff and unresolved assumptions to the Human.
+changes attributable to setup touch only the intended two files and contain no
+credential-like value; preserve unrelated Human changes. Present the scoped
+diff and unresolved assumptions to the Human.
 
 Do not start a Lead as a side effect of setup unless the same explicit Human
 request also includes a task to launch. Setup/update completes at the gate in

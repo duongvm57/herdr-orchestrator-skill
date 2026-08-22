@@ -10,7 +10,7 @@ not verdicts.
   agrees without independent evidence.
 - **Mechanism:** The brief embeds a verdict, so the Peer optimizes for authority.
 - **Response:** Restate evidence and an open question; invite `CONFIRM`,
-  `PARTIAL`, `CHALLENGE`, or `BLOCK`. Reject evidence-free contrarianism too.
+  `PARTIAL`, `CHALLENGE`, or `BLOCKED`. Reject evidence-free contrarianism too.
 
 ## 2. Pre-solving / perfect-plan trap
 

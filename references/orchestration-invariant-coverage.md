@@ -1,16 +1,16 @@
 # Orchestration invariant coverage
 
-Maintainer-only audit of the package's behavioral design. Each row names one
-authoritative file, the roles that receive it, its injection time, and a forward
-behavioral test. Operational pointers may refer to an owner; they must not
-redefine its contract. No row may lack an owner or test.
+Maintainer-only traceability and behavioral test specification. Each row names
+one authoritative file, its reader/injection point, and a forward scenario.
+Scenario IDs are planned evaluations, not evidence they ran or passed.
+Operational pointers may refer to an owner but must not redefine its contract.
 
 ## Prerequisites
 
-| Invariant | Authoritative file | Reader | Injection time | Forward test |
+| Invariant | Authoritative file | Reader | Injection time | Test specification |
 | --- | --- | --- | --- | --- |
 | Preflight: Herdr/repo/config/live recipes/existing state/user changes | `references/launcher.md` | Launcher | Explicit launch, before mutation | FT-01: dirty temp repo with existing pane/worktree/agent is inventoried and preserved |
-| One control plane | `SKILL.md` | Launcher and every packed role via its role profile | Invocation and agent creation | FT-02: packs direct Herdr use and prohibit spawned/native orchestration |
+| One control plane | `SKILL.md` | Launcher; packed roles receive role-specific projections | Invocation and agent creation | FT-02: packs direct Herdr use and prohibit spawned/native orchestration |
 | Fresh independent sessions | `SKILL.md` | Launcher, Lead | Invocation and Lead pack | FT-03: Reviewer/Supervisor/Architect seats are started fresh, never resumed/forked |
 | One writer and worktree isolation | `references/topology.md` | Lead | Lead pack, before dispatch | FT-04: overlapping writer assignment is rejected; concurrent writers get separate worktrees |
 | Live provider/model discovery and no fallback | `references/setup.md` | Launcher | Setup/update and launch validation | FT-05: unavailable model names the exact config entry and launches nothing |
@@ -19,7 +19,7 @@ redefine its contract. No row may lack an owner or test.
 
 ## Instruction architecture
 
-| Invariant | Authoritative file | Reader | Injection time | Forward test |
+| Invariant | Authoritative file | Reader | Injection time | Test specification |
 | --- | --- | --- | --- | --- |
 | Role Profile → Workspace Protocol → Assignment | `SKILL.md` | Launcher | Every explicit invocation | FT-08: saved packs preserve layer order and contain no implicit skill call |
 | Lead gets macro context; Peer gets extracted constraints only | `references/assignments-and-evidence.md` | Lead | Lead pack and each Peer dispatch | FT-09: Lead pack contains full protocol/catalog; Peer pack contains neither |
@@ -27,7 +27,7 @@ redefine its contract. No row may lack an owner or test.
 
 ## Roles and authority
 
-| Invariant | Authoritative file | Reader | Injection time | Forward test |
+| Invariant | Authoritative file | Reader | Injection time | Test specification |
 | --- | --- | --- | --- | --- |
 | Human owns product/portfolio/risk/external/irreversible decisions | `references/workspace-protocol.md` | Launcher, Lead, requested Supervisor | Setup and full protocol pack | FT-11: Lead escalates an excluded owner-only trade-off |
 | Lead is project arbiter, not implementation typist | `references/roles/lead.md` | Lead | Lead creation | FT-12: difficult task produces neutral assignment and project verdict, not presolved patch brief |
@@ -37,17 +37,17 @@ redefine its contract. No row may lack an owner or test.
 
 ## Configuration and monitoring
 
-| Invariant | Authoritative file | Reader | Injection time | Forward test |
+| Invariant | Authoritative file | Reader | Injection time | Test specification |
 | --- | --- | --- | --- | --- |
 | Project config has complete native recipes | `references/setup.md` | Setup Launcher, launch Launcher | Setup and preflight | FT-16: two temp repos parse with different kinds/models/routes and no shared profile lookup |
 | Model/effort follows task risk and live availability | `.orchestration/workspace-protocol.md` in consuming project | Lead | Full Lead pack | FT-17: bounded and architecture task select different configured native recipes |
-| Agent creation contract is complete | `references/assignments-and-evidence.md` | Lead | Before each Peer/Supervisor | FT-18: dispatch missing ownership, authority, verification, or handoff is rejected |
+| Agent creation contract is complete | `references/assignments-and-evidence.md` | Lead for Peers; Launcher for Supervisor | Before each Peer or Supervisor | FT-18: dispatch missing ownership, authority, verification, or handoff is rejected |
 | Monitoring is event-driven | `references/roles/lead.md` | Lead | Lead creation | FT-19: Lead uses `herdr agent wait`; unchanged prerequisite is not polled/retried |
-| Herdr limitations are stated honestly | `SKILL.md` | Launcher and Lead via context | Invocation and Lead pack | FT-20: ledger is not treated as parentage, queue, enforcement, or live status |
+| Herdr limitations are stated honestly | `SKILL.md` | Launcher; Lead receives projections in its role and evidence contract | Invocation and Lead pack | FT-20: ledger is not treated as parentage, queue, enforcement, or live status |
 
 ## Workspace Protocol
 
-| Group | Authoritative file | Reader | Injection time | Forward test |
+| Group | Authoritative file | Reader | Injection time | Test specification |
 | --- | --- | --- | --- | --- |
 | 1. Status/scope/readers/version | `assets/workspace-protocol.md` | Setup Launcher, Lead, requested Supervisor | Setup; full role pack | FT-21: generated protocol binds owner/root/version/readers |
 | 2. Characteristics/risk/reversibility/effects | `assets/workspace-protocol.md` | Same | Same | FT-22: task classification cites project risk rather than ceremony default |
@@ -65,7 +65,7 @@ redefine its contract. No row may lack an owner or test.
 
 ## Operating principles
 
-| Invariant | Authoritative file | Reader | Injection time | Forward test |
+| Invariant | Authoritative file | Reader | Injection time | Test specification |
 | --- | --- | --- | --- | --- |
 | Independent co-worker and authority gradient | `references/roles/peer.md` | Peer | Peer creation | FT-34: neutral outcome permits CONFIRM/CHALLENGE/request with evidence |
 | Provisional plan | `references/roles/lead.md` | Lead | Lead creation | FT-35: failed lifecycle premise triggers REOPEN instead of compatibility patch |
@@ -80,7 +80,7 @@ redefine its contract. No row may lack an owner or test.
 Every catalog row is authoritative in `references/anti-patterns.md`, read in full
 by Lead and requested Supervisor when their context packs are built.
 
-| # | Anti-pattern | Forward behavioral test |
+| # | Anti-pattern | Behavioral test specification |
 | --- | --- | --- |
 | 1 | Sheep / authority-gradient compliance | FT-41: verdict-shaped brief is reframed as evidence plus open question |
 | 2 | Pre-solving / perfect-plan trap | FT-42: exhaustive guessed file plan becomes provisional map |
@@ -102,17 +102,17 @@ by Lead and requested Supervisor when their context packs are built.
 
 ## Topology
 
-| Topology | Authoritative file | Reader | Injection time | Forward test |
+| Topology | Authoritative file | Reader | Injection time | Test specification |
 | --- | --- | --- | --- | --- |
 | Tiny | `references/topology.md` | Lead | Lead creation | FT-58: focused proof with zero or one Peer |
 | Bounded | `references/topology.md` | Lead | Lead creation | FT-59: one Engineer and risk-triggered Reviewer only |
 | Architecture-sensitive | `references/topology.md` | Lead | Lead creation | FT-60: fresh Architect → decision → Engineer → fresh Reviewer → same Engineer correction |
 | Difficult council | `references/topology.md` | Lead | Lead creation | FT-61: distinct sealed mandates, decision-changing propositions, one verdict |
-| Multiple projects | `references/topology.md` | Lead, requested Supervisor | Their context creation | FT-62: evidence and Lead authority remain project-local |
+| Multiple projects | `references/topology.md` | Lead; Supervisor receives only its bounded multi-project projection | Lead context; Supervisor Assignment | FT-62: evidence and Lead authority remain project-local |
 
 ## Lifecycle checklist
 
-| Phase | Authoritative file | Reader | Injection time | Forward test |
+| Phase | Authoritative file | Reader | Injection time | Test specification |
 | --- | --- | --- | --- | --- |
 | Before launch | `references/launcher.md` | Launcher | Explicit launch | FT-63: wrong root/config/model or ambiguous preserved state stops before creation |
 | While running | `references/roles/lead.md` | Lead | Lead creation | FT-64: event wait, requests, proposed expansion, evidence hypotheses, mechanism check |
@@ -121,9 +121,8 @@ by Lead and requested Supervisor when their context packs are built.
 
 ## Audit gate
 
-Coverage passes only when every prerequisite, instruction layer, authority
+Traceability passes only when every prerequisite, instruction layer, authority
 boundary, configuration rule, all twelve protocol groups, all seventeen
-anti-patterns, all topology branches, and all three lifecycle phases have a
-single named owner and a forward test. Validate every pointer from `SKILL.md`;
-every runtime reference must be reachable through an explicit trigger, while
-this maintainer matrix is reached only during package edits or coverage audits.
+anti-patterns, all topology branches, and all lifecycle phases have a named
+owner and scenario. Behavioral coverage requires recorded repeated results on
+each supported harness/model/version. Never claim full proof from this matrix.

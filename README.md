@@ -1,96 +1,153 @@
 # Herdr Orchestrator
 
-An explicit-only Agent Skill that turns the invoking session into a short-lived
-Launcher, creates a fresh Project Lead through
-[Herdr](https://herdr.dev), and transfers the Human to that Lead.
+Herdr Orchestrator is an explicit-only Agent Skill for running repository work
+through a Human-led Project Lead and bounded independent Peers on
+[Herdr](https://herdr.dev).
 
-The package is static instruction and templates. It adds no daemon, CLI,
-plugin, scheduler, or orchestration runtime. Herdr remains the agent lifecycle
-control plane; Git and the filesystem remain artifact truth.
+For a project-task invocation, the current session is only a short-lived
+**Launcher**: it checks the repository and live tooling, prepares role-specific
+context, starts a fresh **Project Lead**, and transfers the Human to that Lead.
+The Launcher does not remain an invisible orchestration proxy.
 
-## Install and invoke
+## Orchestration mindset
 
-Install with an Agent Skills-compatible installer, for example:
+The goal is not more agents. It is better ownership, independent judgment, and
+evidence.
+
+- The **Human** owns intent, cost/risk boundaries, irreversible choices,
+  publication, external effects, and project-reserved trade-offs.
+- The **Lead** holds macro context, chooses the smallest useful topology,
+  assigns one owner per moving scope, resolves dependencies, and issues the
+  project verdict.
+- A **Peer** owns one bounded outcome. It may confirm, challenge, request a
+  dependency, reopen a failed premise, or report `BLOCKED` with evidence.
+- A **Supervisor** is optional fresh governance requested by the Human. It
+  observes and asks questions without becoming a second Lead or accepting work.
+
+Every agent receives only three ordered instruction layers:
+
+```text
+Role Profile → Workspace Protocol → Assignment
+```
+
+The Lead receives full project context. A Peer receives its thin role, only
+relevant project constraints, and one assignment. Independent judgment uses a
+fresh session; correction returns to the same Engineer that owns the write.
+
+Every moving write scope has one writer. Review binds to an exact stable
+candidate: a commit or deterministic base/diff/artifact digest. `done`, an idle
+agent, a successful exit, or passing tests are attention signals—not acceptance.
+
+## What constrains a run
+
+Markdown cannot guarantee model obedience.
+
+- Herdr supplies agent and pane lifecycle truth.
+- Git and worktrees provide inspectable artifact and workspace identity.
+- Harness-native sandbox, approval, and tool controls constrain capabilities.
+- Saved context, assignments, reports, and receipts make decisions auditable.
+- Fresh review and Human gates test claims prompts cannot enforce.
+
+The skill provides no daemon, queue, retry engine, semantic parentage,
+authorization, tamper-proof evidence, or automatic acceptance. Behavioral
+confidence requires repeated real runs against the supported harness/model
+versions.
+
+OpenAI package metadata disables implicit invocation. Other Agent Skills clients
+need an equivalent user-only invocation policy; otherwise explicit-only remains
+an instruction rather than a mechanical gate.
+
+## Install
+
+You need Git, a running Herdr server, a Launcher session inside a Herdr-managed
+pane, and every configured harness/model installed and authenticated.
+
+Install into the harness used as Launcher:
 
 ```bash
-npx skills add duongvm57/herdr-orchestrator --agent codex --agent pi
+npx skills add duongvm57/herdr-orchestrator --agent codex
 ```
 
-The skill never runs implicitly. Invoke it by name:
+Leads, Peers, and Supervisors do not need the skill installed; their
+role-specific context is sent directly when they are created.
+
+## Set up a repository
+
+From the repository, invoke:
 
 ```text
-$herdr-orchestrator set up this repository
-$herdr-orchestrator implement the cancellation fix described in issue 42
+$herdr-orchestrator set up orchestration for this repository
 ```
 
-Setup creates two tracked files in the consuming repository:
+Setup reads current Herdr and harness help, asks about task classes, models,
+cost, authority, review gates, expensive reversals, and Human-only decisions,
+then creates two tracked files:
+
+- `.orchestration/herdr-orchestrator.toml` — complete native launch recipes for
+  the Lead, project Peer routes, and an optional Supervisor;
+- `.orchestration/workspace-protocol.md` — repository-specific authority,
+  routing, ownership, topology, evidence, escalation, and evolution policy.
+
+Review the generated diff. Re-run setup after changing machine, harness, model,
+or permission policy. Legacy `routes.toml` and `workers.*.toml` are unsupported.
+
+## Run a task
 
 ```text
-.orchestration/
-├── herdr-orchestrator.toml
-└── workspace-protocol.md
+$herdr-orchestrator implement issue #42 and preserve my uncommitted changes
 ```
 
-The config contains complete native Herdr launch recipes for one Lead, optional
-Supervisor, and project-defined Peer routes. There are no shared profiles,
-normalized effort names, credentials, or fallback routes. Setup discovers the
-installed Herdr and harness command shapes before writing native arguments.
+The Launcher validates the project contract and configured live recipes,
+inventories existing agents/panes/worktrees/user changes, stores run evidence
+outside the checkout, starts a fresh Lead, and transfers focus. Missing
+capability stops launch at the exact entry without fallback; existing state is
+preserved.
 
-## Runtime model
+After handoff, work with the Lead. A tiny task may need zero or one Peer.
+Architecture-sensitive work may use a fresh Architect, one Engineer, and a fresh
+Reviewer. Agent count never substitutes for evidence.
 
-The three instruction layers are Role Profile, repository Workspace Protocol,
-and one concrete Assignment. The Lead receives macro project context. A Peer
-receives its thin role profile, one disposition, one assignment, and only the
-protocol constraints relevant to that work. A Supervisor receives governance
-context only when the Human explicitly requests one.
+## Request a Supervisor
 
-Run evidence lives outside the checkout under the repository's Git common
-directory:
+A configured Supervisor is never started automatically:
+
+```text
+$herdr-orchestrator attach a Supervisor to run <run-id> and Lead <lead-name>
+```
+
+Refocus an installed Launcher session before invoking that command; the fresh
+Lead does not need or invoke the skill.
+
+The Launcher binds a fresh project-read-only Supervisor to exact Lead/project/run
+identities. It observes evidence, asks open questions, and relays exact Human
+decisions. It never creates Peers, edits project code, or issues a project
+verdict.
+
+## Evidence and verdicts
+
+Run evidence is stored outside the checkout at:
 
 ```text
 <git-common-dir>/herdr-orchestrator/runs/<run-id>/
-├── context/
-├── assignments/
-├── reports/
-├── supervisor/
-└── events.jsonl
 ```
 
-Context packs, assignments, and reports are preserved verbatim. `events.jsonl`
-records semantic milestones, not live lifecycle state or autonomous acceptance.
-
-## Package layout
+It records intended context, delivery receipts, assignments, Peer reports,
+stable candidates, verification, review, Human decision requests, Supervisor
+observations, and the Lead verdict. These records are assertions to compare with
+Herdr, Git, the filesystem, and raw command results—not proof by themselves.
 
 ```text
-SKILL.md
-README.md
-agents/openai.yaml
-assets/
-  config.toml
-  workspace-protocol.md
-references/
-  setup.md
-  launcher.md
-  roles/{lead,peer,supervisor}.md
-  topology.md
-  anti-patterns.md
-  assignments-and-evidence.md
-  workspace-protocol.md
-  orchestration-invariant-coverage.md
+Engineer proves writes
+→ Reviewer falsifies the exact candidate when required
+→ Lead inspects the complete evidence chain and issues the project verdict
+→ Human resolves owner-only decisions
 ```
 
-`SKILL.md` is the router and invariant set. Detailed Herdr commands, topology,
-role manuals, evidence schemas, and protocol authoring guidance load only for
-the branch or role that needs them.
+## Update project policy
 
-## Validate
-
-```bash
-python3 -c 'import tomllib; tomllib.load(open("assets/config.toml", "rb"))'
-python3 /path/to/skill-creator/scripts/quick_validate.py .
-git diff --check
+```text
+$herdr-orchestrator update this repository's orchestration protocol
 ```
 
-Maintainers also audit `references/orchestration-invariant-coverage.md`; every
-orchestration invariant must have one authoritative owner, one reader/injection
-point, and a forward behavioral test.
+A Supervisor observation remains evidence. It becomes policy only through an
+explicit update invocation and a Human-reviewed tracked diff.

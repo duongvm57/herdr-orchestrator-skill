@@ -4,25 +4,25 @@ default_peer = "general"
 # Setup replaces placeholders with native arguments validated on this machine.
 [lead]
 kind = "codex"
-args = ["--model", "<lead-model>", "--config", "model_reasoning_effort=\"high\"", "--disable", "multi_agent"]
+args = ["--model", "<lead-model>", "<native-project-and-run-evidence-write-policy>", "--disable", "multi_agent"]
 
 # Optional. Its presence never authorizes or automatically launches a Supervisor.
 [supervisor]
 kind = "claude"
-args = ["--model", "<supervisor-model>", "--effort", "medium", "--disallowedTools", "Task"]
+args = ["--model", "<supervisor-model>", "--effort", "medium", "<native-project-readonly-notebook-write-policy>", "--disallowedTools", "Task"]
 
 [peer.general]
 kind = "codex"
-args = ["--model", "<peer-model>", "--config", "model_reasoning_effort=\"medium\"", "--disable", "multi_agent"]
+args = ["--model", "<peer-model>", "<native-owned-workspace-write-policy>", "--disable", "multi_agent"]
 
 [peer.fast]
 kind = "pi"
-args = ["--model", "<fast-model>", "--thinking", "low", "--exclude-tools", "<installed-agent-spawn-tools>"]
+args = ["--model", "<fast-model>", "--thinking", "low", "<native-owned-workspace-write-policy>", "--exclude-tools", "<installed-agent-spawn-tools>"]
 
 [peer.architecture]
 kind = "claude"
-args = ["--model", "<architecture-model>", "--effort", "high", "--disallowedTools", "Task"]
+args = ["--model", "<architecture-model>", "--effort", "high", "<native-readonly-policy>", "--disallowedTools", "Task"]
 
 [peer.review]
 kind = "grok"
-args = ["--model", "<review-model>", "--reasoning-effort", "high", "--no-subagents"]
+args = ["--model", "<review-model>", "--reasoning-effort", "high", "<native-readonly-policy>", "--no-subagents"]

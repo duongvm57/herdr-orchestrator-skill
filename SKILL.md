@@ -21,10 +21,11 @@ unless a listed file explicitly requires their contents in a context pack.
 | Mode | Required files | Trigger |
 | --- | --- | --- |
 | Setup or update | `references/setup.md`, `references/workspace-protocol.md`, `assets/config.toml`, `assets/workspace-protocol.md` | The Human asks to create, repair, or update project orchestration files |
-| Launch | `references/launcher.md` | The Human gives a project task to orchestrate |
+| Launch | `references/launcher.md`, `references/assignments-and-evidence.md`, `assets/config.toml` | The Human gives a project task to orchestrate |
+| Supervisor attachment | `references/launcher.md`, `references/assignments-and-evidence.md`, Supervisor-pack sources below | The Human explicitly asks to supervise exact active Lead/run bindings |
 | Lead pack | `references/roles/lead.md`, `references/topology.md`, `references/anti-patterns.md`, `references/assignments-and-evidence.md`, `references/roles/peer.md`, project config, full project Workspace Protocol, Human task | Before starting every Lead |
-| Peer pack | `references/roles/peer.md` plus one concrete disposition/assignment and only the relevant protocol constraints extracted by Lead | Before starting every Peer |
-| Supervisor pack | `references/roles/supervisor.md`, `references/anti-patterns.md`, exact Lead binding, full project Workspace Protocol, evidence/notebook contract | Only after the Human explicitly requests a Supervisor |
+| Peer pack | `references/roles/peer.md`; then only relevant protocol constraints extracted by Lead; then one concrete disposition/Assignment | Before starting every Peer |
+| Supervisor pack | `references/roles/supervisor.md`, `references/anti-patterns.md`; then every full bound Workspace Protocol; then exact Lead/project/run bindings and notebook Assignment | Only after the Human explicitly requests a Supervisor |
 | Maintenance audit | `references/orchestration-invariant-coverage.md` | Editing this package or auditing invariant ownership and behavioral coverage |
 
 `README.md` is for humans, not a runtime instruction source.
@@ -40,8 +41,8 @@ Every agent context has three layers in this order:
    handoff.
 
 The Lead owns project framing, topology, dependencies, integration,
-verification, and the project verdict. The Lead creates Peers. A Supervisor is
-fresh and independent, observes governance, and exists only on explicit Human
+verification, and the project verdict. The Lead creates Peers. The Launcher,
+never the Lead, creates a fresh independent Supervisor only on explicit Human
 request. Reviewer, Supervisor, Architect council seats, and other independent
 judgment sessions are fresh rather than forks. Corrections return to the same
 Engineer session.
@@ -69,6 +70,10 @@ the diff; and no legacy schema was retained.
 has the exact saved context pack, the launch event is recorded, the Lead has
 received the task once, and focus has moved to the Lead. Existing agents,
 panes, worktrees, and user-owned changes remain intact.
+
+**Supervisor attachment is complete** only when the configured recipe, exact
+Lead/project/run bindings, full protocols, fresh agent, notebook, and delivery
+receipt agree. It creates no replacement Lead and grants no acceptance authority.
 
 **Handoff is complete** only when the Human is interacting with the fresh Lead,
 the Lead can locate its run evidence directory, and the Launcher reports the

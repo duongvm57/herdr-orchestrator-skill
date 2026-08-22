@@ -52,10 +52,10 @@ under `assignments/<agent-name>.md`. Record SHA-256, recipe, repository,
 checkout, and agent name. Send the saved pack once. A summary or terminal
 transcript does not replace it.
 
-Peer context contains the Peer profile, one disposition/assignment, and only
-relevant protocol constraints extracted by the Lead. Lead context contains the
-full macro pack. Supervisor context contains its role, full anti-pattern
-catalog, exact Lead binding, full protocol, and notebook/evidence assignment.
+Peer context contains the Peer profile, only relevant protocol constraints, then
+one disposition/Assignment. Lead context contains the full macro pack.
+Supervisor context contains its role and anti-pattern catalog, every full bound
+protocol, then exact Lead/project/run bindings and notebook Assignment.
 
 ## Peer report
 
