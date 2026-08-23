@@ -21,10 +21,11 @@ herdr pane current --current
 ```
 
 Stop on either error. Use `herdr agent start --help` for supported kinds and
-`herdr integration status` for integration state; neither alone proves a harness
-is installed. Resolve each canonical executable through command lookup and a
-bounded version probe. Keep unavailable, broken, outdated, and `unresolved`
-mapping rows. Targeted Herdr and helper `--help` remain command authority.
+command lookup plus a bounded version probe for installed, runnable executables.
+Inventory only their intersection. Omit unsupported and absent executables;
+annotate retained rows with `herdr integration status`, including broken,
+outdated, or `unresolved` mappings. Targeted Herdr and helper `--help` remain
+command authority.
 
 Show the inventory, then use the harness's structured user-input tool when
 available. Ask one unresolved decision at a time: 2–3 mutually exclusive choices,

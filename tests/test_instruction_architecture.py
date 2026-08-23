@@ -151,7 +151,8 @@ class InstructionArchitectureTests(unittest.TestCase):
 
         self.assertIn("herdr agent start --help", setup)
         self.assertIn("herdr integration status", setup)
-        self.assertIn("installed", setup)
+        self.assertIn("intersection", setup)
+        self.assertIn("Omit unsupported and absent executables", setup)
         self.assertIn("basic Peer capability profiles", setup)
         self.assertLess(
             setup.index("Select each recipe's harness"),
