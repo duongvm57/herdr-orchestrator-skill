@@ -5,7 +5,7 @@ by the Project Lead. The Lead always receives it in full. A Supervisor receives
 it only for an explicit audit/update/observation assignment. A Peer never reads
 it; the Lead extracts only constraints relevant to that Peer assignment.
 
-Use `assets/workspace-protocol.md` as the tracked template. Complete all twelve
+Use `assets/workspace-protocol-template.md` as the tracked template. Complete all twelve
 sections:
 
 1. status, Human owner, version, review date, canonical absolute Repository

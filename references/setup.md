@@ -100,8 +100,8 @@ Copy `assets/config.toml` and replace every placeholder. Require exactly:
 Peer recipe names identify reusable capabilities, not dispositions. There is no
 fallback, inheritance, profile lookup, adapter, or legacy-schema migration.
 
-Read `references/workspace-protocol.md`, copy
-`assets/workspace-protocol.md`, and fill all twelve sections with project facts.
+Read `references/workspace-protocol-authoring.md`, copy
+`assets/workspace-protocol-template.md`, and fill all twelve sections with project facts.
 Keep native model/flags in TOML. Make recipe selection, one-writer ownership,
 stable-candidate identity, independent-review triggers, evidence, Human-only
 decisions, and both communication languages decidable. The protocol contains

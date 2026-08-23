@@ -174,7 +174,7 @@ class ContextBudgetTests(unittest.TestCase):
             self.assertEqual(rendered, output.read_text(encoding="utf-8"))
 
     def test_repository_supervisor_fixture_has_only_signal_card(self) -> None:
-        manifest = context_budget.load_manifest(ROOT / "assets" / "context-budgets.json")
+        manifest = context_budget.load_manifest(ROOT / "tests" / "context-budgets.json")
         route = manifest["routes"]["supervisor_initial_fixed"]
         fixture_path = next(
             source["file"]

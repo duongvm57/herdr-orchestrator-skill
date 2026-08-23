@@ -84,7 +84,7 @@ class HerdrOrchestratorTest(unittest.TestCase):
             encoding="utf-8",
         )
         protocol_lines = []
-        for line in (ROOT / "assets/workspace-protocol.md").read_text(encoding="utf-8").splitlines():
+        for line in (ROOT / "assets/workspace-protocol-template.md").read_text(encoding="utf-8").splitlines():
             if line.startswith("- ") and ":" in line:
                 label, value = line.split(":", 1)
                 if not value.strip() or value.strip() == "YYYY-MM-DD":
@@ -235,7 +235,7 @@ class HerdrOrchestratorTest(unittest.TestCase):
         protocol = project / ".orchestration/workspace-protocol.md"
         populated = protocol.read_text(encoding="utf-8")
 
-        protocol.write_bytes((ROOT / "assets/workspace-protocol.md").read_bytes())
+        protocol.write_bytes((ROOT / "assets/workspace-protocol-template.md").read_bytes())
         completed = self.run_cli("validate-project", "--project-root", str(project))
         self.assertEqual(completed.returncode, 2)
         self.assertIn("requires a populated value", completed.stderr)
@@ -270,7 +270,7 @@ class HerdrOrchestratorTest(unittest.TestCase):
 
         sections: list[tuple[str, ...]] = []
         labels: list[str] = []
-        for line in (ROOT / "assets/workspace-protocol.md").read_text(encoding="utf-8").splitlines():
+        for line in (ROOT / "assets/workspace-protocol-template.md").read_text(encoding="utf-8").splitlines():
             if line.startswith("## "):
                 if labels:
                     sections.append(tuple(labels))

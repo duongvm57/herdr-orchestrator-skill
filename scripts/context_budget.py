@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 
-DEFAULT_MANIFEST = "assets/context-budgets.json"
+DEFAULT_MANIFEST = "tests/context-budgets.json"
 PACK_LAYERS = (
     ("role_profile", "Role Profile"),
     ("workspace_protocol", "Workspace Protocol"),

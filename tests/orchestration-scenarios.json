@@ -80,7 +80,7 @@
       ],
       "sources": [
         "assets/config.toml",
-        "assets/workspace-protocol.md",
+        "assets/workspace-protocol-template.md",
         "references/setup.md",
         "scripts/herdr_orchestrator.py"
       ],
@@ -185,7 +185,7 @@
       ],
       "sources": [
         "SKILL.md",
-        "references/workspace-protocol.md",
+        "references/workspace-protocol-authoring.md",
         "references/roles/lead.md",
         "references/roles/peer.md",
         "references/roles/supervisor.md"
@@ -230,7 +230,7 @@
         }
       ],
       "sources": [
-        "assets/workspace-protocol.md",
+        "assets/workspace-protocol-template.md",
         "references/roles/lead.md",
         "references/lead/peer-lifecycle.md"
       ],
@@ -318,8 +318,8 @@
         }
       ],
       "sources": [
-        "assets/workspace-protocol.md",
-        "references/workspace-protocol.md",
+        "assets/workspace-protocol-template.md",
+        "references/workspace-protocol-authoring.md",
         "references/lead/peer-lifecycle.md",
         "references/lead/candidate-and-verdict.md"
       ],
@@ -352,7 +352,7 @@
         "references/roles/lead.md",
         "references/roles/peer.md",
         "references/roles/supervisor.md",
-        "references/workspace-protocol.md"
+        "references/workspace-protocol-authoring.md"
       ],
       "scenario": "Give a neutral provisional premise that may be challenged or reopened with evidence, observe without polling when no event occurs, and keep repeated Supervisor evidence provisional until a later explicit Human-approved protocol update.",
       "test_selectors": []

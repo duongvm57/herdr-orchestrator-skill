@@ -14,9 +14,9 @@
       "files": [
         "SKILL.md",
         "references/setup.md",
-        "references/workspace-protocol.md",
+        "references/workspace-protocol-authoring.md",
         "assets/config.toml",
-        "assets/workspace-protocol.md"
+        "assets/workspace-protocol-template.md"
       ],
       "hard_limit": 3000,
       "baseline": 2909

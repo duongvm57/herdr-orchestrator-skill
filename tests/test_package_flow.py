@@ -61,7 +61,7 @@ args = ["--model", "gpt-test"]
             ):
                 path.write_text(body, encoding="utf-8")
             protocol_lines: list[str] = []
-            for line in (ROOT / "assets/workspace-protocol.md").read_text(
+            for line in (ROOT / "assets/workspace-protocol-template.md").read_text(
                 encoding="utf-8"
             ).splitlines():
                 if line.endswith("YYYY-MM-DD"):
