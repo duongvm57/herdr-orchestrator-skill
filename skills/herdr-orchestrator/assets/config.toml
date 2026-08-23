@@ -10,9 +10,9 @@ args = ["<lead-native-arg>"]
 kind = "<supervisor-kind>"
 args = ["<supervisor-native-arg>"]
 
-# Repeat this table for every Human-approved harness/model/access combination.
+# Repeat independently for each Human-approved capability route; kinds may differ.
 # The description includes its project and report-return write boundaries.
-# Recipes are reusable launch capabilities, not Peer roles or topology slots.
+# Recipes are launch capabilities; the assignment supplies Peer disposition.
 [peer_recipes."<recipe-name>"]
 description = "<capability-cost-independence-and-access-summary>"
 kind = "<peer-kind>"

@@ -134,29 +134,56 @@ class InstructionArchitectureTests(unittest.TestCase):
 
     def test_setup_prefers_harness_choice_cards(self) -> None:
         setup = read("references/launcher/setup.md")
+        normalized = " ".join(setup.split())
 
         for contract in (
-            r"structured user-input tool",
-            r"one\s+unresolved decision at a time",
-            r"2–3 mutually exclusive choices",
-            r"recommended choice first",
+            r"structured user-input",
+            r"one question per card",
+            r"2–3\s+exclusive choices",
+            r"explicit labels",
+            r"recommendation first",
             r"free-form answer",
         ):
-            self.assertRegex(setup, contract)
-        self.assertIn("ordinary chat", setup)
-        self.assertRegex(setup, r"wait for its\s+answer")
+            self.assertRegex(normalized, contract)
+        self.assertIn("every valid answer as a numbered choice", normalized)
+        self.assertIn("request its number", normalized)
+        self.assertIn("one question and wait", normalized)
+
+    def test_setup_offers_guided_or_human_configured_toml(self) -> None:
+        setup = read("references/launcher/setup.md")
+        normalized = " ".join(setup.split())
+
+        self.assertIn("Choose configuration mode", setup)
+        self.assertIn("Guided setup", setup)
+        self.assertIn("Configure TOML yourself", setup)
+        self.assertIn("version-2 TOML", normalized)
+        self.assertIn("so the Human can create or edit it", normalized)
+        self.assertIn("assets/config.toml", setup)
+        self.assertIn("from chat or", normalized)
+        self.assertIn("role/recipe fields", normalized)
+        self.assertIn("only missing protocol decisions", normalized)
+        self.assertLess(
+            setup.index("Choose configuration mode"),
+            setup.index("profile matrix"),
+        )
 
     def test_setup_selects_harness_before_recipe_details(self) -> None:
         setup = read("references/launcher/setup.md")
+        template = read("assets/config.toml")
+        normalized = " ".join(setup.split())
 
         self.assertIn("herdr agent start --help", setup)
         self.assertIn("herdr integration status", setup)
-        self.assertIn("intersection", setup)
-        self.assertIn("Omit unsupported and absent executables", setup)
-        self.assertIn("basic Peer capability profiles", setup)
+        self.assertIn("intersect kinds", setup)
+        self.assertIn("omit the rest", setup)
+        self.assertIn("profile matrix", setup)
+        self.assertIn("Each row independently selects its harness", setup)
+        self.assertIn("fast/general/reasoning/coding/architecture/reviewer", setup)
+        self.assertRegex(setup, r"assignment\s+binds the Peer disposition")
+        self.assertIn("kinds may differ", template)
         self.assertLess(
-            setup.index("Select each recipe's harness"),
-            setup.index("then discover and choose its model"),
+            normalized.index("Each row independently selects its harness"),
+            normalized.index("then discover and choose its model"),
         )
 
     def test_lead_asset_names_match_launch_staging_contract(self) -> None:

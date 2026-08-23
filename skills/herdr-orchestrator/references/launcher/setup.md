@@ -1,50 +1,52 @@
 # Project setup and update
 
-This branch produces exactly two tracked project files:
-`.orchestration/herdr-orchestrator.toml` and
-`.orchestration/workspace-protocol.md`. It does not launch an agent unless the
-same explicit invocation also contains a task, which is handled afterward by
-the task-launch route.
+This branch writes only `.orchestration/herdr-orchestrator.toml` and
+`.orchestration/workspace-protocol.md`. Launch an agent only for an included
+task via the task-launch route.
 
 ## 1. Preserve and discover
 
-Resolve the repository root and absolute Git common directory. Inventory status,
-worktrees, agents/panes, and both destinations. Preserve Human-owned files and
-unrelated changes; understand them and present an in-place diff.
+Resolve repository and absolute Git-common roots. Inventory status, worktrees,
+agents/panes, and destinations. Understand and preserve Human-owned or unrelated
+changes; present an in-place diff.
 
-Require `HERDR_ENV=1` and Python 3.11+, then prove the Launcher's live control
-boundary first:
+Require `HERDR_ENV=1` and Python 3.11+; prove the Launcher control boundary:
 
 ```text
 herdr agent list
 herdr pane current --current
 ```
 
-Stop on either error. Use `herdr agent start --help` for supported kinds and
-command lookup plus a bounded version probe for installed, runnable executables.
-Inventory only their intersection. Omit unsupported and absent executables;
-annotate retained rows with `herdr integration status`, including broken,
-outdated, or `unresolved` mappings. Targeted Herdr and helper `--help` remain
-command authority.
+Stop on error. Choose configuration mode with one card:
 
-Show the inventory, then use the harness's structured user-input tool when
-available. Ask one unresolved decision at a time: 2–3 mutually exclusive choices,
-an evidence-backed recommended choice first, concise impacts, and a free-form
-answer. Sequence dependent recipe choices and skip supplied answers. Never
-replace available cards with combined prose or invent choices.
+- **Guided setup** (recommended): discover candidates, then ask each profile row.
+- **Configure TOML yourself:** accept version-2 TOML from chat or
+  `.orchestration/herdr-orchestrator.toml`; otherwise show that path, starter
+  from `assets/config.toml`, and role/recipe fields so the Human can create or
+  edit it. Strictly parse and validate live tuples, then ask only missing
+  protocol decisions.
 
-If unavailable or all valid choices cannot fit, use ordinary chat with every
-numbered choice plus a free-form answer; ask one question and wait for its answer.
+Use structured user-input when available: one question per card; 2–3 exclusive
+choices with explicit labels and impacts; evidence-backed recommendation first;
+free-form answer. Otherwise, or if choices do not fit, show every valid answer
+as a numbered choice and request its number or free-form. Ask one question and
+wait; preserve answers.
 
-Select each recipe's harness from installed rows first; then discover and choose its model,
-reasoning/cost, access, and native arguments. Configure the Lead,
-one or more basic Peer capability profiles, then the optional Supervisor. Reuse
-a deep inventory when profiles share a harness. Deep-probe only selected or
-previously configured harnesses for authentication, native choices, sandbox,
-network, and native-spawn control.
+In Guided setup, intersect kinds from `herdr agent start --help` with installed,
+runnable executables; omit the rest and annotate retained rows using
+`herdr integration status`. Build a profile matrix: Lead, optional Supervisor,
+and `fast/general/reasoning/coding/architecture/reviewer` Peer capability routes,
+plus custom or omit. Each row independently selects its harness; then discover
+and choose its model, reasoning/cost, access, and native arguments. Rows may
+differ; reuse requires explicit Human choice. Routes describe capability/model
+fit; the assignment binds the Peer disposition.
 
-For Codex use `scripts/herdr_orchestrator.py codex-models --output <file>`; use
-an analogous bounded native mechanism elsewhere. Consume only compact metadata
+Deep-probe only configured candidates for authentication, native choices,
+sandbox, network, and native-spawn control. Targeted Herdr and helper `--help`
+remain command authority.
+
+Use `scripts/herdr_orchestrator.py codex-models --output <file>` for Codex and a
+bounded native mechanism elsewhere. Consume only compact metadata
 from a collision-free temporary directory and remove it after one preference
 query. An unavailable catalog remains `unverified` until a documented check or
 Human-approved smoke proves the exact model. Obtain remaining decisions for:
