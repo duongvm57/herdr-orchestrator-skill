@@ -123,6 +123,15 @@ class InstructionArchitectureTests(unittest.TestCase):
         ):
             self.assertNotIn(internal, readme)
 
+    def test_ci_pip_cache_tracks_dev_requirements(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+        self.assertIn("cache: pip", workflow)
+        self.assertRegex(
+            workflow,
+            r"(?m)^\s+cache-dependency-path: requirements-dev\.txt$",
+        )
+
     def test_lead_asset_names_match_launch_staging_contract(self) -> None:
         launch = read("references/launcher/task-launch.md")
         lead = read("references/roles/lead.md")
