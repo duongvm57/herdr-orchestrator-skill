@@ -492,6 +492,37 @@ def _validate_recipe_arguments(kind: str, args: list[str], location: str) -> Non
         index += 1
 
 
+def _recipe_option_values(args: list[str], option: str) -> list[str]:
+    values: list[str] = []
+    index = 0
+    while index < len(args):
+        current = args[index]
+        schema = RECIPE_ARGUMENT_SCHEMAS.get("codex", {}).get(current)
+        index += 1
+        if schema == "flag":
+            continue
+        if index >= len(args):  # already rejected by recipe validation
+            break
+        if current == option:
+            values.append(args[index])
+        index += 1
+    return values
+
+
+def _validate_lead_evidence_boundary(config: dict[str, Any], common: Path) -> None:
+    lead = config["roles"]["lead"]
+    if lead["kind"] != "codex":
+        return
+    sandbox = _recipe_option_values(lead["args"], "--sandbox")
+    if sandbox != ["workspace-write"]:
+        return
+    writable_roots = _recipe_option_values(lead["args"], "--add-dir")
+    if str(common) not in writable_roots:
+        raise HelperError(
+            "roles.lead Codex workspace-write args must add the exact Git common directory"
+        )
+
+
 def _validate_recipe(
     value: Any,
     *,
@@ -682,10 +713,15 @@ def command_validate_project(args: argparse.Namespace) -> dict[str, Any]:
     config = _parse_project_config(config_data, str(config_path))
     protocol_values = _parse_protocol(protocol_data, str(protocol_path))
     _require_protocol_repository(protocol_values, root)
+    common = None
+    if args.git_common_dir:
+        common = _require_directory(Path(args.git_common_dir), "Git common directory")
+        _validate_lead_evidence_boundary(config, common)
     return {
         "schema_version": SCHEMA_VERSION,
         "command": "validate-project",
         "project_root": str(root),
+        "git_common_dir": str(common) if common is not None else None,
         "config": {
             "path": str(config_path),
             "bytes": len(config_data),
@@ -816,7 +852,8 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
         raise HelperError("project config changed after preflight validation")
     if _sha256(workspace_protocol_data) != expected_protocol_sha256:
         raise HelperError("workspace protocol changed after preflight validation")
-    _parse_project_config(project_config_data, str(project_config_path))
+    config = _parse_project_config(project_config_data, str(project_config_path))
+    _validate_lead_evidence_boundary(config, common)
     protocol_values = _parse_protocol(
         workspace_protocol_data,
         str(workspace_protocol_path),
@@ -942,6 +979,11 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
         "command": "init-run",
         "run_id": args.run_id,
         "run_directory": str(destination),
+        "human_task": {
+            "path": str(destination / "human-task.md"),
+            "bytes": len(task_data),
+            "sha256": _sha256(task_data),
+        },
         "manifest": {
             "path": str(destination / "run-manifest.json"),
             "bytes": len(manifest_data),
@@ -1746,6 +1788,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="strictly validate version-2 project config and the 12-section protocol",
     )
     validate.add_argument("--project-root", required=True)
+    validate.add_argument(
+        "--git-common-dir",
+        help=(
+            "canonical absolute Git common directory; when supplied, validate "
+            "the Lead evidence-write recipe against it"
+        ),
+    )
     validate.add_argument(
         "--config",
         help="config path; relative paths are resolved from project root",

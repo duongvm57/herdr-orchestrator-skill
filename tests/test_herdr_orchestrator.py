@@ -204,6 +204,48 @@ class HerdrOrchestratorTest(unittest.TestCase):
                 self.assertEqual(completed.returncode, 2)
                 self.assertIn("unsupported value", completed.stderr)
 
+    def test_validate_project_binds_codex_workspace_write_lead_to_git_common_dir(self) -> None:
+        project = self.valid_project()
+        common = self.root / "git-common"
+        common.mkdir()
+        config = project / ".orchestration/herdr-orchestrator.toml"
+        original = config.read_text(encoding="utf-8")
+        workspace_write = original.replace(
+            'args = ["--model", "gpt-5.6-sol"]',
+            'args = ["--model", "gpt-5.6-sol", "--sandbox", "workspace-write"]',
+            1,
+        )
+        config.write_text(workspace_write, encoding="utf-8")
+
+        completed = self.run_cli(
+            "validate-project",
+            "--project-root",
+            str(project),
+            "--git-common-dir",
+            str(common),
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("roles.lead", completed.stderr)
+        self.assertIn("Git common directory", completed.stderr)
+
+        config.write_text(
+            workspace_write.replace(
+                '"--sandbox", "workspace-write"',
+                f'"--sandbox", "workspace-write", "--add-dir", "{common}"',
+            ),
+            encoding="utf-8",
+        )
+        completed = self.run_cli(
+            "validate-project",
+            "--project-root",
+            str(project),
+            "--git-common-dir",
+            str(common),
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["git_common_dir"], str(common.resolve()))
+
     def test_validate_project_binds_canonical_paths_and_protocol_root(self) -> None:
         project = self.valid_project()
         protocol = project / ".orchestration/workspace-protocol.md"
@@ -440,6 +482,14 @@ class HerdrOrchestratorTest(unittest.TestCase):
             },
         )
         self.assertEqual(metadata["asset_count"], 1)
+        self.assertEqual(
+            metadata["human_task"],
+            {
+                "path": str(run_dir / "human-task.md"),
+                "bytes": len(b"Implement the exact Human task.\n"),
+                "sha256": sha256(b"Implement the exact Human task.\n"),
+            },
+        )
 
     def test_init_run_rejects_post_preflight_change_before_mutation(self) -> None:
         common = self.root / "common"

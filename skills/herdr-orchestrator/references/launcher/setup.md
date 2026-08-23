@@ -57,9 +57,6 @@ Human-approved smoke proves the exact model. Obtain remaining decisions for:
 - edit, commit, push, deploy, publish, and other external-effect authority; and
 - scope expansion, reserved architecture, budget, and Human-only boundaries.
 
-On first setup the Human explicitly confirms both language values. On unrelated
-updates, preserve an existing valid pair unless the Human requests a change.
-
 Translate choices into native argument vectors passed unchanged. Store no
 credential, secret path/value, or inferred shared effort vocabulary.
 Every option must have a strict helper schema for its exact kind; an unsupported
@@ -80,12 +77,11 @@ probe, must reject out-of-scope writes without residue, and for control roles
 runs `herdr agent list` inside the exact native boundary. Do not configure an
 unenforceable envelope; state limitations precisely.
 
-For current Codex `workspace-write`, allow native network access when required
-for the Herdr Unix socket. Add the absolute Git common directory only to a Lead
-or commit-capable Peer whose authority requires it, and show that broadened
-boundary. A project-read-only Peer instead uses mailbox cwd with no checkout or
-common-directory writable root; a Supervisor receives only each exact notebook
-root.
+Before smoke or serialization, Codex Lead `workspace-write` args must contain
+`--add-dir <absolute-git-common-dir>` and any network flag required for Herdr.
+Show that boundary; add the root elsewhere only when authorized. A read-only
+Peer uses mailbox cwd without writable project/Git roots; a Supervisor receives
+only its notebook root.
 
 Discovery is complete when the shallow kind map and compact deep inventory were
 shown; every selected kind, executable, native argument, model, spawn control,
@@ -115,11 +111,11 @@ project tactics, not task-specific file lists, secrets, or global role manuals.
 
 ## 4. Validate and review
 
-Run `scripts/herdr_orchestrator.py validate-project` on the repository and
-consume its compact JSON result. Recheck every final recipe against live local
-capabilities. Confirm only the two intended files changed,
-all placeholders and credential-like values are absent, and unrelated state is
-preserved. Present the scoped diff and unresolved assumptions for Human review.
+Run `scripts/herdr_orchestrator.py validate-project` with the repository and
+resolved `--git-common-dir`; consume its compact JSON. Recheck every recipe
+live. Confirm only the two intended files changed, placeholders and
+credential-like values are absent, and unrelated state remains. Present the
+scoped diff and unresolved assumptions for Human review.
 
 Setup/update is complete only when schema version 2 parses strictly; both files
 exist with every required protocol section and explicit language; shallow

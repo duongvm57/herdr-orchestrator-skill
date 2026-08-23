@@ -31,6 +31,7 @@ tracked checkout:
 
 ```text
 <git-common-dir>/herdr-orchestrator/runs/<run-id>/
+├── human-task.md
 ├── context/
 │   ├── project-config.toml
 │   ├── workspace-protocol.md
@@ -81,8 +82,10 @@ and digests, scope, authority, and Human-only boundaries in the binding.
    `context/cards/manifest.json`;
 2. `--protocol-source`: run-local `context/project-config.toml`, then run-local
    `context/workspace-protocol.md`;
-3. `--assignment-source`: run-local `human-task.md`, then the saved repository
-   authority, then the saved run binding.
+3. `--assignment-source`: init-run's returned `human_task.path`, then the saved
+   repository authority, then the saved run binding. The returned path is
+   `<run>/human-task.md`; pass it unchanged instead of deriving a `context/`
+   path.
 
 The manifest is a Role Profile source, while the Lead profile supplies the
 fixed trigger for each logical name. `peer-profile` is opaque builder input: the

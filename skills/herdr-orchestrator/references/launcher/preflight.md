@@ -30,10 +30,11 @@ command authority.
 
 ## 2. Validate the project and recipes
 
-Invoke the orchestration helper's `validate-project` operation against the
-repository. Consume only its compact JSON result and retain its exact canonical
-project root, config path/digest, and protocol path/digest as the preflight
-binding; do not recompute or substitute them. Require:
+Invoke the orchestration helper's `validate-project` operation with the
+repository and resolved `--git-common-dir`. Consume only its compact JSON
+result and retain its exact canonical project root, Git common directory,
+config path/digest, and protocol path/digest as the preflight binding; do not
+recompute or substitute them. Require:
 
 - `.orchestration/herdr-orchestrator.toml` at schema `version = 2` with exactly
   one `[roles.lead]`, optional `[roles.supervisor]`, and one or more uniquely
