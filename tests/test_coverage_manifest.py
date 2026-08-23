@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "tests/orchestration-scenarios.json"
-OUTPUT_PATH = ROOT / "references/maintenance/orchestration-invariant-coverage.md"
+OUTPUT_PATH = ROOT / "maintenance/orchestration-invariant-coverage.md"
 RENDERER_PATH = ROOT / "scripts/render_coverage.py"
 
 SPEC = importlib.util.spec_from_file_location("render_coverage", RENDERER_PATH)
@@ -32,6 +32,7 @@ class CoverageManifestTests(unittest.TestCase):
         manifest = render_coverage.validate_manifest(copy.deepcopy(self.raw), ROOT)
 
         self.assertEqual(manifest["schema_version"], 1)
+        self.assertEqual(manifest["source_root"], "skills/herdr-orchestrator")
         self.assertEqual(
             {group["verification"] for group in manifest["groups"]},
             {"automated/static", "live/manual"},
@@ -47,12 +48,21 @@ class CoverageManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(render_coverage.ManifestError, "invalid fields"):
             render_coverage.validate_manifest(invalid, ROOT)
 
+        escaping = copy.deepcopy(self.raw)
+        escaping["source_root"] = "../outside"
+        with self.assertRaisesRegex(render_coverage.ManifestError, "normalized"):
+            render_coverage.validate_manifest(escaping, ROOT)
+
     def test_source_paths_and_automated_selectors_resolve(self) -> None:
         manifest = render_coverage.validate_manifest(copy.deepcopy(self.raw), ROOT)
+        source_root = ROOT / manifest["source_root"]
 
         for group in manifest["groups"]:
             for relative in group["sources"]:
-                self.assertTrue((ROOT / relative).is_file(), f"{group['slug']}: {relative}")
+                self.assertTrue(
+                    (source_root / relative).is_file(),
+                    f"{group['slug']}: {relative}",
+                )
             for selector in group["test_selectors"]:
                 render_coverage.validate_test_selector(ROOT, selector)
 

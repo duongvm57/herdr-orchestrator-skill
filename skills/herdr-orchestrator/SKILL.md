@@ -21,8 +21,6 @@ Read the selected procedure completely. Procedures compose only where stated.
   `references/launcher/task-launch.md`.
 - **Supervisor attachment:** read `references/launcher/preflight.md`, then
   `references/launcher/supervisor-attachment.md`.
-- **Package maintenance/audit:** read
-  `references/maintenance/orchestration-invariant-coverage.md`.
 
 Do not load an unselected procedure. Runtime role profiles and disclosed cards
 are opaque pack sources: pass their paths to the orchestration helper without

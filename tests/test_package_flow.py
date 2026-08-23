@@ -9,8 +9,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPER = ROOT / "scripts/herdr_orchestrator.py"
-LAYOUT = ROOT / "scripts/herdr_balanced_split.py"
+SKILL_ROOT = ROOT / "skills/herdr-orchestrator"
+HELPER = SKILL_ROOT / "scripts/herdr_orchestrator.py"
+LAYOUT = SKILL_ROOT / "scripts/herdr_balanced_split.py"
 
 
 class RealPackageFlowTests(unittest.TestCase):
@@ -61,7 +62,7 @@ args = ["--model", "gpt-test"]
             ):
                 path.write_text(body, encoding="utf-8")
             protocol_lines: list[str] = []
-            for line in (ROOT / "assets/workspace-protocol-template.md").read_text(
+            for line in (SKILL_ROOT / "assets/workspace-protocol-template.md").read_text(
                 encoding="utf-8"
             ).splitlines():
                 if line.endswith("YYYY-MM-DD"):
@@ -109,11 +110,11 @@ args = ["--model", "gpt-test"]
                 str(LAYOUT),
             ]
             assets = {
-                "topology": ROOT / "references/lead/topology.md",
-                "peer-lifecycle": ROOT / "references/lead/peer-lifecycle.md",
-                "candidate-and-verdict": ROOT / "references/lead/candidate-and-verdict.md",
-                "anti-pattern-details": ROOT / "references/cards/anti-patterns.md",
-                "peer-profile": ROOT / "references/roles/peer.md",
+                "topology": SKILL_ROOT / "references/lead/topology.md",
+                "peer-lifecycle": SKILL_ROOT / "references/lead/peer-lifecycle.md",
+                "candidate-and-verdict": SKILL_ROOT / "references/lead/candidate-and-verdict.md",
+                "anti-pattern-details": SKILL_ROOT / "references/anti-patterns/responses.md",
+                "peer-profile": SKILL_ROOT / "references/roles/peer.md",
             }
             for name, path in assets.items():
                 init_args.extend(("--asset", f"{name}={path}"))
@@ -140,9 +141,9 @@ args = ["--model", "gpt-test"]
                 "--output",
                 str(lead_pack),
                 "--role-source",
-                str(ROOT / "references/roles/lead.md"),
+                str(SKILL_ROOT / "references/roles/lead.md"),
                 "--role-source",
-                str(ROOT / "references/cards/anti-pattern-index.md"),
+                str(SKILL_ROOT / "references/anti-patterns/index.md"),
                 "--role-source",
                 str(manifest),
                 "--protocol-source",

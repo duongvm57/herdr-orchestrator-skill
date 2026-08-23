@@ -4,42 +4,42 @@
     "skill": {
       "render": "concat",
       "files": [
-        "SKILL.md"
+        "skills/herdr-orchestrator/SKILL.md"
       ],
       "hard_limit": 500,
-      "baseline": 417
+      "baseline": 394
     },
     "setup_launcher": {
       "render": "concat",
       "files": [
-        "SKILL.md",
-        "references/launcher/setup.md",
-        "references/launcher/workspace-protocol-authoring.md",
-        "assets/config.toml",
-        "assets/workspace-protocol-template.md"
+        "skills/herdr-orchestrator/SKILL.md",
+        "skills/herdr-orchestrator/references/launcher/setup.md",
+        "skills/herdr-orchestrator/references/launcher/workspace-protocol-authoring.md",
+        "skills/herdr-orchestrator/assets/config.toml",
+        "skills/herdr-orchestrator/assets/workspace-protocol-template.md"
       ],
       "hard_limit": 3000,
-      "baseline": 2932
+      "baseline": 2909
     },
     "task_launcher": {
       "render": "concat",
       "files": [
-        "SKILL.md",
-        "references/launcher/preflight.md",
-        "references/launcher/task-launch.md"
+        "skills/herdr-orchestrator/SKILL.md",
+        "skills/herdr-orchestrator/references/launcher/preflight.md",
+        "skills/herdr-orchestrator/references/launcher/task-launch.md"
       ],
       "hard_limit": 4000,
-      "baseline": 2878
+      "baseline": 2856
     },
     "supervisor_attachment": {
       "render": "concat",
       "files": [
-        "SKILL.md",
-        "references/launcher/preflight.md",
-        "references/launcher/supervisor-attachment.md"
+        "skills/herdr-orchestrator/SKILL.md",
+        "skills/herdr-orchestrator/references/launcher/preflight.md",
+        "skills/herdr-orchestrator/references/launcher/supervisor-attachment.md"
       ],
       "hard_limit": 3000,
-      "baseline": 2735
+      "baseline": 2713
     },
     "lead_initial_fixed": {
       "render": "pack",
@@ -48,11 +48,11 @@
         "role_profile": [
           {
             "label": "lead.md",
-            "file": "references/roles/lead.md"
+            "file": "skills/herdr-orchestrator/references/roles/lead.md"
           },
           {
             "label": "anti-pattern-index.md",
-            "file": "references/cards/anti-pattern-index.md"
+            "file": "skills/herdr-orchestrator/references/anti-patterns/index.md"
           },
           {
             "label": "manifest.json",
@@ -72,7 +72,7 @@
         "role_profile": [
           {
             "label": "peer-profile",
-            "file": "references/roles/peer.md"
+            "file": "skills/herdr-orchestrator/references/roles/peer.md"
           }
         ],
         "workspace_protocol": [],
@@ -88,11 +88,11 @@
         "role_profile": [
           {
             "label": "supervisor.md",
-            "file": "references/roles/supervisor.md"
+            "file": "skills/herdr-orchestrator/references/roles/supervisor.md"
           },
           {
             "label": "anti-pattern-index.md",
-            "file": "references/cards/anti-pattern-index.md"
+            "file": "skills/herdr-orchestrator/references/anti-patterns/index.md"
           },
           {
             "label": "manifest.json",

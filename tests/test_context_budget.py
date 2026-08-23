@@ -11,6 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SKILL_ROOT = ROOT / "skills/herdr-orchestrator"
 SPEC = importlib.util.spec_from_file_location(
     "context_budget", ROOT / "scripts" / "context_budget.py"
 )
@@ -152,7 +153,7 @@ class ContextBudgetTests(unittest.TestCase):
             completed = subprocess.run(
                 [
                     sys.executable,
-                    str(ROOT / "scripts" / "herdr_orchestrator.py"),
+                    str(SKILL_ROOT / "scripts" / "herdr_orchestrator.py"),
                     "pack",
                     "--role",
                     "supervisor",
@@ -190,11 +191,11 @@ class ContextBudgetTests(unittest.TestCase):
 
     def test_repository_card_fixtures_match_packaged_assets(self) -> None:
         packaged = {
-            "topology": ROOT / "references/lead/topology.md",
-            "peer-lifecycle": ROOT / "references/lead/peer-lifecycle.md",
-            "candidate-and-verdict": ROOT / "references/lead/candidate-and-verdict.md",
-            "anti-pattern-details": ROOT / "references/cards/anti-patterns.md",
-            "peer-profile": ROOT / "references/roles/peer.md",
+            "topology": SKILL_ROOT / "references/lead/topology.md",
+            "peer-lifecycle": SKILL_ROOT / "references/lead/peer-lifecycle.md",
+            "candidate-and-verdict": SKILL_ROOT / "references/lead/candidate-and-verdict.md",
+            "anti-pattern-details": SKILL_ROOT / "references/anti-patterns/responses.md",
+            "peer-profile": SKILL_ROOT / "references/roles/peer.md",
         }
         for fixture_name in (
             "lead-card-manifest.json",

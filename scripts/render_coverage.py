@@ -14,7 +14,7 @@ from typing import Any, Sequence
 
 
 DEFAULT_MANIFEST = "tests/orchestration-scenarios.json"
-DEFAULT_OUTPUT = "references/maintenance/orchestration-invariant-coverage.md"
+DEFAULT_OUTPUT = "maintenance/orchestration-invariant-coverage.md"
 VERIFICATION_MODES = {"automated/static", "live/manual"}
 SLUG_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 SELECTOR_RE = re.compile(
@@ -113,11 +113,28 @@ def validate_manifest(manifest: Any, root: Path) -> dict[str, Any]:
         raise ManifestError("manifest root must be an object")
     _require_exact_keys(
         manifest,
-        {"schema_version", "legacy_ids", "groups"},
+        {"schema_version", "source_root", "legacy_ids", "groups"},
         "manifest",
     )
     if manifest["schema_version"] != 1:
         raise ManifestError("schema_version must equal 1")
+
+    source_root_value = _nonempty_string(manifest["source_root"], "source_root")
+    source_root_path = PurePosixPath(source_root_value)
+    if (
+        source_root_path.is_absolute()
+        or not source_root_path.parts
+        or any(part in {".", ".."} for part in source_root_path.parts)
+    ):
+        raise ManifestError("source_root must be a normalized repository-relative path")
+    source_root = root.joinpath(*source_root_path.parts)
+    try:
+        resolved_source_root = source_root.resolve(strict=True)
+        resolved_source_root.relative_to(root.resolve())
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ManifestError("source_root does not resolve inside the repository") from exc
+    if not resolved_source_root.is_dir():
+        raise ManifestError("source_root must resolve to a directory")
 
     legacy = manifest["legacy_ids"]
     if not isinstance(legacy, dict):
@@ -210,7 +227,7 @@ def validate_manifest(manifest: Any, root: Path) -> dict[str, Any]:
         seen_ids.extend(ids)
 
         for source in sources:
-            _validate_source_path(root, source, f"{label}.sources")
+            _validate_source_path(resolved_source_root, source, f"{label}.sources")
         for selector in selectors:
             validate_test_selector(root, selector)
 
@@ -249,7 +266,7 @@ def render_document(manifest: dict[str, Any]) -> str:
         "runtime contracts. The JSON manifest is the source of truth for each group's",
         "per-ID scenario text, contract paths, and automated selectors. Read only the",
         "relevant group's manifest entries when auditing an individual invariant.",
-        "The maintenance ownership map is `references/maintenance/assignments-and-evidence.md`.",
+        "The maintenance ownership map is `maintenance/assignments-and-evidence.md`.",
         "",
         "## Verification meaning",
         "",

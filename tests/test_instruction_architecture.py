@@ -6,10 +6,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SKILL_ROOT = ROOT / "skills/herdr-orchestrator"
 
 
 def read(relative: str) -> str:
-    return (ROOT / relative).read_text(encoding="utf-8")
+    return (SKILL_ROOT / relative).read_text(encoding="utf-8")
 
 
 class InstructionArchitectureTests(unittest.TestCase):
@@ -27,7 +28,6 @@ class InstructionArchitectureTests(unittest.TestCase):
             "references/launcher/setup.md",
             "references/launcher/task-launch.md",
             "references/launcher/supervisor-attachment.md",
-            "references/maintenance/orchestration-invariant-coverage.md",
         ):
             self.assertIn(f"`{path}`", skill)
         self.assertNotIn("references/roles/lead.md", skill)
@@ -35,13 +35,24 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertNotIn("references/roles/supervisor.md", skill)
 
     def test_references_are_grouped_by_consumer(self) -> None:
-        reference_root = ROOT / "references"
+        reference_root = SKILL_ROOT / "references"
 
         self.assertEqual(list(reference_root.glob("*.md")), [])
         self.assertEqual(
             {path.name for path in reference_root.iterdir() if path.is_dir()},
-            {"cards", "launcher", "lead", "maintenance", "roles"},
+            {"anti-patterns", "launcher", "lead", "roles"},
         )
+
+    def test_installable_bundle_excludes_repository_maintenance(self) -> None:
+        self.assertFalse((ROOT / "SKILL.md").exists())
+        for excluded in (
+            "README.md",
+            "tests",
+            "maintenance",
+            ".github",
+            "requirements-dev.txt",
+        ):
+            self.assertFalse((SKILL_ROOT / excluded).exists(), excluded)
 
     def test_runtime_docs_never_execute_the_generic_herdr_skill_dump(self) -> None:
         runtime_docs = (
@@ -100,7 +111,7 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertRegex(supervisor, r"that\s+project's live language")
 
     def test_readme_stays_user_facing(self) -> None:
-        readme = read("README.md")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
         for internal in (
             "context-budgets.json",
@@ -131,7 +142,7 @@ class InstructionArchitectureTests(unittest.TestCase):
 
     def test_initial_lead_context_excludes_disclosed_bodies(self) -> None:
         lead = read("references/roles/lead.md")
-        index = read("references/cards/anti-pattern-index.md")
+        index = read("references/anti-patterns/index.md")
         combined = lead + index
 
         self.assertNotIn("# PEER REPORT", combined)
@@ -144,7 +155,7 @@ class InstructionArchitectureTests(unittest.TestCase):
             "references/lead/topology.md": ("before choosing a topology", "Selection is complete"),
             "references/lead/peer-lifecycle.md": ("before drafting", "Collection is complete"),
             "references/lead/candidate-and-verdict.md": ("before recording", "The run is complete"),
-            "references/cards/anti-patterns.md": (
+            "references/anti-patterns/responses.md": (
                 "After a signal triggers",
                 "Response is complete only when the observed signal is recorded as evidence",
             ),
@@ -155,7 +166,10 @@ class InstructionArchitectureTests(unittest.TestCase):
             self.assertIn(completion, body, path)
 
     def test_repository_instruction_pointers_resolve(self) -> None:
-        documents = [ROOT / "SKILL.md", *sorted((ROOT / "references").rglob("*.md"))]
+        documents = [
+            SKILL_ROOT / "SKILL.md",
+            *sorted((SKILL_ROOT / "references").rglob("*.md")),
+        ]
         pointer = re.compile(r"`((?:references|assets|scripts)/[^`\s]+)`")
         missing: list[str] = []
         for document in documents:
@@ -163,8 +177,8 @@ class InstructionArchitectureTests(unittest.TestCase):
                 relative = match.group(1).rstrip(".,;:")
                 if "<" in relative or ">" in relative:
                     continue
-                if not (ROOT / relative).exists():
-                    missing.append(f"{document.relative_to(ROOT)} -> {relative}")
+                if not (SKILL_ROOT / relative).exists():
+                    missing.append(f"{document.relative_to(SKILL_ROOT)} -> {relative}")
         self.assertEqual(missing, [])
 
 

@@ -72,7 +72,7 @@ access, so choose them deliberately and verify both with bounded canaries.
 Install into the harness used as Launcher:
 
 ```bash
-npx skills add duongvm57/herdr-orchestrator --agent codex
+npx skills add duongvm57/herdr-orchestrator --skill herdr-orchestrator --agent codex
 ```
 
 Leads, Peers, and Supervisors do not need the skill installed; their

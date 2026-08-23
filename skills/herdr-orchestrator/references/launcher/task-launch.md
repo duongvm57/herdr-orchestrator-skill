@@ -19,7 +19,7 @@ before-state, layout helper, and these opaque `--asset name=path` inputs:
 topology=references/lead/topology.md
 peer-lifecycle=references/lead/peer-lifecycle.md
 candidate-and-verdict=references/lead/candidate-and-verdict.md
-anti-pattern-details=references/cards/anti-patterns.md
+anti-pattern-details=references/anti-patterns/responses.md
 peer-profile=references/roles/peer.md
 ```
 
@@ -77,7 +77,7 @@ include run ID, repository root, evidence root, before-state, helper/state paths
 and digests, scope, authority, and Human-only boundaries in the binding.
 
 1. `--role-source`: `references/roles/lead.md`, then
-   `references/cards/anti-pattern-index.md`, then
+   `references/anti-patterns/index.md`, then
    `context/cards/manifest.json`;
 2. `--protocol-source`: run-local `context/project-config.toml`, then run-local
    `context/workspace-protocol.md`;

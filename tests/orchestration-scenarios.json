@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "source_root": "skills/herdr-orchestrator",
   "legacy_ids": {
     "prefix": "FT-",
     "first": 1,
@@ -29,8 +30,8 @@
         "references/launcher/task-launch.md",
         "references/launcher/supervisor-attachment.md",
         "references/lead/topology.md",
-        "references/cards/anti-pattern-index.md",
-        "references/cards/anti-patterns.md",
+        "references/anti-patterns/index.md",
+        "references/anti-patterns/responses.md",
         "references/roles/lead.md",
         "references/roles/peer.md",
         "references/lead/peer-lifecycle.md",
@@ -432,8 +433,8 @@
         }
       ],
       "sources": [
-        "references/cards/anti-pattern-index.md",
-        "references/cards/anti-patterns.md",
+        "references/anti-patterns/index.md",
+        "references/anti-patterns/responses.md",
         "references/roles/lead.md",
         "references/roles/supervisor.md"
       ],

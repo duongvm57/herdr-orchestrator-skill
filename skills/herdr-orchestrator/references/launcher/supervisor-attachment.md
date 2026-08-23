@@ -46,7 +46,7 @@ identity and every access probe and exclusive root reservation passed.
 
 First invoke the host run helper's `stage-assets` operation with
 `--run-dir <absolute-host-run>` and
-`--asset anti-pattern-details=references/cards/anti-patterns.md`, requesting a new
+`--asset anti-pattern-details=references/anti-patterns/responses.md`, requesting a new
 filtered selection through `--selection-output` at
 `<host-attachment-root>/card-manifest.json`. Require byte-for-byte staging and
 a digest-only selection containing exactly `anti-pattern-details`; do not
@@ -64,7 +64,7 @@ bindings, notebook roots, host recipe authority, observation scope, Human-only
 boundaries, and notebook Assignment.
 
 1. `--role-source`: `references/roles/supervisor.md`, then
-   `references/cards/anti-pattern-index.md`, then the filtered selection manifest;
+   `references/anti-patterns/index.md`, then the filtered selection manifest;
 2. `--protocol-source`: every bound run's full
    `context/workspace-protocol.md` snapshot under a unique labelled project/run
    boundary; and
