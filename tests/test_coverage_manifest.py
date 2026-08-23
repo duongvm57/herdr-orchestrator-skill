@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "tests/orchestration-scenarios.json"
-OUTPUT_PATH = ROOT / "references/orchestration-invariant-coverage.md"
+OUTPUT_PATH = ROOT / "references/maintenance/orchestration-invariant-coverage.md"
 RENDERER_PATH = ROOT / "scripts/render_coverage.py"
 
 SPEC = importlib.util.spec_from_file_location("render_coverage", RENDERER_PATH)

@@ -1,8 +1,8 @@
 # Task launch
 
-Read `references/launcher.md` completely and pass its preflight gate before
-starting this branch. This branch creates one run and one fresh Project Lead;
-it does not coordinate Peers or wait for project work.
+Read `references/launcher/preflight.md` completely and pass its preflight gate
+before starting this branch. This branch creates one run and one fresh Project
+Lead; it does not coordinate Peers or wait for project work.
 
 ## 1. Initialize durable run evidence
 
@@ -16,10 +16,10 @@ directory, collision-free run ID, verbatim Human-task source, captured
 before-state, layout helper, and these opaque `--asset name=path` inputs:
 
 ```text
-topology=references/topology.md
+topology=references/lead/topology.md
 peer-lifecycle=references/lead/peer-lifecycle.md
 candidate-and-verdict=references/lead/candidate-and-verdict.md
-anti-pattern-details=references/anti-patterns.md
+anti-pattern-details=references/cards/anti-patterns.md
 peer-profile=references/roles/peer.md
 ```
 
@@ -77,7 +77,7 @@ include run ID, repository root, evidence root, before-state, helper/state paths
 and digests, scope, authority, and Human-only boundaries in the binding.
 
 1. `--role-source`: `references/roles/lead.md`, then
-   `references/anti-pattern-index.md`, then
+   `references/cards/anti-pattern-index.md`, then
    `context/cards/manifest.json`;
 2. `--protocol-source`: run-local `context/project-config.toml`, then run-local
    `context/workspace-protocol.md`;

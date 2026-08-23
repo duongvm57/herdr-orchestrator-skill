@@ -190,10 +190,10 @@ class ContextBudgetTests(unittest.TestCase):
 
     def test_repository_card_fixtures_match_packaged_assets(self) -> None:
         packaged = {
-            "topology": ROOT / "references/topology.md",
+            "topology": ROOT / "references/lead/topology.md",
             "peer-lifecycle": ROOT / "references/lead/peer-lifecycle.md",
             "candidate-and-verdict": ROOT / "references/lead/candidate-and-verdict.md",
-            "anti-pattern-details": ROOT / "references/anti-patterns.md",
+            "anti-pattern-details": ROOT / "references/cards/anti-patterns.md",
             "peer-profile": ROOT / "references/roles/peer.md",
         }
         for fixture_name in (

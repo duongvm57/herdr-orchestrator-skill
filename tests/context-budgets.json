@@ -7,39 +7,39 @@
         "SKILL.md"
       ],
       "hard_limit": 500,
-      "baseline": 401
+      "baseline": 417
     },
     "setup_launcher": {
       "render": "concat",
       "files": [
         "SKILL.md",
-        "references/setup.md",
-        "references/workspace-protocol-authoring.md",
+        "references/launcher/setup.md",
+        "references/launcher/workspace-protocol-authoring.md",
         "assets/config.toml",
         "assets/workspace-protocol-template.md"
       ],
       "hard_limit": 3000,
-      "baseline": 2909
+      "baseline": 2932
     },
     "task_launcher": {
       "render": "concat",
       "files": [
         "SKILL.md",
-        "references/launcher.md",
-        "references/launch.md"
+        "references/launcher/preflight.md",
+        "references/launcher/task-launch.md"
       ],
       "hard_limit": 4000,
-      "baseline": 2855
+      "baseline": 2878
     },
     "supervisor_attachment": {
       "render": "concat",
       "files": [
         "SKILL.md",
-        "references/launcher.md",
-        "references/supervisor-attachment.md"
+        "references/launcher/preflight.md",
+        "references/launcher/supervisor-attachment.md"
       ],
       "hard_limit": 3000,
-      "baseline": 2714
+      "baseline": 2735
     },
     "lead_initial_fixed": {
       "render": "pack",
@@ -52,7 +52,7 @@
           },
           {
             "label": "anti-pattern-index.md",
-            "file": "references/anti-pattern-index.md"
+            "file": "references/cards/anti-pattern-index.md"
           },
           {
             "label": "manifest.json",
@@ -92,7 +92,7 @@
           },
           {
             "label": "anti-pattern-index.md",
-            "file": "references/anti-pattern-index.md"
+            "file": "references/cards/anti-pattern-index.md"
           },
           {
             "label": "manifest.json",

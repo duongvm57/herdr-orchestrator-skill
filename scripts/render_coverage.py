@@ -14,7 +14,7 @@ from typing import Any, Sequence
 
 
 DEFAULT_MANIFEST = "tests/orchestration-scenarios.json"
-DEFAULT_OUTPUT = "references/orchestration-invariant-coverage.md"
+DEFAULT_OUTPUT = "references/maintenance/orchestration-invariant-coverage.md"
 VERIFICATION_MODES = {"automated/static", "live/manual"}
 SLUG_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 SELECTOR_RE = re.compile(
@@ -249,7 +249,7 @@ def render_document(manifest: dict[str, Any]) -> str:
         "runtime contracts. The JSON manifest is the source of truth for each group's",
         "per-ID scenario text, contract paths, and automated selectors. Read only the",
         "relevant group's manifest entries when auditing an individual invariant.",
-        "The maintenance ownership map is `references/assignments-and-evidence.md`.",
+        "The maintenance ownership map is `references/maintenance/assignments-and-evidence.md`.",
         "",
         "## Verification meaning",
         "",

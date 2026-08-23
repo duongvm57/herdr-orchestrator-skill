@@ -14,15 +14,15 @@ this skill.
 
 Read the selected procedure completely. Procedures compose only where stated.
 
-- **Setup/update:** read `references/setup.md`,
-  `references/workspace-protocol-authoring.md`, `assets/config.toml`, and
-  `assets/workspace-protocol-template.md`.
-- **Task launch:** read `references/launcher.md`, then
-  `references/launch.md`.
-- **Supervisor attachment:** read `references/launcher.md`, then
-  `references/supervisor-attachment.md`.
+- **Setup/update:** read `references/launcher/setup.md`,
+  `references/launcher/workspace-protocol-authoring.md`,
+  `assets/config.toml`, and `assets/workspace-protocol-template.md`.
+- **Task launch:** read `references/launcher/preflight.md`, then
+  `references/launcher/task-launch.md`.
+- **Supervisor attachment:** read `references/launcher/preflight.md`, then
+  `references/launcher/supervisor-attachment.md`.
 - **Package maintenance/audit:** read
-  `references/orchestration-invariant-coverage.md`.
+  `references/maintenance/orchestration-invariant-coverage.md`.
 
 Do not load an unselected procedure. Runtime role profiles and disclosed cards
 are opaque pack sources: pass their paths to the orchestration helper without

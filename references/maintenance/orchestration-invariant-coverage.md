@@ -6,7 +6,7 @@ This maintainer index groups the legacy scenarios without duplicating their
 runtime contracts. The JSON manifest is the source of truth for each group's
 per-ID scenario text, contract paths, and automated selectors. Read only the
 relevant group's manifest entries when auditing an individual invariant.
-The maintenance ownership map is `references/assignments-and-evidence.md`.
+The maintenance ownership map is `references/maintenance/assignments-and-evidence.md`.
 
 ## Verification meaning
 

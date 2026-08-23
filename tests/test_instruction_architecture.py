@@ -24,22 +24,31 @@ class InstructionArchitectureTests(unittest.TestCase):
         skill = read("SKILL.md")
 
         for path in (
-            "references/setup.md",
-            "references/launch.md",
-            "references/supervisor-attachment.md",
-            "references/orchestration-invariant-coverage.md",
+            "references/launcher/setup.md",
+            "references/launcher/task-launch.md",
+            "references/launcher/supervisor-attachment.md",
+            "references/maintenance/orchestration-invariant-coverage.md",
         ):
             self.assertIn(f"`{path}`", skill)
         self.assertNotIn("references/roles/lead.md", skill)
         self.assertNotIn("references/roles/peer.md", skill)
         self.assertNotIn("references/roles/supervisor.md", skill)
 
+    def test_references_are_grouped_by_consumer(self) -> None:
+        reference_root = ROOT / "references"
+
+        self.assertEqual(list(reference_root.glob("*.md")), [])
+        self.assertEqual(
+            {path.name for path in reference_root.iterdir() if path.is_dir()},
+            {"cards", "launcher", "lead", "maintenance", "roles"},
+        )
+
     def test_runtime_docs_never_execute_the_generic_herdr_skill_dump(self) -> None:
         runtime_docs = (
-            "references/setup.md",
-            "references/launcher.md",
-            "references/launch.md",
-            "references/supervisor-attachment.md",
+            "references/launcher/setup.md",
+            "references/launcher/preflight.md",
+            "references/launcher/task-launch.md",
+            "references/launcher/supervisor-attachment.md",
             "references/roles/lead.md",
             "references/roles/peer.md",
             "references/roles/supervisor.md",
@@ -52,16 +61,16 @@ class InstructionArchitectureTests(unittest.TestCase):
             self.assertIsNone(command_line.search(read(path)), path)
 
     def test_launcher_and_supervisor_branches_are_separate(self) -> None:
-        launch = read("references/launch.md")
-        supervisor = read("references/supervisor-attachment.md")
+        launch = read("references/launcher/task-launch.md")
+        supervisor = read("references/launcher/supervisor-attachment.md")
 
         self.assertNotIn("references/roles/supervisor.md", launch)
         self.assertNotIn("init-run", supervisor)
         self.assertIn("stage-assets", supervisor)
 
     def test_run_context_uses_launch_time_project_snapshots(self) -> None:
-        launch = read("references/launch.md")
-        supervisor = read("references/supervisor-attachment.md")
+        launch = read("references/launcher/task-launch.md")
+        supervisor = read("references/launcher/supervisor-attachment.md")
 
         self.assertIn("--project-config-file", launch)
         self.assertIn("--workspace-protocol-file", launch)
@@ -76,7 +85,7 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertNotIn("then the full project Workspace Protocol", launch)
 
     def test_supervisor_attachment_is_collision_and_language_bound(self) -> None:
-        supervisor = read("references/supervisor-attachment.md")
+        supervisor = read("references/launcher/supervisor-attachment.md")
 
         self.assertIn("<attachment-id>", supervisor)
         self.assertIn("[a-z][a-z0-9_-]{0,31}", supervisor)
@@ -104,7 +113,7 @@ class InstructionArchitectureTests(unittest.TestCase):
             self.assertNotIn(internal, readme)
 
     def test_lead_asset_names_match_launch_staging_contract(self) -> None:
-        launch = read("references/launch.md")
+        launch = read("references/launcher/task-launch.md")
         lead = read("references/roles/lead.md")
         expected = {
             "topology",
@@ -122,7 +131,7 @@ class InstructionArchitectureTests(unittest.TestCase):
 
     def test_initial_lead_context_excludes_disclosed_bodies(self) -> None:
         lead = read("references/roles/lead.md")
-        index = read("references/anti-pattern-index.md")
+        index = read("references/cards/anti-pattern-index.md")
         combined = lead + index
 
         self.assertNotIn("# PEER REPORT", combined)
@@ -132,10 +141,10 @@ class InstructionArchitectureTests(unittest.TestCase):
 
     def test_disclosed_cards_have_explicit_trigger_and_completion_bound(self) -> None:
         cards = {
-            "references/topology.md": ("before choosing a topology", "Selection is complete"),
+            "references/lead/topology.md": ("before choosing a topology", "Selection is complete"),
             "references/lead/peer-lifecycle.md": ("before drafting", "Collection is complete"),
             "references/lead/candidate-and-verdict.md": ("before recording", "The run is complete"),
-            "references/anti-patterns.md": (
+            "references/cards/anti-patterns.md": (
                 "After a signal triggers",
                 "Response is complete only when the observed signal is recorded as evidence",
             ),

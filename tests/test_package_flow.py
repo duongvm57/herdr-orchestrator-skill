@@ -109,10 +109,10 @@ args = ["--model", "gpt-test"]
                 str(LAYOUT),
             ]
             assets = {
-                "topology": ROOT / "references/topology.md",
+                "topology": ROOT / "references/lead/topology.md",
                 "peer-lifecycle": ROOT / "references/lead/peer-lifecycle.md",
                 "candidate-and-verdict": ROOT / "references/lead/candidate-and-verdict.md",
-                "anti-pattern-details": ROOT / "references/anti-patterns.md",
+                "anti-pattern-details": ROOT / "references/cards/anti-patterns.md",
                 "peer-profile": ROOT / "references/roles/peer.md",
             }
             for name, path in assets.items():
@@ -142,7 +142,7 @@ args = ["--model", "gpt-test"]
                 "--role-source",
                 str(ROOT / "references/roles/lead.md"),
                 "--role-source",
-                str(ROOT / "references/anti-pattern-index.md"),
+                str(ROOT / "references/cards/anti-pattern-index.md"),
                 "--role-source",
                 str(manifest),
                 "--protocol-source",

@@ -6,10 +6,10 @@ authoritative home and is disclosed at the action that consumes it:
 | Contract | Authoritative source | Runtime trigger |
 | --- | --- | --- |
 | Three-layer pack and language ordering | `SKILL.md` | Every delivery |
-| Run initialization, initial `launch`, and handoff | `references/launch.md` | Task launch |
+| Run initialization, initial `launch`, and handoff | `references/launcher/task-launch.md` | Task launch |
 | Peer Assignment fields, disposition, exact report schema, delivery, promotion, and `assignment`/`report` evidence | `references/lead/peer-lifecycle.md` | Before first Peer lifecycle action |
 | Stable candidate, verification, review, Human request, verdict, ledger, and terminal `finish` | `references/lead/candidate-and-verdict.md` | Before the first corresponding milestone |
-| Supervisor binding, notebook receipts, and authority | `references/supervisor-attachment.md` | Explicit Supervisor attachment |
+| Supervisor binding, notebook receipts, and authority | `references/launcher/supervisor-attachment.md` | Explicit Supervisor attachment |
 
 The orchestration helper stages Lead cards and opaque Peer role bytes under the
 run, records their SHA-256 digests, assembles sources in role/protocol/assignment
