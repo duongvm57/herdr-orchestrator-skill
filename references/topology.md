@@ -76,6 +76,12 @@ Record the base and integration owner before start. The Lead alone creates,
 hands back, integrates, and removes worktrees it owns; pre-existing worktrees
 remain untouched.
 
+Run-created Peer panes may be retired only after their complete handoff is
+durable and the session cannot receive continuation or correction. Retire a
+settled read-only Reviewer before creating its fresh replacement when display
+capacity is exhausted. Preserve the Launcher, Lead, pre-existing panes, and the
+same Engineer until its correction lifecycle ends.
+
 Review starts only after the writer identifies a stable candidate: an exact
 commit, or a deterministic base/diff/artifact digest when commit authority is
 absent. A changed candidate invalidates its earlier review.

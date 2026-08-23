@@ -1,28 +1,19 @@
-version = 1
-default_peer = "general"
+version = 2
 
-# Setup replaces placeholders with native arguments validated on this machine.
-[lead]
-kind = "codex"
-args = ["--model", "<lead-model>", "<native-project-and-run-evidence-write-policy>", "--disable", "multi_agent"]
+# Setup replaces every placeholder with a recipe validated on this machine.
+[roles.lead]
+kind = "<lead-kind>"
+args = ["<lead-native-arg>"]
 
 # Optional. Its presence never authorizes or automatically launches a Supervisor.
-[supervisor]
-kind = "claude"
-args = ["--model", "<supervisor-model>", "--effort", "medium", "<native-project-readonly-notebook-write-policy>", "--disallowedTools", "Task"]
+[roles.supervisor]
+kind = "<supervisor-kind>"
+args = ["<supervisor-native-arg>"]
 
-[peer.general]
-kind = "codex"
-args = ["--model", "<peer-model>", "<native-owned-workspace-write-policy>", "--disable", "multi_agent"]
-
-[peer.fast]
-kind = "pi"
-args = ["--model", "<fast-model>", "--thinking", "low", "<native-owned-workspace-write-policy>", "--exclude-tools", "<installed-agent-spawn-tools>"]
-
-[peer.architecture]
-kind = "claude"
-args = ["--model", "<architecture-model>", "--effort", "high", "<native-readonly-policy>", "--disallowedTools", "Task"]
-
-[peer.review]
-kind = "grok"
-args = ["--model", "<review-model>", "--reasoning-effort", "high", "<native-readonly-policy>", "--no-subagents"]
+# Repeat this table for every Human-approved harness/model/access combination.
+# The description includes its project and report-return write boundaries.
+# Recipes are reusable launch capabilities, not Peer roles or topology slots.
+[peer_recipes."<recipe-name>"]
+description = "<capability-cost-independence-and-access-summary>"
+kind = "<peer-kind>"
+args = ["<peer-native-arg>"]

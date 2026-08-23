@@ -59,8 +59,14 @@ an instruction rather than a mechanical gate.
 
 ## Install
 
-You need Git, a running Herdr server, a Launcher session inside a Herdr-managed
-pane, and every configured harness/model installed and authenticated.
+You need Git, Python 3, a running Herdr server, a Launcher session inside a
+Herdr-managed pane, and every configured harness/model installed and
+authenticated. The Launcher's native permission profile must also allow the
+Herdr socket and run-evidence writes in the repository's absolute Git common
+directory. On current Codex, `workspace-write` needs
+`-c sandbox_workspace_write.network_access=true` plus
+`--add-dir <absolute-git-common-dir>`; these broaden network and Git-metadata
+access, so choose them deliberately and verify both with bounded canaries.
 
 Install into the harness used as Launcher:
 
@@ -79,14 +85,26 @@ From the repository, invoke:
 $herdr-orchestrator set up orchestration for this repository
 ```
 
-Setup reads current Herdr and harness help, asks about task classes, models,
-cost, authority, review gates, expensive reversals, and Human-only decisions,
-then creates two tracked files:
+Setup first maps every Herdr-supported local harness by executable, version, and
+integration state. It then performs deeper model, effort, access, and
+native-spawn discovery only for the harnesses you select (or name in the setup
+request). It shows exact native choices before asking which recipes are
+permitted, then asks about cost, authority, review gates, expensive reversals,
+and Human-only decisions and creates two tracked files:
 
 - `.orchestration/herdr-orchestrator.toml` — complete native launch recipes for
-  the Lead, project Peer routes, and an optional Supervisor;
+  the Lead, a project-defined catalog of reusable Peer recipes, and an optional
+  Supervisor;
 - `.orchestration/workspace-protocol.md` — repository-specific authority,
   routing, ownership, topology, evidence, escalation, and evolution policy.
+
+The protocol also separates live orchestration language from durable artifact
+language. First setup asks the Human to confirm two nonempty values for that
+repository; unrelated updates preserve a valid pair unless the Human requests a
+change. The package has no language default. Authoritative embedded skill text
+and technical literals remain unchanged. Selected Lead and Supervisor recipes
+must prove local Herdr control access, and each recipe must prove only its
+assigned evidence/commit boundary, before setup writes config.
 
 Review the generated diff. Re-run setup after changing machine, harness, model,
 or permission policy. Legacy `routes.toml` and `workers.*.toml` are unsupported.
@@ -103,9 +121,20 @@ outside the checkout, starts a fresh Lead, and transfers focus. Missing
 capability stops launch at the exact entry without fallback; existing state is
 preserved.
 
+Fresh-agent panes are placed by a deterministic helper using only panes
+registered to that run. Layout code is not injected; the Lead receives only the
+helper and state paths needed to request Peer panes. When the display is full, a
+completed run-created Peer pane may be retired after its evidence is durable so
+a required fresh replacement can use that space; pre-existing panes and an
+Engineer awaiting correction remain protected. Each split or retirement intent
+is persisted before Herdr mutates panes, allowing deterministic crash recovery
+and rejecting unexplained pane disappearance.
+
 After handoff, work with the Lead. A tiny task may need zero or one Peer.
 Architecture-sensitive work may use a fresh Architect, one Engineer, and a fresh
-Reviewer. Agent count never substitutes for evidence.
+Reviewer. The Lead decides the number and dispositions per task and may reuse or
+mix approved harness/model recipes. Configured recipes are capabilities, not a
+fixed list of Peer types; agent count never substitutes for evidence.
 
 ## Request a Supervisor
 
@@ -139,8 +168,10 @@ not a general filesystem lock.
 
 It records intended context, delivery receipts, assignments, Peer reports,
 stable candidates, verification, review, Human decision requests, Supervisor
-observations, and the Lead verdict. These records are assertions to compare with
-Herdr, Git, the filesystem, and raw command results—not proof by themselves.
+observations, and the Lead verdict. Each Peer returns its full report through an
+exclusive writable file boundary; terminal snapshots are only status/debug
+signals. These records are assertions to compare with Herdr, Git, the
+filesystem, and raw command results—not proof by themselves.
 
 ```text
 Engineer proves writes

@@ -3,27 +3,51 @@
 The invoking session launches one fresh Project Lead or attaches one fresh
 Supervisor to exact active bindings. It never coordinates Peers.
 
-## 1. Preflight without mutation
+## 1. Preflight canaries without durable mutation
 
-Require `HERDR_ENV=1`, then read current `herdr --skill` and relevant `--help`
-output as command authority. Resolve the repository root with Git. Require and
-strictly parse:
+Require `HERDR_ENV=1` and Python 3, then run `herdr agent list` and
+`herdr pane current --current`. If either cannot reach the current Herdr server,
+stop on that exact error before parsing project files or probing harnesses. A
+managed pane whose native sandbox blocks the Herdr socket is not launch-ready.
 
-- `.orchestration/herdr-orchestrator.toml` at `version = 1`;
+Resolve the repository root and absolute Git common directory. Use an
+exclusive, collision-free probe file directly under the common directory to
+prove actual write access, then remove only that probe in the same bounded
+operation. Stop on the exact create/write/fsync/remove failure and require no
+leftover. Permission bits alone are insufficient because a native sandbox may
+make Git metadata read-only. This is the only preflight mutation and it leaves
+no durable state.
+
+Read current `herdr --skill` and relevant `--help` output as command authority.
+Resolve the packaged
+`scripts/herdr_balanced_split.py` relative to this skill and require its
+`--help` check to pass. Require and strictly parse:
+
+- `.orchestration/herdr-orchestrator.toml` at `version = 2`;
 - `.orchestration/workspace-protocol.md` with all twelve protocol sections;
-- one `[lead]` recipe, optional `[supervisor]`; and
-- the configured `default_peer` plus every declared Peer recipe.
+- exactly one `[roles.lead]` recipe, optional `[roles.supervisor]`; and
+- one or more uniquely named `[peer_recipes.<name>]` entries, each with a
+  nonempty `description`, `kind`, and `args`.
 
 Reject every other top-level key, recipe indirection, placeholder, credential,
-legacy profile/route schema, or unresolved default.
+legacy profile/route/`[peer.*]` schema, or empty Peer recipe catalog.
+
+Require the protocol's `Live orchestration language` and `Durable Markdown
+artifact language` fields to contain explicit non-placeholder values. Reject a
+missing or blank field; there is no package fallback. Read both before reporting
+further status or building packs. Keep generated durable prose in the artifact
+language and live Human handoff/status in the live language; preserve embedded
+authoritative source text, verbatim tasks, and technical literals exactly.
 
 Read live `herdr --help`, `herdr agent start --help`, and each configured
 harness's help/catalog. Require a reachable Herdr server, installed executable,
 supported kind, accepted native arguments, available configured model, denied
 native spawning, and role-compatible read/write boundary for every configured
-entry. The Lead must be able to write run evidence; a Supervisor must be
-project-read-only and notebook-write-only. Report the exact failing element and
-stop; never fall back.
+entry. The Lead must be able to write run evidence; every Peer recipe must have
+a validated lossless report-return boundary; a project-read-only Peer must be
+checkout/Git-metadata read-only and exclusive-mailbox writable; and a Supervisor
+must be project-read-only and notebook-write-only. Report the exact failing
+element and stop; never fall back.
 
 Capture before-state evidence:
 
@@ -57,17 +81,24 @@ UTC timestamp plus a short random suffix, then create:
 ├── context/
 ├── assignments/
 ├── reports/
+│   └── inbox/
 ├── supervisor/
+├── tools/
+│   └── herdr_balanced_split.py
 └── events.jsonl
 ```
 
 This location is outside tracked checkout content even when worktrees are used.
 Never add it to a commit. Save the before-state inventory and the exact Human
-task in the run directory.
+task in the run directory. Copy the exact packaged layout helper into `tools/`
+and record its SHA-256. Reserve `tools/layout-state.json` as the runtime state
+path but leave it absent: the helper owns its atomic initialization on the first
+split. Never pre-create an empty file or `{}` state.
 
-The Lead Assignment requires waiting for `launcher-handoff.md` before
-orchestrating or appending events. The Launcher owns initial evidence until that
-marker transfers ledger ownership, preventing concurrent ledger writers.
+The Launcher owns the ledger through the initial `launch` event. It atomically
+creates `launcher-handoff.md` before sending the Lead context; that marker
+transfers later ledger writes to the Lead. The Lead checks it once rather than
+polling for it.
 
 Follow the semantic event ledger contract in
 `references/assignments-and-evidence.md` for every append. The Launcher writes
@@ -75,7 +106,8 @@ only the initial `launch` milestone; the Lead writes later milestones after
 handoff. The ledger never represents current status or inferred acceptance.
 
 Evidence preparation is complete when the directory is outside the checkout,
-all five entries exist, and before-state plus Human task are durable.
+the required directories including an empty report inbox, ledger, helper
+copy/digest, before-state, and Human task are durable.
 
 ## 3. Task launch: build the Lead context pack
 
@@ -88,7 +120,8 @@ Read and concatenate the exact content required by the Lead-pack row in
 2. **Workspace Protocol:** parsed project config with native recipes, then the
    full project Workspace Protocol; and
 3. **Assignment:** verbatim Human task and relevant repository authority, then
-   run ID, absolute evidence directory, repository root, and before-state.
+   run ID, absolute evidence directory, repository root, before-state, and the
+   absolute layout helper/state paths plus helper digest.
 
 Add a small assignment boundary: the Lead may orchestrate only this project and
 Human task; external effects and Human-only decisions remain excluded unless
@@ -102,26 +135,42 @@ direct injection, and no Supervisor role text was added.
 
 ## 4. Task launch: start and transfer
 
-Use live Herdr help as command-shape authority. Create a new pane in the
-repository checkout without focusing it. Generate a unique Lead name that is
-absent from the captured agent list. Never resume or fork an existing agent.
-
-Start the Lead with the configured recipe in the new pane:
+Use live Herdr help as command-shape authority. Invoke the run-local helper once
+with its shared state, repository cwd, and the Launcher's explicit pane ID:
 
 ```text
-herdr agent start <lead-name> --kind <lead.kind> --pane <pane-id> -- <lead.args exactly>
+python3 <run>/tools/herdr_balanced_split.py --state <run>/tools/layout-state.json --cwd <repository> --anchor <launcher-pane-id>
 ```
 
-Pass the saved `context/lead.md` contents as one exact prompt using the execution
-environment's safe argument facility. Do not paraphrase it, send it twice, or
-ask the Lead to invoke this skill. Record the pane ID, name, recipe, context
-path/hash, and prompt delivery in a `launch` event.
+Read the new Lead pane ID from `new_pane_id` in its JSON output. Do not call
+`herdr pane split` separately. A recovery-only result without `new_pane_id` is
+not a new pane; reconcile the same cwd first and repeat only when the helper says
+`retry_required`. Generate a unique Lead name absent from the captured agent
+list. Never resume or fork an existing agent.
 
-After recording the launch event, run `herdr agent focus <lead-name>`. Only after
-Herdr confirms that focus targets the fresh Lead, atomically create
-`launcher-handoff.md` with the Lead/run/context identities and ledger transfer.
-Transfer is complete only after the agent exists, prompt delivery succeeded,
-focus succeeded, and the marker released the Lead. Report the Lead name,
+Start the Lead with the configured role recipe in the new pane:
+
+```text
+herdr agent start <lead-name> --kind <roles.lead.kind> --pane <pane-id> -- <roles.lead.args exactly>
+```
+
+Start with no prompt and wait only for Herdr's startup-readiness result. Record
+the pane ID, name, recipe, and context path/hash in the single `launch` event,
+then atomically create `launcher-handoff.md` with the Lead/run/context identities
+and ledger transfer.
+
+Wrap the saved `context/lead.md` contents once in a short transport envelope
+written in the configured live language; both its first and final lines tell the
+Lead to use that language for conversational replies. The envelope is live
+delivery, not another instruction layer or durable Markdown. Pass the complete
+payload with `herdr agent prompt` using the execution environment's safe
+argument facility and **without** `--wait`. Save the delivery result, context
+digest, and full delivery-payload digest as a receipt outside the ledger. Do not
+put a prompt in the start command, paraphrase or replace the context with a
+pathname, send it twice, or wait for Lead work to finish.
+After delivery is accepted, run `herdr agent focus <lead-name>`. Transfer is
+complete only after the agent exists, the marker predates delivery, exact prompt
+delivery succeeded, and focus targets the fresh Lead. Report the Lead name,
 repository, run ID/evidence path, and preserved state.
 
 If start or delivery fails, preserve evidence and the new pane; report the exact
@@ -148,11 +197,12 @@ roots, authority, and Assignment. Save the exact context in the host run and its
 digest in every bound run's attachment receipt; do not copy project evidence
 between runs.
 
-Create a no-focus pane at the host run's `supervisor/` directory, choose a fresh
-unique name, start the exact host recipe, submit the saved context once, and
-confirm delivery. Prompt each bound Lead with its local receipt path/digest; the
-Lead remains that project's ledger writer. Focus the Supervisor unless the
-Human requests otherwise.
+Create a no-focus pane at the host run's `supervisor/` directory using the bound
+host run's layout helper and shared state, choose a fresh unique name, start the
+exact host recipe, submit the saved context once, and confirm delivery. Prompt
+each bound Lead with its local receipt path/digest; the Lead remains that
+project's ledger writer. Focus the Supervisor unless the Human requests
+otherwise.
 
 On any start, delivery, or receipt failure, preserve the pane and evidence,
 report the exact failure, and do not retry unchanged prerequisites. Never reuse

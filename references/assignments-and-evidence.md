@@ -17,15 +17,21 @@ Owned scope and exclusive resources
 Excluded scope
 Authority and Human-only boundary
 Relevant Workspace Protocol constraints
+Applicable repository instructions and scope
 Dependencies and related owners
 Verification and candidate identity
 Escalation conditions
-Handoff contract and evidence directory
+Handoff contract, report-return path, and writable boundary
 ```
 
 Use a neutral brief: provide observations, constraints, and evidence without
 embedding the preferred conclusion. One assignment has one outcome owner. A
 plan and file list remain provisional.
+
+Every Peer assignment reproduces the complete `PEER REPORT` template below in
+its Handoff contract. Do not replace the headings with “use the required
+report,” a reference to this manual, or a pathname: the Peer does not receive
+this manual.
 
 ## Disposition requirements
 
@@ -48,9 +54,13 @@ not itself grant broader authority.
 ## Context and assignment storage
 
 Save the exact context pack under `context/` before start and its full assignment
-under `assignments/<agent-name>.md`. Record SHA-256, recipe, repository,
-checkout, and agent name. Send the saved pack once. A summary or terminal
-transcript does not replace it.
+under `assignments/<agent-name>.md`. The context's Assignment layer contains
+that full assignment text, not merely its path or a summary. Record SHA-256,
+recipe, repository, checkout, and agent name. The prompt payload contains the
+complete saved pack bytes once inside the configured live-language transport
+envelope. Record both context and full delivery-payload digests; the envelope is
+not persisted as a Markdown context layer. A request to read a path, summary,
+or terminal transcript does not replace direct context delivery.
 
 Peer context contains the Peer profile, only relevant protocol constraints, then
 one disposition/Assignment. Lead context contains the full macro pack.
@@ -59,13 +69,23 @@ protocol, then exact Lead/project/run bindings and notebook Assignment.
 
 ## Peer report
 
-Require full Markdown with no line limit and save it verbatim under `reports/`:
+Before a Peer starts, reserve one collision-free return path that did not
+previously exist. For a project-read-only Peer it is
+`reports/inbox/<agent-name>/report.md`, and that exclusive inbox directory is
+the pane cwd and only writable project/orchestration-evidence root. Harness-owned
+temporary roots may still exist. A writable Peer uses either that inbox when its
+validated boundary permits it or an exact temporary return path inside its owned
+workspace. The temporary path is operational evidence, excluded from the
+candidate, and removed only after verified promotion. Put the exact path and
+boundary in the Assignment.
+
+Require full Markdown with no line limit:
 
 ```markdown
 # PEER REPORT
 
 ## Type
-<Engineer | Architect | Reviewer | Scout | request type>
+<Engineer | Architect | Reviewer | Scout | proof auditor | feature owner | request type>
 
 ## Task / Assignment / Disposition
 <exact identifiers and bounded mandate>
@@ -94,6 +114,17 @@ Require full Markdown with no line limit and save it verbatim under `reports/`:
 
 A report is an evidence-bearing handoff, not proof of acceptance. Missing
 candidate, verification, risk, scope, or requested decision makes it incomplete.
+Write the report in the assigned durable artifact language and accompany its
+delivery with a brief summary in the assigned live orchestration language.
+The Peer writes a sibling partial file and atomically renames it to the assigned
+return path before sending that summary. Terminal output is not the report.
+
+After the exact Peer settles, the Lead requires a regular return file, validates
+the complete schema, computes SHA-256, and atomically promotes the same bytes to
+`reports/<agent-name>.md`. If source and destination paths differ, verify their
+digests match before removing only the collision-free temporary source. A
+missing or incomplete file follows the one-continuation rule; never reconstruct
+it from `herdr agent read`, whose terminal snapshot is not lossless.
 
 ## Stable candidate and review chain
 
@@ -133,7 +164,14 @@ Milestone payloads retain the decision chain:
 - `human_decision_request`: exact question, boundary, options/evidence path;
 - `verdict`: exact candidate, decision, authority, unresolved findings and
   residual risks, with evidence paths; and
-- `finish`: terminal project outcome and durable report/verdict references.
+- `finish`: terminal project outcome and durable report/verdict references. Do
+  not append it for a Human decision request that may resume the same run; after
+  `finish`, no later event is valid.
+
+`human_decision_request` records only an open request. Save the Human's response
+as a durable Markdown evidence file and reference it from the next applicable
+allowed milestone (or the verdict); do not reuse the request type as a decision
+event and do not invent another event type.
 
 Never truncate candidate, verification, risk, or decision information to fit
 JSONL. Put the full record in Markdown and preserve its path plus digest in the

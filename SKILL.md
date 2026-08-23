@@ -43,6 +43,16 @@ Every agent context has three layers in this order:
 3. **Assignment** — one run's objective, scope, authority, verification, and
    handoff.
 
+Communication has two project settings. Use the Workspace Protocol's live
+orchestration language for conversational status, questions, corrections, and
+handoff summaries. Use its durable artifact language for generated prose in
+saved context packs, assignments, reports, observations, and verdicts.
+Authoritative role/reference text embedded in a pack, exact commands,
+identifiers, paths, schemas, output, and the verbatim Human task remain
+unchanged. During first setup, follow the invoking Human's language until both
+settings are confirmed. Agent-delivery transport uses a short envelope in the
+configured live language while embedding the saved context bytes unchanged.
+
 The Lead owns project framing, topology, dependencies, integration,
 verification, and the project verdict. The Lead creates Peers. The Launcher,
 never the Lead, creates a fresh independent Supervisor only on explicit Human
@@ -64,15 +74,23 @@ enforcement that Herdr does not provide.
 ## Completion gates
 
 **Setup/update is complete** only when the new schema parses; both tracked
-project files exist; every configured kind, executable, native argument, and
-selected model is validated against live local capabilities; no credential is
-stored; the protocol has all twelve required sections; the Human has reviewed
-the diff; and no legacy schema was retained.
+project files exist; shallow discovery covered the live Herdr kind set; every
+selected kind, executable, native argument, and model is validated against live
+local capabilities; the Launcher, exact Lead recipe, and any configured
+Supervisor recipe can reach Herdr from inside their native access boundaries;
+workspace and Git common-directory access matches each role's evidence or
+commit authority, including one exclusive report-return write boundary for each
+Peer, no project/Git-metadata write for a project-read-only Peer, and
+notebook-only write access for a Supervisor; no credential is stored; the
+protocol has all twelve required sections and two explicitly populated
+communication languages; the Human has
+reviewed the diff; and no legacy schema was retained.
 
 **Launch is complete** only when preflight passes without fallback, a fresh Lead
-has the exact saved context pack, the launch event is recorded, the Lead has
-received the task once, and focus has moved to the Lead. Existing agents,
-panes, worktrees, and user-owned changes remain intact.
+has the exact saved context pack, the launch event and handoff marker precede
+the single task delivery, and focus has moved to the Lead without waiting for
+project work. Existing agents, panes, worktrees, and user-owned changes remain
+intact.
 
 **Supervisor attachment is complete** only when the configured recipe, exact
 Lead/project/run bindings, full protocols, fresh agent, notebook, and delivery

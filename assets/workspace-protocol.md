@@ -7,6 +7,8 @@
 - Last reviewed: YYYY-MM-DD
 - Repository root:
 - Readers: Project Lead; Supervisor only when explicitly assigned
+- Live orchestration language:
+- Durable Markdown artifact language:
 
 ## 2. Project characteristics and risk classes
 
@@ -33,11 +35,12 @@
 - Architecture lock-in:
 - Subjective/product evidence:
 
-## 5. Peer routes and native model/effort policy
+## 5. Peer recipe selection and native model/effort policy
 
-- `general`:
-- Other project routes and their task classes:
-- Availability check and no-fallback rule:
+- Configured recipe capabilities and access constraints:
+- Selection by Assignment risk, independence, cost, and required access:
+- Recipe reuse or mixing across dynamically created Peers:
+- Missing capability, availability check, and no-fallback rule:
 
 ## 6. Architect, Reviewer, and council triggers
 
@@ -75,7 +78,7 @@
 ## 11. Project-specific anti-patterns and supervision
 
 - Signal, evidence, suspected mechanism, open question, allowed response:
-- Supervisor observation/notebook location:
+- Supervisor observation retention/export policy:
 - Supervisor project-read/notebook-write boundary:
 - Repeated-failure prerequisite check:
 
