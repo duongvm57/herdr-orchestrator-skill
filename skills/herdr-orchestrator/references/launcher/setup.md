@@ -20,32 +20,34 @@ herdr agent list
 herdr pane current --current
 ```
 
-Stop on either error before discovery. Read targeted Herdr and agent-start help,
-integration status, and both packaged helpers' `--help`; these interfaces, not
-a runtime skill dump, are command authority.
+Stop on either error. Use `herdr agent start --help` for supported kinds and
+`herdr integration status` for integration state; neither alone proves a harness
+is installed. Resolve each canonical executable through command lookup and a
+bounded version probe. Keep unavailable, broken, outdated, and `unresolved`
+mapping rows. Targeted Herdr and helper `--help` remain command authority.
 
-Build one shallow row per live Herdr kind: executable path/presence, bounded
-version, and integration state. Mark unknown mappings `unresolved`; retain
-unavailable, broken, and outdated rows. Deep-probe only Human-named or
-previously configured harnesses.
+Show the inventory, then use the harness's structured user-input tool when
+available. Ask one unresolved decision at a time: 2–3 mutually exclusive choices,
+an evidence-backed recommended choice first, concise impacts, and a free-form
+answer. Sequence dependent recipe choices and skip supplied answers. Never
+replace available cards with combined prose or invent choices.
 
-For each selected harness, discover authentication, native arguments, model and
-reasoning choices, sandbox/tool/network controls, and native-spawn control. Use
-`scripts/herdr_orchestrator.py codex-models --output <file>` for normalized
-Codex data and an analogous bounded native mechanism elsewhere. Put each output
-in a collision-free temporary directory outside the repository; consume compact
-metadata, run one bounded preference query, then remove it on success or
-failure. Raw catalogs never enter conversation or instruction context. An
-unavailable catalog stays `unverified` until a documented local check or
-Human-approved bounded smoke proves the exact model; marketing names, old
-config, and guessed aliases are not evidence.
+If unavailable or all valid choices cannot fit, use ordinary chat with every
+numbered choice plus a free-form answer; ask one question and wait for its answer.
 
-Show the compact selected-candidate inventory, then obtain Human decisions for:
+Select each recipe's harness from installed rows first; then discover and choose its model,
+reasoning/cost, access, and native arguments. Configure the Lead,
+one or more basic Peer capability profiles, then the optional Supervisor. Reuse
+a deep inventory when profiles share a harness. Deep-probe only selected or
+previously configured harnesses for authentication, native choices, sandbox,
+network, and native-spawn control.
 
-- Lead reasoning/cost preference and exact Lead recipe;
-- reusable Peer recipes with capability, cost, independence, and access
-  descriptions;
-- optional Supervisor recipe;
+For Codex use `scripts/herdr_orchestrator.py codex-models --output <file>`; use
+an analogous bounded native mechanism elsewhere. Consume only compact metadata
+from a collision-free temporary directory and remove it after one preference
+query. An unavailable catalog remains `unverified` until a documented check or
+Human-approved smoke proves the exact model. Obtain remaining decisions for:
+
 - live orchestration and durable artifact languages on first setup, invalid
   existing values, or an explicit language change;
 - project risk, review triggers, costly reversals, and minimum verdict proof;

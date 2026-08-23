@@ -132,6 +132,32 @@ class InstructionArchitectureTests(unittest.TestCase):
             r"(?m)^\s+cache-dependency-path: requirements-dev\.txt$",
         )
 
+    def test_setup_prefers_harness_choice_cards(self) -> None:
+        setup = read("references/launcher/setup.md")
+
+        for contract in (
+            r"structured user-input tool",
+            r"one\s+unresolved decision at a time",
+            r"2–3 mutually exclusive choices",
+            r"recommended choice first",
+            r"free-form answer",
+        ):
+            self.assertRegex(setup, contract)
+        self.assertIn("ordinary chat", setup)
+        self.assertRegex(setup, r"wait for its\s+answer")
+
+    def test_setup_selects_harness_before_recipe_details(self) -> None:
+        setup = read("references/launcher/setup.md")
+
+        self.assertIn("herdr agent start --help", setup)
+        self.assertIn("herdr integration status", setup)
+        self.assertIn("installed", setup)
+        self.assertIn("basic Peer capability profiles", setup)
+        self.assertLess(
+            setup.index("Select each recipe's harness"),
+            setup.index("then discover and choose its model"),
+        )
+
     def test_lead_asset_names_match_launch_staging_contract(self) -> None:
         launch = read("references/launcher/task-launch.md")
         lead = read("references/roles/lead.md")
