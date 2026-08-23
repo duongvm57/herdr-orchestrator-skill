@@ -1,5 +1,8 @@
 # Topology selection
 
+This is the disclosed `topology` card. Read it completely after the Lead core's
+manifest check and before choosing a topology.
+
 Choose the smallest topology that can change the decision or supply required
 evidence. Agent count is not confidence. Before dispatch, map each moving scope
 to exactly one writer and each decision/evidence boundary to one owner.
@@ -85,3 +88,8 @@ same Engineer until its correction lifecycle ends.
 Review starts only after the writer identifies a stable candidate: an exact
 commit, or a deterministic base/diff/artifact digest when commit authority is
 absent. A changed candidate invalidates its earlier review.
+
+Selection is complete when each moving scope has one writer, every dependency
+and evidence boundary has an owner, each independent seat can change a named
+decision, workspace separation matches concurrency, and the chosen topology is
+the smallest one satisfying protocol and risk.

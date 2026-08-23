@@ -30,9 +30,11 @@ Every agent receives only three ordered instruction layers:
 Role Profile → Workspace Protocol → Assignment
 ```
 
-The Lead receives full project context. A Peer receives its thin role, only
-relevant project constraints, and one assignment. Independent judgment uses a
-fresh session; correction returns to the same Engineer that owns the write.
+The Lead receives full project config, protocol, task, and only the
+orchestration guidance required by the current branch. A Peer receives its thin
+role, only relevant project constraints, and one assignment. Independent
+judgment uses a fresh session; correction returns to the same Engineer that owns
+the write.
 
 Every moving write scope has one writer. Review binds to an exact stable
 candidate: a commit or deterministic base/diff/artifact digest. `done`, an idle
@@ -53,18 +55,17 @@ authorization, tamper-proof evidence, or automatic acceptance. Behavioral
 confidence requires repeated real runs against the supported harness/model
 versions.
 
-OpenAI package metadata disables implicit invocation. Other Agent Skills clients
-need an equivalent user-only invocation policy; otherwise explicit-only remains
-an instruction rather than a mechanical gate.
+OpenAI package metadata marks the skill explicit-only, and its entrypoint
+requires explicit Human invocation.
 
 ## Install
 
-You need Git, Python 3, a running Herdr server, a Launcher session inside a
+You need Git, Python 3.11+, a running Herdr server, a Launcher session inside a
 Herdr-managed pane, and every configured harness/model installed and
 authenticated. The Launcher's native permission profile must also allow the
 Herdr socket and run-evidence writes in the repository's absolute Git common
 directory. On current Codex, `workspace-write` needs
-`-c sandbox_workspace_write.network_access=true` plus
+`--config sandbox_workspace_write.network_access=true` plus
 `--add-dir <absolute-git-common-dir>`; these broaden network and Git-metadata
 access, so choose them deliberately and verify both with bounded canaries.
 

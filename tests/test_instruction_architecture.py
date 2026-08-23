@@ -1,0 +1,163 @@
+from __future__ import annotations
+
+import re
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def read(relative: str) -> str:
+    return (ROOT / relative).read_text(encoding="utf-8")
+
+
+class InstructionArchitectureTests(unittest.TestCase):
+    def test_invocation_is_mechanically_user_only(self) -> None:
+        skill = read("SKILL.md")
+        openai = read("agents/openai.yaml")
+
+        self.assertNotIn("disable-model-invocation", skill)
+        self.assertRegex(openai, r"(?m)^\s*allow_implicit_invocation: false$")
+
+    def test_root_routes_each_invocation_without_runtime_role_sources(self) -> None:
+        skill = read("SKILL.md")
+
+        for path in (
+            "references/setup.md",
+            "references/launch.md",
+            "references/supervisor-attachment.md",
+            "references/orchestration-invariant-coverage.md",
+        ):
+            self.assertIn(f"`{path}`", skill)
+        self.assertNotIn("references/roles/lead.md", skill)
+        self.assertNotIn("references/roles/peer.md", skill)
+        self.assertNotIn("references/roles/supervisor.md", skill)
+
+    def test_runtime_docs_never_execute_the_generic_herdr_skill_dump(self) -> None:
+        runtime_docs = (
+            "references/setup.md",
+            "references/launcher.md",
+            "references/launch.md",
+            "references/supervisor-attachment.md",
+            "references/roles/lead.md",
+            "references/roles/peer.md",
+            "references/roles/supervisor.md",
+            "references/lead/peer-lifecycle.md",
+            "references/lead/candidate-and-verdict.md",
+        )
+        command_line = re.compile(r"(?m)^\s*herdr --skill\s*$")
+
+        for path in runtime_docs:
+            self.assertIsNone(command_line.search(read(path)), path)
+
+    def test_launcher_and_supervisor_branches_are_separate(self) -> None:
+        launch = read("references/launch.md")
+        supervisor = read("references/supervisor-attachment.md")
+
+        self.assertNotIn("references/roles/supervisor.md", launch)
+        self.assertNotIn("init-run", supervisor)
+        self.assertIn("stage-assets", supervisor)
+
+    def test_run_context_uses_launch_time_project_snapshots(self) -> None:
+        launch = read("references/launch.md")
+        supervisor = read("references/supervisor-attachment.md")
+
+        self.assertIn("--project-config-file", launch)
+        self.assertIn("--workspace-protocol-file", launch)
+        self.assertIn("--expected-project-config-sha256", launch)
+        self.assertIn("--expected-workspace-protocol-sha256", launch)
+        self.assertIn("canonical project paths", launch)
+        self.assertIn("context/project-config.toml", launch)
+        self.assertIn("context/workspace-protocol.md", launch)
+        self.assertIn("run-local `human-task.md`", launch)
+        self.assertIn("filtered selection manifest", supervisor)
+        self.assertIn("context/workspace-protocol.md", supervisor)
+        self.assertNotIn("then the full project Workspace Protocol", launch)
+
+    def test_supervisor_attachment_is_collision_and_language_bound(self) -> None:
+        supervisor = read("references/supervisor-attachment.md")
+
+        self.assertIn("<attachment-id>", supervisor)
+        self.assertIn("[a-z][a-z0-9_-]{0,31}", supervisor)
+        self.assertIn("--selection-output", supervisor)
+        self.assertIn("attachment-assignment.md", supervisor)
+        self.assertIn("delivery-receipt.json", supervisor)
+        self.assertIn("local-receipt.md", supervisor)
+        self.assertIn("lead-notification-receipt.json", supervisor)
+        self.assertIn("every bound run's `supervisor/`", supervisor)
+        self.assertIn("host project's live language", supervisor)
+        self.assertRegex(supervisor, r"that project's\s+artifact language")
+        self.assertRegex(supervisor, r"that\s+project's live language")
+
+    def test_readme_stays_user_facing(self) -> None:
+        readme = read("README.md")
+
+        for internal in (
+            "context-budgets.json",
+            "context_budget.py",
+            "herdr_orchestrator.py",
+            "render_coverage.py",
+            "requirements-dev.txt",
+            ".github/workflows",
+        ):
+            self.assertNotIn(internal, readme)
+
+    def test_lead_asset_names_match_launch_staging_contract(self) -> None:
+        launch = read("references/launch.md")
+        lead = read("references/roles/lead.md")
+        expected = {
+            "topology",
+            "peer-lifecycle",
+            "candidate-and-verdict",
+            "anti-pattern-details",
+            "peer-profile",
+        }
+
+        staged = set(re.findall(r"(?m)^([a-z][a-z-]+)=references/", launch))
+        mapped = set(re.findall(r"(?m)^- `([a-z][a-z-]+)` —", lead))
+
+        self.assertEqual(staged, expected)
+        self.assertEqual(mapped, expected)
+
+    def test_initial_lead_context_excludes_disclosed_bodies(self) -> None:
+        lead = read("references/roles/lead.md")
+        index = read("references/anti-pattern-index.md")
+        combined = lead + index
+
+        self.assertNotIn("# PEER REPORT", combined)
+        self.assertNotIn("## Difficult council", combined)
+        self.assertNotIn("## 17. Supervisor overreach", combined)
+        self.assertIn("read that card completely before", lead)
+
+    def test_disclosed_cards_have_explicit_trigger_and_completion_bound(self) -> None:
+        cards = {
+            "references/topology.md": ("before choosing a topology", "Selection is complete"),
+            "references/lead/peer-lifecycle.md": ("before drafting", "Collection is complete"),
+            "references/lead/candidate-and-verdict.md": ("before recording", "The run is complete"),
+            "references/anti-patterns.md": (
+                "After a signal triggers",
+                "Response is complete only when the observed signal is recorded as evidence",
+            ),
+        }
+        for path, (trigger, completion) in cards.items():
+            body = read(path)
+            self.assertIn(trigger, body, path)
+            self.assertIn(completion, body, path)
+
+    def test_repository_instruction_pointers_resolve(self) -> None:
+        documents = [ROOT / "SKILL.md", *sorted((ROOT / "references").rglob("*.md"))]
+        pointer = re.compile(r"`((?:references|assets|scripts)/[^`\s]+)`")
+        missing: list[str] = []
+        for document in documents:
+            for match in pointer.finditer(document.read_text(encoding="utf-8")):
+                relative = match.group(1).rstrip(".,;:")
+                if "<" in relative or ">" in relative:
+                    continue
+                if not (ROOT / relative).exists():
+                    missing.append(f"{document.relative_to(ROOT)} -> {relative}")
+        self.assertEqual(missing, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

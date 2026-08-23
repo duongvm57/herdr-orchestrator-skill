@@ -1,0 +1,109 @@
+{
+  "encoding": "o200k_base",
+  "routes": {
+    "skill": {
+      "render": "concat",
+      "files": [
+        "SKILL.md"
+      ],
+      "hard_limit": 500,
+      "baseline": 401
+    },
+    "setup_launcher": {
+      "render": "concat",
+      "files": [
+        "SKILL.md",
+        "references/setup.md",
+        "references/workspace-protocol.md",
+        "assets/config.toml",
+        "assets/workspace-protocol.md"
+      ],
+      "hard_limit": 3000,
+      "baseline": 2909
+    },
+    "task_launcher": {
+      "render": "concat",
+      "files": [
+        "SKILL.md",
+        "references/launcher.md",
+        "references/launch.md"
+      ],
+      "hard_limit": 4000,
+      "baseline": 2855
+    },
+    "supervisor_attachment": {
+      "render": "concat",
+      "files": [
+        "SKILL.md",
+        "references/launcher.md",
+        "references/supervisor-attachment.md"
+      ],
+      "hard_limit": 3000,
+      "baseline": 2714
+    },
+    "lead_initial_fixed": {
+      "render": "pack",
+      "role": "lead",
+      "layers": {
+        "role_profile": [
+          {
+            "label": "lead.md",
+            "file": "references/roles/lead.md"
+          },
+          {
+            "label": "anti-pattern-index.md",
+            "file": "references/anti-pattern-index.md"
+          },
+          {
+            "label": "manifest.json",
+            "file": "tests/fixtures/lead-card-manifest.json"
+          }
+        ],
+        "workspace_protocol": [],
+        "assignment": []
+      },
+      "hard_limit": 3000,
+      "baseline": 1579
+    },
+    "peer_fixed": {
+      "render": "pack",
+      "role": "peer",
+      "layers": {
+        "role_profile": [
+          {
+            "label": "peer-profile",
+            "file": "references/roles/peer.md"
+          }
+        ],
+        "workspace_protocol": [],
+        "assignment": []
+      },
+      "hard_limit": 700,
+      "baseline": 564
+    },
+    "supervisor_initial_fixed": {
+      "render": "pack",
+      "role": "supervisor",
+      "layers": {
+        "role_profile": [
+          {
+            "label": "supervisor.md",
+            "file": "references/roles/supervisor.md"
+          },
+          {
+            "label": "anti-pattern-index.md",
+            "file": "references/anti-pattern-index.md"
+          },
+          {
+            "label": "manifest.json",
+            "file": "tests/fixtures/supervisor-card-manifest.json"
+          }
+        ],
+        "workspace_protocol": [],
+        "assignment": []
+      },
+      "hard_limit": 900,
+      "baseline": 850
+    }
+  }
+}

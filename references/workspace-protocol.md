@@ -8,8 +8,9 @@ it; the Lead extracts only constraints relevant to that Peer assignment.
 Use `assets/workspace-protocol.md` as the tracked template. Complete all twelve
 sections:
 
-1. status, Human owner, version, review date, repository scope, readers, live
-   orchestration language, and durable Markdown artifact language;
+1. status, Human owner, version, review date, canonical absolute Repository
+   root, readers, live orchestration language, and durable Markdown artifact
+   language;
 2. criticality, risk classes, costly reversals, external effects, and budget;
 3. Lead decisions; edit/commit/push/deploy/publish authority; scope expansion;
    reserved architecture contracts; Human-only boundaries; prohibited effects;

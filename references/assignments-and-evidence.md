@@ -1,178 +1,19 @@
-# Assignments and evidence
+# Assignment and evidence ownership map
 
-The Lead uses this contract for every created agent and runtime milestone.
+This file is a maintenance index, not a runtime route. Each contract has one
+authoritative home and is disclosed at the action that consumes it:
 
-## Agent creation contract
+| Contract | Authoritative source | Runtime trigger |
+| --- | --- | --- |
+| Three-layer pack and language ordering | `SKILL.md` | Every delivery |
+| Run initialization, initial `launch`, and handoff | `references/launch.md` | Task launch |
+| Peer Assignment fields, disposition, exact report schema, delivery, promotion, and `assignment`/`report` evidence | `references/lead/peer-lifecycle.md` | Before first Peer lifecycle action |
+| Stable candidate, verification, review, Human request, verdict, ledger, and terminal `finish` | `references/lead/candidate-and-verdict.md` | Before the first corresponding milestone |
+| Supervisor binding, notebook receipts, and authority | `references/supervisor-attachment.md` | Explicit Supervisor attachment |
 
-Before start, resolve and save all fields:
-
-```text
-Project ID
-Task ID
-Repository root
-Checkout/worktree and accepted base
-Role and disposition
-Objective / open question
-Owned scope and exclusive resources
-Excluded scope
-Authority and Human-only boundary
-Relevant Workspace Protocol constraints
-Applicable repository instructions and scope
-Dependencies and related owners
-Verification and candidate identity
-Escalation conditions
-Handoff contract, report-return path, and writable boundary
-```
-
-Use a neutral brief: provide observations, constraints, and evidence without
-embedding the preferred conclusion. One assignment has one outcome owner. A
-plan and file list remain provisional.
-
-Every Peer assignment reproduces the complete `PEER REPORT` template below in
-its Handoff contract. Do not replace the headings with “use the required
-report,” a reference to this manual, or a pathname: the Peer does not receive
-this manual.
-
-## Disposition requirements
-
-**Engineer:** one writable moving scope; inspect the mechanism; preserve
-unrelated work; verify writes; reopen ownership/lifecycle/API premises; never
-self-accept.
-
-**Architect:** read-only; reconstruct ownership, lifecycle, failure semantics,
-alternatives, recommendation, strongest counterargument, and reversal
-conditions. A sealed seat reads no other seat's conclusion.
-
-**Reviewer:** fresh and read-only; candidate identity is mandatory; attempt to
-falsify the assigned behavior, scope, and proof; report findings by severity and
-`APPROVE` or `FINDINGS` without redesigning unrelated modules.
-
-**Scout/proof auditor/feature owner:** state the bounded question, mode, owned
-evidence, exclusions, and decision the report will inform. The Peer role does
-not itself grant broader authority.
-
-## Context and assignment storage
-
-Save the exact context pack under `context/` before start and its full assignment
-under `assignments/<agent-name>.md`. The context's Assignment layer contains
-that full assignment text, not merely its path or a summary. Record SHA-256,
-recipe, repository, checkout, and agent name. The prompt payload contains the
-complete saved pack bytes once inside the configured live-language transport
-envelope. Record both context and full delivery-payload digests; the envelope is
-not persisted as a Markdown context layer. A request to read a path, summary,
-or terminal transcript does not replace direct context delivery.
-
-Peer context contains the Peer profile, only relevant protocol constraints, then
-one disposition/Assignment. Lead context contains the full macro pack.
-Supervisor context contains its role and anti-pattern catalog, every full bound
-protocol, then exact Lead/project/run bindings and notebook Assignment.
-
-## Peer report
-
-Before a Peer starts, reserve one collision-free return path that did not
-previously exist. For a project-read-only Peer it is
-`reports/inbox/<agent-name>/report.md`, and that exclusive inbox directory is
-the pane cwd and only writable project/orchestration-evidence root. Harness-owned
-temporary roots may still exist. A writable Peer uses either that inbox when its
-validated boundary permits it or an exact temporary return path inside its owned
-workspace. The temporary path is operational evidence, excluded from the
-candidate, and removed only after verified promotion. Put the exact path and
-boundary in the Assignment.
-
-Require full Markdown with no line limit:
-
-```markdown
-# PEER REPORT
-
-## Type
-<Engineer | Architect | Reviewer | Scout | proof auditor | feature owner | request type>
-
-## Task / Assignment / Disposition
-<exact identifiers and bounded mandate>
-
-## Outcome or request
-<result | REOPEN_REQUEST | DEPENDENCY_REQUEST | BLOCKED>
-
-## Owned and changed scope
-<owned paths/resources and exact changes, including none>
-
-## Artifacts and exact candidate
-<commit or deterministic base/diff/artifact digest>
-
-## Verification commands, cwd, and results
-<each command, working directory, exit/result, relevant output>
-
-## Findings, assumptions, and residual risks
-<severity and inspectable evidence where applicable>
-
-## Unfinished dependencies
-<owners, prerequisites, or none>
-
-## Decision needed from Lead
-<one explicit decision or none>
-```
-
-A report is an evidence-bearing handoff, not proof of acceptance. Missing
-candidate, verification, risk, scope, or requested decision makes it incomplete.
-Write the report in the assigned durable artifact language and accompany its
-delivery with a brief summary in the assigned live orchestration language.
-The Peer writes a sibling partial file and atomically renames it to the assigned
-return path before sending that summary. Terminal output is not the report.
-
-After the exact Peer settles, the Lead requires a regular return file, validates
-the complete schema, computes SHA-256, and atomically promotes the same bytes to
-`reports/<agent-name>.md`. If source and destination paths differ, verify their
-digests match before removing only the collision-free temporary source. A
-missing or incomplete file follows the one-continuation rule; never reconstruct
-it from `herdr agent read`, whose terminal snapshot is not lossless.
-
-## Stable candidate and review chain
-
-Prefer an exact commit when authority permits. Otherwise record a deterministic
-identity including base commit, binary-safe diff digest, untracked-artifact
-manifest/digests, and any generated artifact digest. Freeze it during review.
-Any write produces a new candidate that requires new verification and review.
-
-The Engineer proves writes; the Reviewer falsifies the exact candidate; the
-Lead inspects evidence and binds the project verdict; the Human resolves
-owner-only decisions. Never derive one link from Herdr status or test success.
-
-## Semantic event ledger
-
-Append-only `events.jsonl` uses one object per milestone. Every event carries
-`schema_version`, UTC `timestamp`, `run_id`, `type`, `actor`, and
-event-specific evidence references:
-
-```json
-{"schema_version":1,"timestamp":"<UTC RFC3339>","run_id":"<id>","type":"candidate","actor":"<lead>","task_id":"<id>","candidate":"<exact identity>","evidence":["<relative run path>"]}
-```
-
-Use only `launch`, `assignment`, `report`, `candidate`, `verification`,
-`review`, `human_decision_request`, `verdict`, and `finish`. Store full text in
-Markdown and reference it from JSONL. The ledger records facts already grounded
-in Herdr/Git/filesystem; it never becomes live status, queue, retry engine,
-parentage, or automatic acceptance.
-
-Milestone payloads retain the decision chain:
-
-- `launch`: agent, pane, recipe, context path, and context digest;
-- `assignment`: assignee, disposition, assignment path/digest, owned scope;
-- `report`: reporter, outcome/request, full report path/digest;
-- `candidate`: task and exact immutable identity;
-- `verification`: exact candidate, command, cwd, result, and full evidence path;
-- `review`: exact candidate, Reviewer identity, decision/findings, report path;
-- `human_decision_request`: exact question, boundary, options/evidence path;
-- `verdict`: exact candidate, decision, authority, unresolved findings and
-  residual risks, with evidence paths; and
-- `finish`: terminal project outcome and durable report/verdict references. Do
-  not append it for a Human decision request that may resume the same run; after
-  `finish`, no later event is valid.
-
-`human_decision_request` records only an open request. Save the Human's response
-as a durable Markdown evidence file and reference it from the next applicable
-allowed milestone (or the verdict); do not reuse the request type as a decision
-event and do not invent another event type.
-
-Never truncate candidate, verification, risk, or decision information to fit
-JSONL. Put the full record in Markdown and preserve its path plus digest in the
-event.
+The orchestration helper stages Lead cards and opaque Peer role bytes under the
+run, records their SHA-256 digests, assembles sources in role/protocol/assignment
+order, and delivers exact saved context. The Launcher consumes compact metadata
+rather than loading runtime role/card bodies. A Lead verifies and reads one
+card completely when its fixed trigger fires; the Peer profile is passed back
+to `pack --role peer` without being read by the Lead.

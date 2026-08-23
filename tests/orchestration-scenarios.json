@@ -1,0 +1,547 @@
+{
+  "schema_version": 1,
+  "legacy_ids": {
+    "prefix": "FT-",
+    "first": 1,
+    "last": 69
+  },
+  "groups": [
+    {
+      "slug": "static-context-architecture",
+      "title": "Static context architecture",
+      "verification": "automated/static",
+      "invariants": [
+        {
+          "id": "FT-08",
+          "spec": "Saved context packs preserve Role Profile, Workspace Protocol, and Assignment order with no implicit skill invocation."
+        },
+        {
+          "id": "FT-09",
+          "spec": "The Lead pack includes full config and protocol while a Peer pack includes only selected constraints and its complete inline Assignment."
+        },
+        {
+          "id": "FT-10",
+          "spec": "A spawned harness with Agent Skills disabled receives exact inline pack bytes; pathname-only delivery is rejected."
+        }
+      ],
+      "sources": [
+        "SKILL.md",
+        "references/launch.md",
+        "references/supervisor-attachment.md",
+        "references/topology.md",
+        "references/anti-pattern-index.md",
+        "references/anti-patterns.md",
+        "references/roles/lead.md",
+        "references/roles/peer.md",
+        "references/lead/peer-lifecycle.md",
+        "references/lead/candidate-and-verdict.md",
+        "scripts/herdr_orchestrator.py"
+      ],
+      "scenario": "Repository checks enforce user-only routing, ordered inline role/protocol/assignment packs, macro context only for Lead, bounded context for Peer, and digest-triggered byte disclosure.",
+      "test_selectors": [
+        "tests.test_instruction_architecture.InstructionArchitectureTests.test_invocation_is_mechanically_user_only",
+        "tests.test_instruction_architecture.InstructionArchitectureTests.test_root_routes_each_invocation_without_runtime_role_sources",
+        "tests.test_instruction_architecture.InstructionArchitectureTests.test_runtime_docs_never_execute_the_generic_herdr_skill_dump",
+        "tests.test_instruction_architecture.InstructionArchitectureTests.test_lead_asset_names_match_launch_staging_contract",
+        "tests.test_instruction_architecture.InstructionArchitectureTests.test_initial_lead_context_excludes_disclosed_bodies",
+        "tests.test_instruction_architecture.InstructionArchitectureTests.test_disclosed_cards_have_explicit_trigger_and_completion_bound",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_pack_preserves_source_order_and_enforces_ceiling",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_deliver_uses_one_argument_without_leaking_payload_or_child_output",
+        "tests.test_package_flow.RealPackageFlowTests.test_real_sources_keep_conditional_bodies_out_of_initial_lead"
+      ]
+    },
+    {
+      "slug": "live-launcher-opaque-attention",
+      "title": "Live Launcher opaque-body boundary",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-40",
+          "spec": "A real Launcher run reads only selected routing procedures, passes role/card paths opaquely, and exposes no opaque body in its transcript."
+        }
+      ],
+      "sources": [
+        "SKILL.md",
+        "references/launch.md",
+        "references/supervisor-attachment.md"
+      ],
+      "scenario": "Exercise a real Launcher with instrumented file access and transcript capture; verify opaque role and card bodies are passed by path and never enter Launcher attention or output.",
+      "test_selectors": []
+    },
+    {
+      "slug": "static-project-contract",
+      "title": "Static project contract and catalog projection",
+      "verification": "automated/static",
+      "invariants": [
+        {
+          "id": "FT-16",
+          "spec": "Two projects strictly parse schema-v2 native Lead, optional Supervisor, and arbitrary described mixed-harness Peer recipes without legacy lookup."
+        }
+      ],
+      "sources": [
+        "assets/config.toml",
+        "assets/workspace-protocol.md",
+        "references/setup.md",
+        "scripts/herdr_orchestrator.py"
+      ],
+      "scenario": "Deterministic checks parse schema version 2, reject unknown, placeholder, legacy, and credential-bearing configuration, require explicit protocol languages, retain arbitrary described Peer recipes, and project raw model catalogs into bounded local metadata.",
+      "test_selectors": [
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_returns_compact_metadata",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_rejects_unknown_schema_and_blank_language",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_rejects_placeholder_and_credential_arguments",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_codex_models_writes_only_compact_projection"
+      ]
+    },
+    {
+      "slug": "live-control-plane-boundaries",
+      "title": "Live control-plane and semantic boundaries",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-02",
+          "spec": "Every role uses Herdr as the sole control plane and creates no native secondary agent tree."
+        },
+        {
+          "id": "FT-20",
+          "spec": "Lifecycle and ledger state are treated only as attention and evidence, never parentage, queueing, enforcement, authorization, or acceptance."
+        }
+      ],
+      "sources": [
+        "SKILL.md",
+        "references/roles/lead.md",
+        "references/roles/peer.md",
+        "references/lead/candidate-and-verdict.md"
+      ],
+      "scenario": "Exercise every role through Herdr without a native secondary agent tree, then verify lifecycle state and the semantic ledger only wake or record work and never become parentage, queueing, enforcement, authorization, or acceptance.",
+      "test_selectors": []
+    },
+    {
+      "slug": "live-preflight-and-preservation",
+      "title": "Live preflight, discovery, and preservation",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-01",
+          "spec": "A dirty repository with existing pane, worktree, agent, and user changes is inventoried and preserved before mutation."
+        },
+        {
+          "id": "FT-05",
+          "spec": "Discovery maps every live kind, deeply verifies only selected recipes and exact role boundaries, leaves no probe residue, and never falls back."
+        },
+        {
+          "id": "FT-63",
+          "spec": "Blocked Herdr or Git access, wrong canonical root/path/model, changed preflight config/protocol digest, or ambiguous preserved state stops before run creation and leaves no canary residue."
+        },
+        {
+          "id": "FT-66",
+          "spec": "Pre-existing panes, worktrees, agents, branches, and dirty files remain unchanged; only registered run-managed topology may be added."
+        }
+      ],
+      "sources": [
+        "references/setup.md",
+        "references/launcher.md",
+        "references/launch.md"
+      ],
+      "scenario": "In a dirty repository with existing panes, agents, and worktrees, exercise red Herdr and Git canaries, exact live-kind discovery, selected recipe/model/access validation, no-fallback stops, collision-free probes, and preservation of all pre-existing state while only run-owned topology may change.",
+      "test_selectors": []
+    },
+    {
+      "slug": "live-role-authority",
+      "title": "Live role independence and authority",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-03",
+          "spec": "Reviewer, Supervisor, Architect, and council seats start as fresh sessions and are never resumed or forked for independence."
+        },
+        {
+          "id": "FT-06",
+          "spec": "A done signal and passing test without candidate identity, risk, evidence, and authority cannot produce a verdict."
+        },
+        {
+          "id": "FT-07",
+          "spec": "An excluded external or irreversible decision becomes an explicit Human decision request."
+        },
+        {
+          "id": "FT-11",
+          "spec": "The Lead escalates product, portfolio, risk, external-effect, and other owner-only trade-offs."
+        },
+        {
+          "id": "FT-12",
+          "spec": "A difficult task yields a neutral outcome Assignment and project verdict instead of a pre-solved patch brief."
+        },
+        {
+          "id": "FT-13",
+          "spec": "Disposition narrows one Peer role without widening authority; the Peer may challenge with evidence and cannot spawn agents."
+        },
+        {
+          "id": "FT-14",
+          "spec": "No Supervisor starts by default, and an explicit observation cannot edit implementation or accept a project."
+        },
+        {
+          "id": "FT-15",
+          "spec": "Supervisor notes separate observation, evidence, suspected mechanism, question, escalation, and protocol candidate."
+        }
+      ],
+      "sources": [
+        "SKILL.md",
+        "references/workspace-protocol.md",
+        "references/roles/lead.md",
+        "references/roles/peer.md",
+        "references/roles/supervisor.md"
+      ],
+      "scenario": "Run fresh Lead, Peer judgment, and explicitly requested Supervisor sessions; verify neutral assignments, bounded dispositions, causal notebook observations, evidence-based Lead verdicts, and escalation of Human-only decisions without role or acceptance overreach.",
+      "test_selectors": []
+    },
+    {
+      "slug": "live-ownership-and-candidates",
+      "title": "Live ownership, stable candidates, and acceptance chain",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-04",
+          "spec": "Overlapping writer ownership is rejected and concurrent moving scopes use isolated worktrees."
+        },
+        {
+          "id": "FT-36",
+          "spec": "A Reviewer binds one immutable candidate identity and refuses a moving target."
+        },
+        {
+          "id": "FT-37",
+          "spec": "Engineer proof, Reviewer falsification, Lead verdict, and Human decision remain separate evidence links."
+        }
+      ],
+      "sources": [
+        "references/topology.md",
+        "references/lead/peer-lifecycle.md",
+        "references/lead/candidate-and-verdict.md"
+      ],
+      "scenario": "Reject overlapping writers, isolate concurrent scopes, freeze an exact candidate, invalidate review after mutation, and keep Engineer proof, Reviewer falsification, Lead verdict, and Human decisions as distinct evidence links.",
+      "test_selectors": []
+    },
+    {
+      "slug": "live-recipe-routing",
+      "title": "Live Assignment-level recipe routing",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-17",
+          "spec": "One run chooses Peer count and disposition independently, reuses or mixes validated recipes by risk, and stops when no capability fits."
+        }
+      ],
+      "sources": [
+        "assets/workspace-protocol.md",
+        "references/roles/lead.md",
+        "references/lead/peer-lifecycle.md"
+      ],
+      "scenario": "Within one run, vary Peer count and disposition independently from recipes, reuse one validated recipe, select another for independence or access, and stop for an explicit setup update when no configured capability fits.",
+      "test_selectors": []
+    },
+    {
+      "slug": "live-peer-roundtrip",
+      "title": "Live Peer assignment and lossless round-trip",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-18",
+          "spec": "Dispatch is rejected without complete ownership, authority, repository constraints, verification, handoff, return boundary, report schema, and exact inline delivery."
+        },
+        {
+          "id": "FT-19",
+          "spec": "The Lead waits event-first, promotes the exact atomic report file, permits one delivered continuation, then blocks a second incomplete settlement."
+        }
+      ],
+      "sources": [
+        "references/roles/lead.md",
+        "references/lead/peer-lifecycle.md",
+        "scripts/herdr_orchestrator.py"
+      ],
+      "scenario": "Dispatch a complete self-contained Assignment with repository authority, exclusive return boundary, report schema, exact direct delivery, and digest evidence; then wait event-first, promote the atomic report bytes, allow one bounded continuation, and block on a second incomplete settle.",
+      "test_selectors": []
+    },
+    {
+      "slug": "live-workspace-protocol",
+      "title": "Live Workspace Protocol decisions",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-21",
+          "spec": "The generated protocol binds owner, repository root, version, review state, readers, and both communication languages."
+        },
+        {
+          "id": "FT-22",
+          "spec": "Task classification cites project criticality, risk, reversal cost, effects, and budget instead of a ceremony default."
+        },
+        {
+          "id": "FT-23",
+          "spec": "A prohibited or Human-only external effect cannot be delegated by the Lead."
+        },
+        {
+          "id": "FT-24",
+          "spec": "Tiny, bounded, cross-module, architecture-lock-in, and subjective task classes map to decidable topology choices."
+        },
+        {
+          "id": "FT-25",
+          "spec": "Peer recipes have Assignment-level risk, independence, cost, and access criteria while count and disposition remain topology decisions."
+        },
+        {
+          "id": "FT-26",
+          "spec": "Architecture-sensitive work uses fresh judgment and sends correction back to the same owning Engineer."
+        },
+        {
+          "id": "FT-27",
+          "spec": "Concurrent moving scopes are isolated, exclusive resources are named, and one integration owner accepts handback."
+        },
+        {
+          "id": "FT-28",
+          "spec": "Any mutation of a stable candidate invalidates prior verification and review."
+        },
+        {
+          "id": "FT-29",
+          "spec": "Candidate, command, cwd, result, risk, and decision survive the lossless report file and grounded ledger reference."
+        },
+        {
+          "id": "FT-30",
+          "spec": "REOPEN_REQUEST, DEPENDENCY_REQUEST, and BLOCKED have distinct routes; a resumable Human request creates evidence, not premature finish or a fake event type."
+        },
+        {
+          "id": "FT-31",
+          "spec": "Repeated failure checks the shared mechanism before retry, and one Supervisor observation remains provisional."
+        },
+        {
+          "id": "FT-32",
+          "spec": "Protocol change occurs only through explicit setup/update with a Human-reviewed tracked diff."
+        },
+        {
+          "id": "FT-33",
+          "spec": "A Peer receives extracted applicable constraints and never the full Workspace Protocol or recipe catalog."
+        }
+      ],
+      "sources": [
+        "assets/workspace-protocol.md",
+        "references/workspace-protocol.md",
+        "references/lead/peer-lifecycle.md",
+        "references/lead/candidate-and-verdict.md"
+      ],
+      "scenario": "Exercise all twelve populated protocol sections: scope and readers, risk, authority, task topology, recipe policy, fresh review/council/correction, writer isolation, candidate identity, verification evidence, reopen/dependency/blocked handling, supervision hypotheses, and Human-approved evolution; confirm a Peer receives only extracted constraints.",
+      "test_selectors": []
+    },
+    {
+      "slug": "live-operating-principles",
+      "title": "Live challenge, recovery, and sparse supervision",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-34",
+          "spec": "A neutral outcome permits confirmation, challenge, or request with evidence instead of authority-gradient agreement."
+        },
+        {
+          "id": "FT-35",
+          "spec": "A failed lifecycle or foundation premise triggers reopening rather than a compatibility patch around it."
+        },
+        {
+          "id": "FT-38",
+          "spec": "No meaningful event causes the Supervisor to wait instead of rereading timelines or polling."
+        },
+        {
+          "id": "FT-39",
+          "spec": "A repeated notebook pattern remains evidence until an explicit Human-approved protocol update."
+        }
+      ],
+      "sources": [
+        "references/roles/lead.md",
+        "references/roles/peer.md",
+        "references/roles/supervisor.md",
+        "references/workspace-protocol.md"
+      ],
+      "scenario": "Give a neutral provisional premise that may be challenged or reopened with evidence, observe without polling when no event occurs, and keep repeated Supervisor evidence provisional until a later explicit Human-approved protocol update.",
+      "test_selectors": []
+    },
+    {
+      "slug": "live-anti-pattern-responses",
+      "title": "Live anti-pattern signal responses",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-41",
+          "spec": "A verdict-shaped brief is reframed as evidence plus an open question with supported opposition."
+        },
+        {
+          "id": "FT-42",
+          "spec": "An exhaustive guessed file plan becomes a provisional outcome, boundary, and risk map."
+        },
+        {
+          "id": "FT-43",
+          "spec": "A third correction for the same symptom stops patches and inspects the root mechanism."
+        },
+        {
+          "id": "FT-44",
+          "spec": "Accumulating adapters around a fixed base trigger fresh alternatives, counterargument, and reversal review."
+        },
+        {
+          "id": "FT-45",
+          "spec": "Architecture fog is replaced by concrete owner, transition, failure, and deletion semantics."
+        },
+        {
+          "id": "FT-46",
+          "spec": "A second overlapping writer is blocked or isolated after an explicit ownership split."
+        },
+        {
+          "id": "FT-47",
+          "spec": "An implementer's own metric may prove writes but cannot issue the project verdict."
+        },
+        {
+          "id": "FT-48",
+          "spec": "Verification names the wrong mechanism that must make the check fail and adds missing integration or Human evidence."
+        },
+        {
+          "id": "FT-49",
+          "spec": "Edge-case machinery is justified only after frequency, impact, fallback, maintenance, and reversal cost are compared."
+        },
+        {
+          "id": "FT-50",
+          "spec": "Repeated unchanged failure waits or checks prerequisites after two attempts instead of accumulating loop debt."
+        },
+        {
+          "id": "FT-51",
+          "spec": "A tiny task returns to the smallest useful topology and does not create a council."
+        },
+        {
+          "id": "FT-52",
+          "spec": "A sealed Architect reconstructs the problem before seeing the preferred solution or another seat's conclusion."
+        },
+        {
+          "id": "FT-53",
+          "spec": "An independent Reviewer has a fresh agent identity and neutral exact-candidate brief, never a fork."
+        },
+        {
+          "id": "FT-54",
+          "spec": "Broad explanatory Q&A is routed away while only compact owner decisions consume Lead attention."
+        },
+        {
+          "id": "FT-55",
+          "spec": "A Peer receives neither orchestration manuals nor unrelated control-plane instructions."
+        },
+        {
+          "id": "FT-56",
+          "spec": "Done or idle only wakes the Lead and cannot append a verdict without complete evidence."
+        },
+        {
+          "id": "FT-57",
+          "spec": "A Supervisor finding yields an evidence-backed question or recommendation, never a code edit or project verdict."
+        }
+      ],
+      "sources": [
+        "references/anti-pattern-index.md",
+        "references/anti-patterns.md",
+        "references/roles/lead.md",
+        "references/roles/supervisor.md"
+      ],
+      "scenario": "Map the legacy IDs in order to anti-pattern signals 1 through 17. Trigger each signal separately, load the digest-bound detail card, treat its mechanism as a hypothesis, gather the named evidence, and apply the bounded response without turning a label into a verdict.",
+      "test_selectors": []
+    },
+    {
+      "slug": "live-topology-branches",
+      "title": "Live smallest-topology branches",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-58",
+          "spec": "A tiny task uses focused proof with zero or one Peer."
+        },
+        {
+          "id": "FT-59",
+          "spec": "A bounded task uses one Engineer and only a risk-triggered Reviewer."
+        },
+        {
+          "id": "FT-60",
+          "spec": "Architecture-sensitive work uses fresh Architect, decision, Engineer, fresh Reviewer, and same-Engineer correction in order."
+        },
+        {
+          "id": "FT-61",
+          "spec": "A difficult council uses distinct sealed mandates, decision-changing propositions, and one outcome owner and verdict."
+        },
+        {
+          "id": "FT-62",
+          "spec": "Multi-project observation keeps evidence, protocol, Lead authority, and verdict project-local."
+        }
+      ],
+      "sources": [
+        "references/topology.md",
+        "references/roles/lead.md",
+        "references/roles/supervisor.md"
+      ],
+      "scenario": "Exercise tiny, bounded, architecture-sensitive, sealed-council, and multi-project topologies; require one outcome owner, fresh decision-changing seats, same-Engineer correction, and project-local evidence and verdict authority.",
+      "test_selectors": []
+    },
+    {
+      "slug": "live-verdict-lifecycle",
+      "title": "Live running and verdict lifecycle",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-64",
+          "spec": "A running Lead handles event waits, reopen/dependency/blocked outcomes, proposed expansion, hypotheses, and repeated-failure mechanism checks."
+        },
+        {
+          "id": "FT-65",
+          "spec": "Before verdict, exact candidate, artifact, verification, independent review, findings, residual risk, and acceptance authority are all present."
+        }
+      ],
+      "sources": [
+        "references/roles/lead.md",
+        "references/lead/peer-lifecycle.md",
+        "references/lead/candidate-and-verdict.md"
+      ],
+      "scenario": "During a run, handle event waits, reopen/dependency/blocked outcomes, proposed expansion, and repeated-failure mechanisms; before verdict require exact candidate, artifact, verification, independent review, findings, residual risk, and owning authority.",
+      "test_selectors": []
+    },
+    {
+      "slug": "live-handoff-and-layout",
+      "title": "Live non-blocking handoff and pane lifecycle",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-67",
+          "spec": "The launch event and ownership marker precede exactly one non-waiting Lead delivery, and the Launcher never waits for project work."
+        },
+        {
+          "id": "FT-68",
+          "spec": "Balanced placement initializes missing state, rejects malformed or pre-created empty state, chooses right then down-right then down-left, persists intent before mutation, recovers same-cwd crashes, adopts one orphan, retires transactionally, and rejects unexplained disappearance."
+        }
+      ],
+      "sources": [
+        "references/launch.md",
+        "references/lead/peer-lifecycle.md",
+        "scripts/herdr_orchestrator.py",
+        "scripts/herdr_balanced_split.py"
+      ],
+      "scenario": "Require the launch event and ownership marker before one non-waiting Lead delivery, then exercise deterministic balanced split initialization, intent-before-mutation, same-cwd recovery, orphan adoption, explicit transactional retirement, and rejection of unexplained pane disappearance.",
+      "test_selectors": []
+    },
+    {
+      "slug": "live-language-separation",
+      "title": "Live orchestration and artifact language separation",
+      "verification": "live/manual",
+      "invariants": [
+        {
+          "id": "FT-69",
+          "spec": "Two projects keep distinct live and artifact languages; envelopes and Markdown follow their own values, literals remain exact, updates preserve valid pairs, and blanks stop launch."
+        }
+      ],
+      "sources": [
+        "SKILL.md",
+        "references/setup.md",
+        "references/launcher.md",
+        "references/launch.md",
+        "references/supervisor-attachment.md",
+        "references/roles/lead.md",
+        "references/roles/peer.md",
+        "references/roles/supervisor.md",
+        "references/lead/peer-lifecycle.md"
+      ],
+      "scenario": "Use two repositories with different explicit language pairs; verify live envelopes and conversation use each live value, saved Markdown uses each artifact value, authoritative bytes and literals remain exact, unrelated updates preserve valid pairs, and missing values stop launch without a package default.",
+      "test_selectors": []
+    }
+  ]
+}

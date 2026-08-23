@@ -1,191 +1,124 @@
 # Project setup and update
 
-Read this file only for setup or update. The result is exactly two tracked
-project files: `.orchestration/herdr-orchestrator.toml` and
-`.orchestration/workspace-protocol.md`.
+This branch produces exactly two tracked project files:
+`.orchestration/herdr-orchestrator.toml` and
+`.orchestration/workspace-protocol.md`. It does not launch an agent unless the
+same explicit invocation also contains a task, which is handled afterward by
+the task-launch route.
 
 ## 1. Preserve and discover
 
-Resolve the Git repository root and absolute Git common directory, then inspect
-status, existing worktrees, current agents/panes, and both destination paths.
-Preserve user-owned changes. If a destination already exists, treat it as user
-data: propose a diff and update it in place only after understanding its current
-intent.
+Resolve the repository root and absolute Git common directory. Inventory status,
+worktrees, agents/panes, and both destinations. Preserve Human-owned files and
+unrelated changes; understand them and present an in-place diff.
 
-Require `HERDR_ENV=1`, then read live command authority and prove that the
-Launcher can reach the current Herdr control plane before doing slower
-discovery:
+Require `HERDR_ENV=1` and Python 3.11+, then prove the Launcher's live control
+boundary first:
 
 ```text
 herdr agent list
 herdr pane current --current
-herdr --skill
-herdr --help
-herdr agent
-herdr agent start --help
-herdr integration status
 ```
 
-If either of the first two canaries cannot reach the live server, stop
-immediately with the exact OS/CLI error. A managed pane alone is insufficient:
-the Launcher's native permission profile must permit the Herdr socket. Do not
-run integration, version, or harness probes while this prerequisite is red.
+Stop on either error before discovery. Read targeted Herdr and agent-start help,
+integration status, and both packaged helpers' `--help`; these interfaces, not
+a runtime skill dump, are command authority.
 
-Discovery has two depths. First build a shallow machine map from the live kind
-set and integration status: supported kind, executable presence/path, bounded
-version probe, and integration state. Show unavailable, broken, or outdated
-entries rather than probing their model catalogs. Emit exactly one row per live
-kind and compare the output set/count to the live kind set; an unknown
-executable mapping is `unresolved`, never an omitted row. Then ask which
-installed harnesses the Human wants to consider for the Lead, Peer recipe
-catalog, and optional Supervisor. If the invocation already names those
-candidates, use that answer without another question. During an update, every
-existing recipe the Human wants to retain is also a selected candidate.
+Build one shallow row per live Herdr kind: executable path/presence, bounded
+version, and integration state. Mark unknown mappings `unresolved`; retain
+unavailable, broken, and outdated rows. Deep-probe only Human-named or
+previously configured harnesses.
 
-Only for the selected candidates, discover authentication readiness, current
-native help, model catalog/list/picker, effort options, and
-sandbox/tool/native-spawn controls. A failure in one selected harness is that
-candidate's exact failure; it is not a reason to deep-probe unrelated
-harnesses.
+For each selected harness, discover authentication, native arguments, model and
+reasoning choices, sandbox/tool/network controls, and native-spawn control. Use
+`scripts/herdr_orchestrator.py codex-models --output <file>` for normalized
+Codex data and an analogous bounded native mechanism elsewhere. Put each output
+in a collision-free temporary directory outside the repository; consume compact
+metadata, run one bounded preference query, then remove it on success or
+failure. Raw catalogs never enter conversation or instruction context. An
+unavailable catalog stays `unverified` until a documented local check or
+Human-approved bounded smoke proves the exact model; marketing names, old
+config, and guessed aliases are not evidence.
 
-Use exact locally selectable model IDs from the native source. For current
-Codex versions, inspect `codex debug models --help` and use `codex debug models`
-when that command exists. Parse every visible `models[]` entry and its
-`supported_reasoning_levels`; never infer the catalog from its first entry or a
-configured default. If no catalog is enumerable, mark the selection
-`unverified` and validate it through a documented local mechanism or a
-Human-approved bounded smoke launch. Old config, marketing lists, guessed
-aliases, and generic recommendations are not evidence. Show the
-selected-candidate inventory and precise missing, unauthenticated, or
-unverified states before asking the Human to choose exact recipes; never
-silently repair machine-level integrations.
+Show the compact selected-candidate inventory, then obtain Human decisions for:
 
-Then ask the Human in plain language for:
-
-- the reasoning/cost preference for the Lead;
-- which concrete harness/model/access recipes the Lead may use for Peers and a
-  short capability/cost/access description for each;
-- whether a Supervisor recipe should be configured;
-- on first setup, when either stored language is missing/invalid, or when the
-  Human explicitly requests a change, the resulting live orchestration and
-  durable Markdown artifact language pair;
-- project risk, costly reversals, review triggers, and minimum verdict evidence;
+- Lead reasoning/cost preference and exact Lead recipe;
+- reusable Peer recipes with capability, cost, independence, and access
+  descriptions;
+- optional Supervisor recipe;
+- live orchestration and durable artifact languages on first setup, invalid
+  existing values, or an explicit language change;
+- project risk, review triggers, costly reversals, and minimum verdict proof;
 - edit, commit, push, deploy, publish, and other external-effect authority; and
-- scope-expansion, reserved architecture, model-budget, and Human-only boundaries.
+- scope expansion, reserved architecture, budget, and Human-only boundaries.
 
-Translate those answers into each harness's current native arguments. Do not
-invent a shared effort vocabulary. Do not store API keys, tokens, credential
-paths, environment values, or secret-bearing arguments.
+On first setup the Human explicitly confirms both language values. On unrelated
+updates, preserve an existing valid pair unless the Human requests a change.
 
-The Human must explicitly confirm both language settings during first setup.
-On an unrelated update, preserve an existing valid pair without asking again.
-If either value is missing or invalid, or the Human requests a language change,
-show and obtain confirmation for the resulting pair before writing it. Store
-nonempty language names or identifiers in both protocol fields; a blank,
-placeholder, or inferred value is invalid. The invocation language may guide
-the live conversation until first setup is complete, but it is not a stored
-default and must not be inherited across repositories.
+Translate choices into native argument vectors passed unchanged. Store no
+credential, secret path/value, or inferred shared effort vocabulary.
+Every option must have a strict helper schema for its exact kind; an unsupported
+option requires a package update, never arbitrary passthrough or fallback.
 
-For every selected recipe, inspect native sandbox, approval, tool, and spawn
-controls. The Lead needs bounded project plus run-evidence writes. Every Peer
-needs one lossless report-return path in an assigned writable boundary;
-writable Peer recipes otherwise need only their owned workspace. A
-project-read-only recipe serves Architect, Reviewer, Scout, or other non-writing
-assignments by making its exclusive report mailbox the pane cwd while keeping
-the project and Git metadata outside every writable root. Supervisor is
-project-read-only and notebook-write-only. Disable native agent spawning: the
-Lead creates Peers through Herdr, and a native subagent tree would create a
-second control plane. Validate installed controls rather than copying examples.
-Do not configure a recipe whose required access envelope cannot be enforced,
-and record any softer behavioral limitation honestly. Validate each role's
-access envelope separately even when recipes share one harness and model.
+## 2. Prove each role envelope
 
-The Lead and any configured Supervisor are control-plane roles. Prove that each
-exact native permission recipe can run `herdr agent list` from inside its
-harness boundary. Validate Git common-directory access per role: the Launcher
-needs the run-evidence root; the Lead needs its run evidence plus Git metadata
-allowed by its integration/commit authority; and a writable Peer needs Git
-metadata only when its Assignment may commit. A project-read-only Peer gets only
-its exclusive `reports/inbox/<agent-name>/` mailbox under the run, never
-checkout or other Git common-directory writes. A Supervisor gets only its bound
-run's `supervisor/` notebook directory, never the whole common directory. If a
-configured harness
-cannot express that dynamic notebook-only boundary, it is not a valid
-Supervisor recipe. When static inspection is insufficient, use a Human-approved
-bounded smoke session launched through Herdr: create, read, and remove one
-collision-free probe inside only the assigned scope, and require no leftover.
-For Codex `workspace-write`, current installations require native network access
-for the Herdr Unix socket. Launcher/Lead or commit-capable Peer recipes may also
-need an explicit writable root for the absolute Git common directory; that
-broadens network and Git-metadata access, so show the trade-off rather than
-hiding it. For a Codex project-read-only Peer, use `workspace-write` with the
-mailbox as cwd and no project/common-directory `--add-dir`; `read-only` cannot
-return the report. Do not copy a broad writable root into that Peer or a
-notebook-only Supervisor recipe. Starting the configured model without the
-relevant role canaries is not sufficient validation.
+Disable native spawning for every recipe. A Lead needs Herdr reachability,
+bounded run-evidence writes, and only authorized project/Git access. Each Peer
+gets one exclusive lossless report boundary and otherwise only its owned
+workspace. A read-only Peer uses mailbox cwd with project/Git outside writable
+roots; a Supervisor is project-read-only and notebook-write-only. Shared
+harness/model choices still need separate role checks.
 
-Discovery is complete when the shallow machine map and deep selected-candidate
-inventory have been shown; every selected recipe names an installed Herdr kind,
-an installed executable, native arguments accepted by current help, and a model
-proven available on this machine; and the Lead recipe has proven live Herdr
-control plus run-evidence access. Every Peer recipe has proven a lossless report
-return path; a project-read-only smoke can read the candidate and write its
-mailbox while checkout and non-mailbox common-directory writes fail. Any
-configured Supervisor and writable Peer recipe has separately proven its
-required control/evidence/commit boundary.
+Validate static controls; use a Human-approved collision-free smoke only when
+inspection is insufficient. It may create, read, fsync, and remove one in-scope
+probe, must reject out-of-scope writes without residue, and for control roles
+runs `herdr agent list` inside the exact native boundary. Do not configure an
+unenforceable envelope; state limitations precisely.
 
-## 2. Write the config
+For current Codex `workspace-write`, allow native network access when required
+for the Herdr Unix socket. Add the absolute Git common directory only to a Lead
+or commit-capable Peer whose authority requires it, and show that broadened
+boundary. A project-read-only Peer instead uses mailbox cwd with no checkout or
+common-directory writable root; a Supervisor receives only each exact notebook
+root.
 
-Copy the authoritative table-shape template at `assets/config.toml` to
-`.orchestration/herdr-orchestrator.toml`, then replace every example and
-placeholder.
+Discovery is complete when the shallow kind map and compact deep inventory were
+shown; every selected kind, executable, native argument, model, spawn control,
+Herdr boundary, evidence boundary, and applicable Git boundary is proven; and
+the Human supplied every non-discoverable choice.
 
-`[roles.lead]` and optional `[roles.supervisor]` are fixed-role recipes. Peer has
-one durable Role Profile; each `[peer_recipes.<name>]` is instead a complete
-launch recipe with a nonempty capability `description`. Add any number, using
-capability labels rather than disposition names. The Lead may create any number
-of Peers, reuse a recipe, or mix recipes; topology and Assignment determine
-count and disposition.
+## 3. Write schema version 2 and the protocol
 
-`kind` and every `args` element are passed unchanged to `herdr agent start`.
-There is no adapter, profile lookup, effort translation, fallback, inheritance,
-or Lead-authored native argument. A missing recipe requires an explicit setup
-update.
+Copy `assets/config.toml` and replace every placeholder. Require exactly:
 
-Require `version = 2`, exactly one `[roles.lead]`, optional
-`[roles.supervisor]`, and one or more uniquely named
-`[peer_recipes.<name>]` tables. A role recipe contains exactly `kind` and
-`args`; a Peer recipe also contains `description`. Reject every other top-level
-key, unknown recipe field, and indirection from any recipe to another table or
-file. Create this schema from live answers rather than translating an older
-project configuration. Package-level legacy files are not project inputs.
+- `version = 2`;
+- one `[roles.lead]` and optional `[roles.supervisor]`, each containing only
+  `kind` and `args`; and
+- one or more uniquely named `[peer_recipes.<name>]`, each containing exactly
+  nonempty `description`, `kind`, and `args`.
 
-Config writing is complete when TOML parsing and strict schema checks succeed,
-all placeholders are gone, and each recipe independently passes discovery.
-
-## 3. Write the protocol
+Peer recipe names identify reusable capabilities, not dispositions. There is no
+fallback, inheritance, profile lookup, adapter, or legacy-schema migration.
 
 Read `references/workspace-protocol.md`, copy
-`assets/workspace-protocol.md`, and interview the Human only for project facts
-that cannot be discovered. Fill all twelve numbered sections. Describe how the
-Lead chooses among configured Peer recipes for each Assignment's risk,
-independence, access, and cost needs; keep model IDs and native flags in TOML.
-The protocol contains tactics and decision boundaries, never secrets,
-task-specific file lists, or global role manuals.
-
-Protocol writing is complete when every section has a concrete project answer,
-every recipe has decidable selection criteria, independent-review triggers are
-decidable, one-writer and stable-candidate rules are explicit, and the
-Human-only boundary plus live/artifact languages are clear.
+`assets/workspace-protocol.md`, and fill all twelve sections with project facts.
+Keep native model/flags in TOML. Make recipe selection, one-writer ownership,
+stable-candidate identity, independent-review triggers, evidence, Human-only
+decisions, and both communication languages decidable. The protocol contains
+project tactics, not task-specific file lists, secrets, or global role manuals.
 
 ## 4. Validate and review
 
-Parse TOML with the standard library or equivalent and check the schema, not
-only syntax. Re-run live availability checks for every final entry. Check that
-changes attributable to setup touch only the intended two files and contain no
-credential-like value; preserve unrelated Human changes. Present the scoped
-diff and unresolved assumptions to the Human.
+Run `scripts/herdr_orchestrator.py validate-project` on the repository and
+consume its compact JSON result. Recheck every final recipe against live local
+capabilities. Confirm only the two intended files changed,
+all placeholders and credential-like values are absent, and unrelated state is
+preserved. Present the scoped diff and unresolved assumptions for Human review.
 
-Do not start a Lead as a side effect of setup unless the same explicit Human
-request also includes a task to launch. Setup/update completes at the gate in
-`SKILL.md`.
+Setup/update is complete only when schema version 2 parses strictly; both files
+exist with every required protocol section and explicit language; shallow
+discovery covers the exact live kind set; every selected recipe/model/argument
+and role envelope passes live validation; Lead, each Peer, and any Supervisor
+have their required Herdr/evidence/Git boundaries; no credential or legacy
+schema remains; the Human reviewed the diff; and no agent was launched as an
+unintended side effect. No catalog, smoke, or probe residue remains.
