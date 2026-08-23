@@ -169,6 +169,41 @@ class HerdrOrchestratorTest(unittest.TestCase):
         )
         self.assertEqual(result["recipes"]["peers"][0]["name"], "engineer")
 
+    def test_validate_project_accepts_provider_scoped_model_ids(self) -> None:
+        project = self.valid_project()
+        config = project / ".orchestration/herdr-orchestrator.toml"
+        scoped = config.read_text(encoding="utf-8").replace(
+            '[peer_recipes.engineer]\n'
+            'description = "Writable implementation recipe"\n'
+            'kind = "codex"\n'
+            'args = ["--model", "gpt-5.6-terra"]\n',
+            '[peer_recipes.engineer]\n'
+            'description = "Writable implementation recipe"\n'
+            'kind = "opencode"\n'
+            'args = ["--model", "opencode-go/ox-alpha-free"]\n',
+        )
+        config.write_text(scoped, encoding="utf-8")
+
+        completed = self.run_cli("validate-project", "--project-root", str(project))
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+        for unsafe in (
+            "/provider/model",
+            "provider/model/",
+            "provider//model",
+            "provider/../model",
+        ):
+            with self.subTest(model=unsafe):
+                config.write_text(
+                    scoped.replace("opencode-go/ox-alpha-free", unsafe),
+                    encoding="utf-8",
+                )
+                completed = self.run_cli(
+                    "validate-project", "--project-root", str(project)
+                )
+                self.assertEqual(completed.returncode, 2)
+                self.assertIn("unsupported value", completed.stderr)
+
     def test_validate_project_binds_canonical_paths_and_protocol_root(self) -> None:
         project = self.valid_project()
         protocol = project / ".orchestration/workspace-protocol.md"

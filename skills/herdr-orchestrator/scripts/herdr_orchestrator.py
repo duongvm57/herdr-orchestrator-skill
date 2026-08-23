@@ -56,7 +56,10 @@ ASSET_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 AGENT_NAME_RE = re.compile(r"[a-z][a-z0-9_-]{0,31}\Z")
 PLACEHOLDER_RE = re.compile(r"^\s*(?:todo|tbd|unknown|n/?a|yyyy-mm-dd)\s*$", re.I)
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-MODEL_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}\Z")
+MODEL_ID_RE = re.compile(
+    r"(?=.{1,128}\Z)[A-Za-z0-9][A-Za-z0-9._:+-]*"
+    r"(?:/[A-Za-z0-9][A-Za-z0-9._:+-]*)*\Z"
+)
 SENSITIVE_LITERAL_RE = re.compile(
     r"(?i)(?:"
     r"\bsk-[a-z0-9][a-z0-9_-]{8,}\b"
