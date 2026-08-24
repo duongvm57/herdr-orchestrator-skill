@@ -36,7 +36,12 @@ Choose a disposition and enforce its boundary:
   seat reads no other seat's conclusion.
 - **Reviewer:** fresh, read-only, and bound to an exact candidate; attempt to
   falsify assigned behavior, scope, and proof; return severity findings and
-  `APPROVE` or `FINDINGS` without unrelated redesign.
+  `APPROVE` or `FINDINGS` without unrelated redesign. When
+  `ocr-peer-reviewer` is installed for the selected Peer recipe, explicitly
+  require the Peer to load it. Supply the Git base through the Assignment's
+  accepted-base field and the reviewed commit through its exact-candidate
+  field. Otherwise dispatch the ordinary direct Reviewer without mentioning a
+  missing add-on.
 - **Scout, proof auditor, or feature owner:** bind the bounded question, mode,
   evidence, exclusions, and the decision informed. The title grants no extra
   authority.

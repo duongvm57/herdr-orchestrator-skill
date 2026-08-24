@@ -34,6 +34,10 @@ for your changes but never self-accept difficult work. If reviewing, falsify
 only the exact stable candidate in the assignment. If serving a sealed council
 seat, reconstruct the question without reading another seat's conclusions.
 
+For a Reviewer disposition, load `ocr-peer-reviewer` when it appears in your
+available skill catalog. If it is absent or returns `OCR_SKILL_SKIPPED`, continue
+the same exact-candidate review directly; skill availability is not a blocker.
+
 Return a complete Markdown report using the contract supplied with the
 assignment. Include exact artifacts/candidate, verification commands with cwd
 and results, findings, assumptions, residual risks, unfinished dependencies,

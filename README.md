@@ -1,13 +1,22 @@
-# Herdr Orchestrator
+# Herdr Skills
 
-Herdr Orchestrator is an explicit-only Agent Skill for running repository work
-through a Human-led Project Lead and bounded independent Peers on
-[Herdr](https://herdr.dev).
+This multi-skill repository contains composable Agent Skills for governed
+repository work:
 
-For a project-task invocation, the current session is only a short-lived
-**Launcher**: it checks the repository and live tooling, prepares role-specific
-context, starts a fresh **Project Lead**, and transfers the Human to that Lead.
-The Launcher does not remain an invisible orchestration proxy.
+| Skill | Purpose | Required? |
+|---|---|---|
+| `herdr-orchestrator` | Launch a Human-led Project Lead and bounded independent Peers on [Herdr](https://herdr.dev). | Yes, for orchestration |
+| `ocr-peer-reviewer` | Let an independent Reviewer use [OpenCodeReview](https://github.com/alibaba/open-code-review) for file selection and rule resolution. | No; direct Peer review remains available |
+
+Herdr Orchestrator is explicit-only. For a project-task invocation, the current
+session is only a short-lived **Launcher**: it checks the repository and live
+tooling, prepares role-specific context, starts a fresh **Project Lead**, and
+transfers the Human to that Lead. The Launcher does not remain an invisible
+orchestration proxy.
+
+`ocr-peer-reviewer` is model-invoked only when installed and applicable. Its
+absence is not an orchestration error: a Reviewer uses direct exact-candidate
+review.
 
 ## Orchestration mindset
 
@@ -69,17 +78,33 @@ vector; its harness adapter validates those flags without translating them into
 a shared sandbox or effort vocabulary. Verify broadened network, filesystem,
 and Git-metadata access with bounded canaries.
 
-Install into the harness used as Launcher:
+Use the standard multi-skill installer:
 
 ```bash
-npx skills add duongvm57/herdr-orchestrator --skill herdr-orchestrator --agent codex
+npx skills@latest add duongvm57/herdr-orchestrator
 ```
 
-Replace `codex` with the harness used by the Launcher when the installer
-supports that target.
+Choose `herdr-orchestrator`, and optionally choose `ocr-peer-reviewer`. The
+installer also asks which supported agents receive each selected skill. Install
+the orchestrator into the Launcher harness; install the OCR add-on into any
+Peer-capable harness where you want OCR-backed review.
 
-Leads, Peers, and Supervisors do not need the skill installed; their
-role-specific context is sent directly when they are created.
+Leads, Peers, and Supervisors do not need `herdr-orchestrator` installed; their
+role-specific context is sent directly when they are created. A Reviewer that
+does not discover `ocr-peer-reviewer` continues with direct review.
+
+The optional OCR path also needs the `ocr` CLI. Delegation mode uses the host
+Peer for reasoning and needs no OCR-side LLM provider:
+
+```bash
+npm install -g @alibaba-group/open-code-review
+# or: brew install open-code-review
+ocr version
+```
+
+See OpenCodeReview's [installation](https://github.com/alibaba/open-code-review/blob/main/pages/src/content/docs/en/installation.md)
+and [delegation-mode](https://github.com/alibaba/open-code-review/blob/main/pages/src/content/docs/en/integrations/delegate.md)
+documentation for other platforms and current CLI details.
 
 ## Set up a repository
 

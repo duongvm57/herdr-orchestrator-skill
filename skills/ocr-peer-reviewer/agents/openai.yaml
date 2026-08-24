@@ -1,0 +1,4 @@
+interface:
+  display_name: "OCR Peer Reviewer"
+  short_description: "Exact-SHA independent review with OCR"
+  default_prompt: "Use $ocr-peer-reviewer to review an exact Git candidate as a read-only peer."
