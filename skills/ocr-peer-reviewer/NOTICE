@@ -1,0 +1,14 @@
+OCR Peer Reviewer
+Copyright 2026 duongvm57
+
+This skill adapts workflow concepts and instruction structure from the
+OpenCodeReview `open-code-review-delegate` skill:
+
+https://github.com/alibaba/open-code-review/tree/main/skills/open-code-review-delegate
+
+Copyright 2026 alibaba/open-code-review Contributors
+
+The upstream work is licensed under the Apache License, Version 2.0. This
+adaptation adds Herdr exact-candidate binding, durable OCR evidence paths and
+digests, explicit fallback receipts, read-only boundaries, and Lead-owned
+project acceptance. See LICENSE in this directory.

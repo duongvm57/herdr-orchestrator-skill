@@ -91,7 +91,10 @@ Peer-capable harness where you want OCR-backed review.
 
 Leads, Peers, and Supervisors do not need `herdr-orchestrator` installed; their
 role-specific context is sent directly when they are created. A Reviewer that
-does not discover `ocr-peer-reviewer` continues with direct review.
+does not discover `ocr-peer-reviewer` continues with direct review. Every
+Reviewer report records the procedure actually used and an OCR status. An
+OCR-backed review preserves raw `preview.json` and `rules.json` beside its inbox
+report and records both SHA-256 digests.
 
 The optional OCR path also needs the `ocr` CLI. Delegation mode uses the host
 Peer for reasoning and needs no OCR-side LLM provider:
@@ -229,4 +232,8 @@ explicit update invocation and a Human-reviewed tracked diff.
 
 ## License
 
-Released under the [MIT License](LICENSE).
+Herdr Orchestrator and the repository-maintained support code are released
+under the [MIT License](LICENSE). The adapted `ocr-peer-reviewer` skill is
+released under [Apache-2.0](skills/ocr-peer-reviewer/LICENSE); its upstream
+attribution and modification notice are in
+[skills/ocr-peer-reviewer/NOTICE](skills/ocr-peer-reviewer/NOTICE).

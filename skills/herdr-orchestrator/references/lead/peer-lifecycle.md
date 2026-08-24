@@ -40,8 +40,8 @@ Choose a disposition and enforce its boundary:
   `ocr-peer-reviewer` is installed for the selected Peer recipe, explicitly
   require the Peer to load it. Supply the Git base through the Assignment's
   accepted-base field and the reviewed commit through its exact-candidate
-  field. Otherwise dispatch the ordinary direct Reviewer without mentioning a
-  missing add-on.
+  field. Every Reviewer Assignment requires the procedure/status receipt in the
+  report schema below, including direct review when the add-on is unavailable.
 - **Scout, proof auditor, or feature owner:** bind the bounded question, mode,
   evidence, exclusions, and the decision informed. The title grants no extra
   authority.
@@ -59,7 +59,9 @@ uses `reports/inbox/<agent-name>/report.md`; its exclusive inbox directory is
 the pane cwd and only writable project/orchestration-evidence root. A writable
 Peer uses that inbox when its validated boundary permits, or one exact temporary
 path inside its owned workspace. Temporary report evidence is outside the
-candidate and is removed only after byte-identical promotion.
+candidate and is removed only after byte-identical promotion. Reserve
+`reports/inbox/<agent-name>/ocr/preview.json` and `ocr/rules.json` as durable raw
+OCR evidence paths for a Reviewer that loads the add-on.
 
 Every Assignment reproduces this complete schema rather than referencing this
 card or a pathname:
@@ -86,7 +88,10 @@ card or a pathname:
 <each command, working directory, exit/result, relevant output>
 
 ## Findings, assumptions, and residual risks
-<severity and inspectable evidence where applicable>
+<for Reviewer, begin with exactly:
+Review procedure: <ocr-delegate | direct>
+OCR status: <USED | SKILL_NOT_AVAILABLE | OCR_UNAVAILABLE | NON_GIT_CANDIDATE | OCR_OUTPUT_UNSUPPORTED | NO_REVIEWABLE_FILES | CANDIDATE_CHANGED>
+then severity and inspectable evidence; for USED include both raw artifact paths and SHA-256 digests; for NO_REVIEWABLE_FILES include preview path and digest>
 
 ## Unfinished dependencies
 <owners, prerequisites, or none>
@@ -161,6 +166,10 @@ After settlement, inspect identity with `herdr agent get`; use
 return path to be a regular file, validate the full schema, compute SHA-256, and
 atomically promote the same bytes to `reports/<agent-name>.md`. If paths differ,
 verify matching digests before removing only the reserved temporary source.
+For a Reviewer, validate the procedure/status receipt. When status is `USED`,
+also require both OCR artifacts under the reserved inbox, verify their reported
+SHA-256 digests, and preserve them after report promotion. For
+`NO_REVIEWABLE_FILES`, require and preserve the hashed preview artifact.
 
 If `idle` or `done` arrives without a complete file, send one bounded
 continuation with `herdr agent prompt` through a safe argument vector and

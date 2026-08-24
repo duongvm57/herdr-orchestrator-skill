@@ -79,7 +79,7 @@
         "assignment": []
       },
       "hard_limit": 700,
-      "baseline": 564
+      "baseline": 668
     },
     "supervisor_initial_fixed": {
       "render": "pack",
