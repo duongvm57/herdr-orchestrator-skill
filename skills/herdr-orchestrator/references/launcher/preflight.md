@@ -36,9 +36,9 @@ result and retain its exact canonical project root, Git common directory,
 config path/digest, and protocol path/digest as the preflight binding; do not
 recompute or substitute them. Require:
 
-- `.orchestration/herdr-orchestrator.toml` at schema `version = 2` with exactly
-  one `[roles.lead]`, optional `[roles.supervisor]`, and one or more uniquely
-  named `[peer_recipes.<name>]` entries;
+- `.orchestration/herdr-orchestrator.toml` at schema `version = 3` with one
+  `fallback_peer_recipe` naming an exact recipe, one `[roles.lead]`, optional
+  `[roles.supervisor]`, and uniquely named `[peer_recipes.<name>]` entries;
 - only `kind` and `args` in fixed roles, and nonempty `description`, `kind`, and
   `args` in each Peer recipe;
 - only options registered in the helper's strict per-kind argument schema, with
@@ -49,16 +49,17 @@ recompute or substitute them. Require:
 
 Validate the recipes the selected branch can start against live local
 capabilities: Lead and all Peer recipes for task launch; only the exact host
-Supervisor recipe for Supervisor attachment. Require an installed executable,
-supported Herdr kind, accepted native arguments, selectable configured model,
+Supervisor recipe for Supervisor attachment. The helper's verified adapter
+registry is the configuration allowlist; a Herdr-advertised kind outside it is
+unavailable. Require an installed executable, supported Herdr kind, accepted native arguments, selectable configured model,
 disabled native spawning, Herdr reachability for control roles, and the exact
 read/write envelope for the role. Use the helper's compact catalog operation
 advertised by its current `--help`; keep raw model catalogs out of the Launcher
 context and logs. A Lead needs run-evidence writes. Each task-launch Peer recipe
 needs a lossless exclusive report-return boundary; project-read-only Peers keep
 checkout and Git metadata read-only. A Supervisor is project-read-only and
-notebook-write-only. Report the exact failing element; no recipe substitution
-or fallback is valid.
+notebook-write-only. Once selected, including the configured Peer fallback, a
+failing recipe is reported exactly and never substituted at runtime.
 
 Read both communication languages before generating prose or delivering a
 pack. Durable evidence uses the artifact language. Live status and transport
@@ -84,5 +85,5 @@ changes are Human-owned. Keep them in place and unchanged.
 Preflight is complete only when the repository, Git common directory, project
 files, live recipes, selected branch input, applicable authority, and preserved
 before-state are unambiguous; both helpers pass their own checks; and all access
-canaries pass without fallback. The retained project root, paths, and digests
-remain the sole authority for any task-run initialization.
+canaries pass without runtime substitution. The retained project root, paths,
+and digests remain the sole authority for any task-run initialization.

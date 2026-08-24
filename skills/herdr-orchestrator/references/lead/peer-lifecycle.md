@@ -44,8 +44,10 @@ Choose a disposition and enforce its boundary:
 Choose one configured Peer recipe whose description satisfies the Assignment's
 risk, independence, access, and cost needs. Recipe selection and disposition
 are independent; reuse or mix recipes as needed. Pass the selected `kind` and
-native `args` unchanged. If no recipe fits, request a Human-approved setup
-update.
+native `args` unchanged. If no specialized recipe fits, use the configured
+`fallback_peer_recipe` and record that fallback choice in the Assignment. Its
+existing access boundary remains binding; request a Human-approved setup update
+when the Assignment requires capability outside it.
 
 Reserve a collision-free return path before start. A project-read-only Peer
 uses `reports/inbox/<agent-name>/report.md`; its exclusive inbox directory is

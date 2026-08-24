@@ -40,7 +40,7 @@
 - Configured recipe capabilities and access constraints:
 - Selection by Assignment risk, independence, cost, and required access:
 - Recipe reuse or mixing across dynamically created Peers:
-- Missing capability, availability check, and no-fallback rule:
+- Specialized miss, configured fallback recipe, and out-of-envelope escalation:
 
 ## 6. Architect, Reviewer, and council triggers
 

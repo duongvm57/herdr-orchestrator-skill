@@ -42,11 +42,13 @@ output.
 - Legacy: `FT-16`
 - Verification: **automated/static**
 
-Deterministic checks parse schema version 2, reject unknown, placeholder, legacy, and
-credential-bearing configuration, require explicit protocol languages, retain arbitrary
-described Peer recipes, and project raw model catalogs into bounded local metadata.
+Deterministic checks parse schema version 3, bind the fallback to an exact Peer recipe,
+reject unknown, placeholder, legacy, credential-bearing, and unverified-harness
+configuration, require explicit protocol languages, retain arbitrary described Peer
+recipes, and project raw model catalogs into bounded local metadata, with Pi restricted
+to its effective model scope and OMP restricted to its authenticated-provider catalog.
 
-Automation: 4 validated selector(s) in the manifest.
+Automation: 11 validated selector(s) in the manifest.
 
 ### Live control-plane and semantic boundaries
 
@@ -91,9 +93,10 @@ verdict, and Human decisions as distinct evidence links.
 - Legacy: `FT-17`
 - Verification: **live/manual**
 
-Within one run, vary Peer count and disposition independently from recipes, reuse one
-validated recipe, select another for independence or access, and stop for an explicit
-setup update when no configured capability fits.
+Within one run, vary Peer count and disposition independently from recipes, reuse or mix
+specialized recipes, use the configured fallback for an unmatched case without changing
+its harness/model/access, and stop for setup update when the Assignment exceeds that
+envelope.
 
 ### Live Peer assignment and lossless round-trip
 

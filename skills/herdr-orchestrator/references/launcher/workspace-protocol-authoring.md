@@ -15,8 +15,8 @@ sections:
 3. Lead decisions; edit/commit/push/deploy/publish authority; scope expansion;
    reserved architecture contracts; Human-only boundaries; prohibited effects;
 4. task classes mapped to the smallest useful topology;
-5. per-Assignment Peer recipe selection, reuse/mixing, and native
-   availability/no-fallback principle;
+5. per-Assignment Peer recipe selection, reuse/mixing, configured fallback,
+   native availability, and out-of-envelope escalation;
 6. fresh Architect, Reviewer, sealed council, and same-Engineer correction gates;
 7. one writer, concurrent-worktree isolation, resources, handback, integration;
 8. allowed stable-candidate identities and candidate invalidation;
@@ -29,8 +29,8 @@ sections:
 
 Keep global role identity in role profiles and one-run details in assignments.
 Keep model IDs and native flags in config. Keep secrets out of both files. Avoid
-task-specific path lists, guessed fallback models, topology ceremony for every
-task, or authority that the Human did not grant.
+task-specific path lists, unconfigured fallback models, topology ceremony for
+every task, or authority that the Human did not grant.
 
 Protocol candidates come from repeated causal evidence, not a single
 Supervisor verdict. Material authority or workflow changes are applied only in

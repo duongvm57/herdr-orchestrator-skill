@@ -76,21 +76,36 @@
       "invariants": [
         {
           "id": "FT-16",
-          "spec": "Two projects strictly parse schema-v2 native Lead, optional Supervisor, and arbitrary described mixed-harness Peer recipes without legacy lookup."
+          "spec": "Two projects strictly parse schema-v3 native Lead, optional Supervisor, exact fallback Peer recipe, and arbitrary described mixed-harness Peer recipes without legacy lookup."
         }
       ],
       "sources": [
         "assets/config.toml",
         "assets/workspace-protocol-template.md",
         "references/launcher/setup.md",
-        "scripts/herdr_orchestrator.py"
+        "scripts/herdr_orchestrator.py",
+        "scripts/herdr_harnesses/__init__.py",
+        "scripts/herdr_harnesses/base.py",
+        "scripts/herdr_harnesses/claude.py",
+        "scripts/herdr_harnesses/codex.py",
+        "scripts/herdr_harnesses/grok.py",
+        "scripts/herdr_harnesses/omp.py",
+        "scripts/herdr_harnesses/opencode.py",
+        "scripts/herdr_harnesses/pi.py"
       ],
-      "scenario": "Deterministic checks parse schema version 2, reject unknown, placeholder, legacy, and credential-bearing configuration, require explicit protocol languages, retain arbitrary described Peer recipes, and project raw model catalogs into bounded local metadata.",
+      "scenario": "Deterministic checks parse schema version 3, bind the fallback to an exact Peer recipe, reject unknown, placeholder, legacy, credential-bearing, and unverified-harness configuration, require explicit protocol languages, retain arbitrary described Peer recipes, and project raw model catalogs into bounded local metadata, with Pi restricted to its effective model scope and OMP restricted to its authenticated-provider catalog.",
       "test_selectors": [
         "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_returns_compact_metadata",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_binds_fallback_to_an_exact_peer_recipe",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_accepts_independent_mixed_harness_profiles",
         "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_rejects_unknown_schema_and_blank_language",
         "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_rejects_placeholder_and_credential_arguments",
-        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_codex_models_writes_only_compact_projection"
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_enforces_omp_model_and_subagent_boundary",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_harness_models_projects_each_native_catalog_without_raw_payloads",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_omp_harness_models_rejects_malformed_or_duplicate_catalogs",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_pi_harness_models_projects_only_effective_model_scope",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_pi_harness_models_fails_closed_without_a_resolved_scope",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_harness_models_rejects_unprojectable_native_fields_without_leaking_them"
       ]
     },
     {
@@ -227,7 +242,7 @@
       "invariants": [
         {
           "id": "FT-17",
-          "spec": "One run chooses Peer count and disposition independently, reuses or mixes validated recipes by risk, and stops when no capability fits."
+          "spec": "One run chooses Peer count and disposition independently, reuses or mixes validated recipes by risk, uses the Human-approved fallback recipe for an unmatched case, and stops when the Assignment exceeds its envelope."
         }
       ],
       "sources": [
@@ -235,7 +250,7 @@
         "references/roles/lead.md",
         "references/lead/peer-lifecycle.md"
       ],
-      "scenario": "Within one run, vary Peer count and disposition independently from recipes, reuse one validated recipe, select another for independence or access, and stop for an explicit setup update when no configured capability fits.",
+      "scenario": "Within one run, vary Peer count and disposition independently from recipes, reuse or mix specialized recipes, use the configured fallback for an unmatched case without changing its harness/model/access, and stop for setup update when the Assignment exceeds that envelope.",
       "test_selectors": []
     },
     {

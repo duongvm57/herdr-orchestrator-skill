@@ -1,4 +1,5 @@
-version = 2
+version = 3
+fallback_peer_recipe = "<fallback-recipe-name>"
 
 # Setup replaces every placeholder with a recipe validated on this machine.
 [roles.lead]
@@ -13,6 +14,7 @@ args = ["<supervisor-native-arg>"]
 # Repeat independently for each Human-approved capability route; kinds may differ.
 # The description includes its project and report-return write boundaries.
 # Recipes are launch capabilities; the assignment supplies Peer disposition.
+# One recipe is the Human-approved fallback for an otherwise unmatched case.
 [peer_recipes."<recipe-name>"]
 description = "<capability-cost-independence-and-access-summary>"
 kind = "<peer-kind>"

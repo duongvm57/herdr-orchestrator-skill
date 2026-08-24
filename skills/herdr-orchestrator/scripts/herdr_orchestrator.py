@@ -34,8 +34,21 @@ from pathlib import Path
 from typing import Any, Optional, Sequence
 
 
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+
+from herdr_harnesses import (  # noqa: E402 - standalone sibling package
+    ADAPTERS as HARNESS_ADAPTERS,
+    PACKAGED_FILES as HARNESS_ADAPTER_FILES,
+    VERIFIED_HARNESS_KINDS,
+    HarnessError,
+    get_adapter,
+)
+
+
 SCHEMA_VERSION = 1
-PROJECT_CONFIG_VERSION = 2
+PROJECT_CONFIG_VERSION = 3
 SAFE_PROMPT_MAX_BYTES = 96 * 1024
 DEFAULT_PROMPT_MAX_BYTES = SAFE_PROMPT_MAX_BYTES
 DEFAULT_DELIVERY_TIMEOUT_SECONDS = 30.0
@@ -56,10 +69,6 @@ ASSET_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 AGENT_NAME_RE = re.compile(r"[a-z][a-z0-9_-]{0,31}\Z")
 PLACEHOLDER_RE = re.compile(r"^\s*(?:todo|tbd|unknown|n/?a|yyyy-mm-dd)\s*$", re.I)
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-MODEL_ID_RE = re.compile(
-    r"(?=.{1,128}\Z)[A-Za-z0-9][A-Za-z0-9._:+-]*"
-    r"(?:/[A-Za-z0-9][A-Za-z0-9._:+-]*)*\Z"
-)
 SENSITIVE_LITERAL_RE = re.compile(
     r"(?i)(?:"
     r"\bsk-[a-z0-9][a-z0-9_-]{8,}\b"
@@ -69,73 +78,6 @@ SENSITIVE_LITERAL_RE = re.compile(
     r"|@[A-Za-z0-9_./~-]+"
     r")"
 )
-HERDR_AGENT_KINDS = (
-    "pi",
-    "claude",
-    "codex",
-    "gemini",
-    "cursor",
-    "devin",
-    "agy",
-    "cline",
-    "omp",
-    "mastracode",
-    "opencode",
-    "copilot",
-    "kimi",
-    "kiro",
-    "droid",
-    "amp",
-    "grok",
-    "hermes",
-    "kilo",
-    "qodercli",
-    "qwen",
-    "maki",
-)
-COMMON_RECIPE_ARGUMENTS = {
-    "--model": "model",
-}
-RECIPE_ARGUMENT_SCHEMAS: dict[str, dict[str, str]] = {
-    kind: dict(COMMON_RECIPE_ARGUMENTS) for kind in HERDR_AGENT_KINDS
-}
-RECIPE_ARGUMENT_SCHEMAS["codex"].update(
-    {
-        "--sandbox": "codex-sandbox",
-        "--ask-for-approval": "codex-approval",
-        "--add-dir": "absolute-directory",
-        "--config": "codex-config",
-        "--no-alt-screen": "flag",
-        "--strict-config": "flag",
-    }
-)
-RECIPE_ARGUMENT_SCHEMAS["claude"].update(
-    {
-        "--effort": "effort",
-        "--permission-mode": "claude-permission",
-        "--add-dir": "absolute-directory",
-        "--disallowedTools": "claude-spawn-tools",
-        "--disallowed-tools": "claude-spawn-tools",
-        "--disable-slash-commands": "flag",
-        "--no-chrome": "flag",
-        "--no-session-persistence": "flag",
-        "--bare": "flag",
-        "--ax-screen-reader": "flag",
-    }
-)
-RECIPE_ARGUMENT_SCHEMAS["gemini"].update(
-    {
-        "--approval-mode": "gemini-approval",
-        "--sandbox": "flag",
-    }
-)
-REPEATABLE_RECIPE_ARGUMENTS = {
-    ("codex", "--add-dir"),
-    ("codex", "--config"),
-    ("claude", "--add-dir"),
-    ("claude", "--disallowedTools"),
-    ("claude", "--disallowed-tools"),
-}
 LANGUAGE_FIELDS = (
     "Live orchestration language",
     "Durable Markdown artifact language",
@@ -176,7 +118,10 @@ PROTOCOL_LABELS: tuple[tuple[str, ...], ...] = (
         "Configured recipe capabilities and access constraints",
         "Selection by Assignment risk, independence, cost, and required access",
         "Recipe reuse or mixing across dynamically created Peers",
-        "Missing capability, availability check, and no-fallback rule",
+        (
+            "Specialized miss, configured fallback recipe, and "
+            "out-of-envelope escalation"
+        ),
     ),
     (
         "Fresh Architect required when",
@@ -378,149 +323,28 @@ def _is_populated(value: str) -> bool:
     )
 
 
-def _validate_absolute_directory_argument(value: str, location: str) -> None:
-    path = Path(value)
-    if not path.is_absolute():
-        raise HelperError(f"{location} has an unsupported directory; canonical absolute path required")
-    try:
-        resolved = _require_directory(path, location)
-    except HelperError as exc:
-        raise HelperError(
-            f"{location} has an unsupported directory; canonical absolute path required"
-        ) from exc
-    if resolved == Path(resolved.anchor) or value != str(resolved):
-        raise HelperError(f"{location} has an unsupported directory; canonical absolute path required")
-
-
-def _validate_codex_config_argument(value: str, location: str) -> None:
-    if "=" not in value:
-        raise HelperError(f"{location} has an unsupported Codex configuration override")
-    key, configured = value.split("=", 1)
-    allowed_values = {
-        "sandbox_workspace_write.network_access": {"true", "false"},
-        "model_reasoning_effort": {
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max",
-            "ultra",
-            '"low"',
-            '"medium"',
-            '"high"',
-            '"xhigh"',
-            '"max"',
-            '"ultra"',
-        },
-        "service_tier": {"priority", '"priority"'},
-        "agents.enabled": {"false"},
-    }
-    if key not in allowed_values or configured not in allowed_values[key]:
-        raise HelperError(f"{location} uses an unsupported Codex configuration override")
-
-
-def _validate_recipe_argument_value(schema: str, value: str, location: str) -> None:
-    if schema == "model":
-        valid = MODEL_ID_RE.fullmatch(value) is not None
-    elif schema == "effort":
-        valid = value in {"low", "medium", "high", "xhigh", "max"}
-    elif schema == "codex-sandbox":
-        valid = value in {"read-only", "workspace-write", "danger-full-access"}
-    elif schema == "codex-approval":
-        valid = value in {"on-request", "never"}
-    elif schema == "claude-permission":
-        valid = value in {
-            "acceptEdits",
-            "auto",
-            "bypassPermissions",
-            "manual",
-            "dontAsk",
-            "plan",
-        }
-    elif schema == "claude-spawn-tools":
-        tools = [item for item in re.split(r"[\s,]+", value) if item]
-        valid = bool(tools) and set(tools) <= {"Agent", "Task"}
-    elif schema == "gemini-approval":
-        valid = value in {"default", "auto_edit", "yolo", "plan"}
-    elif schema == "absolute-directory":
-        _validate_absolute_directory_argument(value, location)
-        return
-    elif schema == "codex-config":
-        _validate_codex_config_argument(value, location)
-        return
-    else:  # pragma: no cover - package-owned schema programming error
-        raise HelperError(f"{location} has an unknown package argument schema")
-    if not valid:
-        raise HelperError(f"{location} has an unsupported value")
-
-
 def _validate_recipe_arguments(kind: str, args: list[str], location: str) -> None:
-    schema = RECIPE_ARGUMENT_SCHEMAS.get(kind)
-    if schema is None:
-        raise HelperError(f"{location}.kind is not supported by the safe recipe schema")
-    seen: set[str] = set()
-    seen_pairs: set[tuple[str, str]] = set()
-    seen_codex_config_keys: set[str] = set()
-    index = 0
-    while index < len(args):
-        option = args[index]
-        value_schema = schema.get(option)
-        if value_schema is None:
-            raise HelperError(f"{location}.args has an unsupported option at index {index}")
-        if option in seen and (kind, option) not in REPEATABLE_RECIPE_ARGUMENTS:
-            raise HelperError(f"{location}.args repeats a non-repeatable option")
-        seen.add(option)
-        index += 1
-        if value_schema == "flag":
-            continue
-        if index >= len(args):
-            raise HelperError(f"{location}.args option at index {index - 1} requires a value")
-        _validate_recipe_argument_value(
-            value_schema,
-            args[index],
-            f"{location}.args value at index {index}",
-        )
-        pair = (option, args[index])
-        if pair in seen_pairs:
-            raise HelperError(f"{location}.args repeats an option value")
-        seen_pairs.add(pair)
-        if value_schema == "codex-config":
-            config_key = args[index].split("=", 1)[0]
-            if config_key in seen_codex_config_keys:
-                raise HelperError(f"{location}.args repeats a Codex configuration key")
-            seen_codex_config_keys.add(config_key)
-        index += 1
-
-
-def _recipe_option_values(args: list[str], option: str) -> list[str]:
-    values: list[str] = []
-    index = 0
-    while index < len(args):
-        current = args[index]
-        schema = RECIPE_ARGUMENT_SCHEMAS.get("codex", {}).get(current)
-        index += 1
-        if schema == "flag":
-            continue
-        if index >= len(args):  # already rejected by recipe validation
-            break
-        if current == option:
-            values.append(args[index])
-        index += 1
-    return values
+    try:
+        adapter = get_adapter(kind)
+    except HarnessError as exc:
+        raise HelperError(f"{location}.kind {exc}") from exc
+    try:
+        adapter.validate_arguments(args, location)
+    except HarnessError as exc:
+        raise HelperError(str(exc)) from exc
 
 
 def _validate_lead_evidence_boundary(config: dict[str, Any], common: Path) -> None:
     lead = config["roles"]["lead"]
-    if lead["kind"] != "codex":
-        return
-    sandbox = _recipe_option_values(lead["args"], "--sandbox")
-    if sandbox != ["workspace-write"]:
-        return
-    writable_roots = _recipe_option_values(lead["args"], "--add-dir")
-    if str(common) not in writable_roots:
-        raise HelperError(
-            "roles.lead Codex workspace-write args must add the exact Git common directory"
+    adapter = get_adapter(lead["kind"])
+    try:
+        adapter.validate_lead_evidence_root(
+            lead["args"],
+            common,
+            "roles.lead",
         )
+    except HarnessError as exc:
+        raise HelperError(str(exc)) from exc
 
 
 def _validate_recipe(
@@ -572,9 +396,10 @@ def _parse_project_config(data: bytes, label: str) -> dict[str, Any]:
         config = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         raise HelperError(f"invalid project config TOML: {exc}") from exc
-    if set(config) != {"version", "roles", "peer_recipes"}:
-        unknown = set(config) - {"version", "roles", "peer_recipes"}
-        missing = {"version", "roles", "peer_recipes"} - set(config)
+    required_keys = {"version", "fallback_peer_recipe", "roles", "peer_recipes"}
+    if set(config) != required_keys:
+        unknown = set(config) - required_keys
+        missing = required_keys - set(config)
         details: list[str] = []
         if unknown:
             details.append(f"unsupported keys: {', '.join(sorted(unknown))}")
@@ -614,8 +439,14 @@ def _parse_project_config(data: bytes, label: str) -> dict[str, Any]:
             location=f"peer_recipes.{name}",
             require_description=True,
         )
+    fallback_name = config["fallback_peer_recipe"]
+    if not isinstance(fallback_name, str) or not _is_populated(fallback_name):
+        raise HelperError("fallback_peer_recipe must be a non-placeholder string")
+    if fallback_name not in validated_peers:
+        raise HelperError("fallback_peer_recipe must name an exact peer_recipes entry")
     return {
         "version": PROJECT_CONFIG_VERSION,
+        "fallback_peer_recipe": fallback_name,
         "roles": validated_roles,
         "peer_recipes": validated_peers,
     }
@@ -740,6 +571,10 @@ def command_validate_project(args: argparse.Namespace) -> dict[str, Any]:
         "recipes": {
             "lead": config["roles"]["lead"],
             "supervisor": config["roles"].get("supervisor"),
+            "fallback_peer": {
+                "name": config["fallback_peer_recipe"],
+                **config["peer_recipes"][config["fallback_peer_recipe"]],
+            },
             "peers": [
                 {"name": name, **recipe}
                 for name, recipe in config["peer_recipes"].items()
@@ -768,6 +603,17 @@ def _asset_entry(name: str, data: bytes) -> dict[str, Any]:
         "bytes": len(data),
         "sha256": _sha256(data),
     }
+
+
+def _harness_adapter_artifact_paths() -> dict[str, str]:
+    artifacts: dict[str, str] = {}
+    for relative in HARNESS_ADAPTER_FILES:
+        stem = Path(relative).stem.strip("_") or "package"
+        name = f"harness_adapter_{stem}"
+        if name in artifacts:  # pragma: no cover - package-owned file list error
+            raise HelperError(f"duplicate packaged harness adapter artifact: {name}")
+        artifacts[name] = (Path("tools/herdr_harnesses") / relative).as_posix()
+    return artifacts
 
 
 def _remove_created_directories(paths: list[Path]) -> None:
@@ -838,6 +684,18 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
         "layout helper",
     )
     orchestration_helper_path = _require_file(Path(__file__), "orchestration helper")
+    harness_adapter_root = orchestration_helper_path.with_name("herdr_harnesses")
+    harness_adapter_artifacts = _harness_adapter_artifact_paths()
+    harness_adapter_sources: dict[str, tuple[str, bytes]] = {}
+    for name, relative in harness_adapter_artifacts.items():
+        source = _require_file(
+            harness_adapter_root / Path(relative).name,
+            f"harness adapter {name}",
+        )
+        harness_adapter_sources[name] = (
+            relative,
+            _read(source, f"harness adapter {name}"),
+        )
     task_data = _read(task_path, "Human task file")
     if not task_data:
         raise HelperError("Human task file must not be empty")
@@ -903,6 +761,8 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
             orchestration_helper_data,
             mode=0o755,
         )
+        for _name, (relative, data) in harness_adapter_sources.items():
+            _write_staged(staged / relative, data)
 
         asset_entries: list[dict[str, Any]] = []
         for name, source_path, data in asset_sources:
@@ -930,6 +790,7 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
                 "tools/herdr_orchestrator.py",
                 orchestration_helper_data,
             ),
+            **harness_adapter_sources,
         }
         run_manifest = {
             "schema_version": SCHEMA_VERSION,
@@ -1074,6 +935,7 @@ def _load_run_manifest(path: Path) -> dict[str, Any]:
         "stage_assets_lock": "context/cards/.stage-assets.lock",
         "layout_helper": "tools/herdr_balanced_split.py",
         "orchestration_helper": "tools/herdr_orchestrator.py",
+        **_harness_adapter_artifact_paths(),
     }
     if set(manifest["artifacts"]) != set(expected_artifacts):
         raise HelperError("run manifest has an unsupported artifact set")
@@ -1648,87 +1510,27 @@ def command_deliver(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
-def _catalog_projection(raw: bytes, label: str) -> dict[str, Any]:
-    text = _decode_utf8(raw, label)
+def command_harness_models(args: argparse.Namespace) -> dict[str, Any]:
+    adapter = HARNESS_ADAPTERS[args.kind]
+    project_root = _require_directory(Path(args.project_root), "project root")
     try:
-        document = json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise HelperError(f"Codex model catalog is not valid JSON: {exc}") from exc
-    if not isinstance(document, dict) or not isinstance(document.get("models"), list):
-        raise HelperError("Codex model catalog must contain a models array")
-    projected: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for index, model in enumerate(document["models"]):
-        if not isinstance(model, dict):
-            raise HelperError(f"Codex model catalog entry {index} must be an object")
-        identifier = model.get("slug")
-        if not isinstance(identifier, str) or not identifier:
-            raise HelperError(f"Codex model catalog entry {index} has no slug")
-        if identifier in seen:
-            raise HelperError(f"Codex model catalog has duplicate slug: {identifier}")
-        seen.add(identifier)
-        raw_levels = model.get("supported_reasoning_levels")
-        if not isinstance(raw_levels, list):
-            raise HelperError(f"Codex model {identifier} supported_reasoning_levels is not an array")
-        levels: list[str] = []
-        for level_index, level in enumerate(raw_levels):
-            effort = level.get("effort") if isinstance(level, dict) else level
-            if not isinstance(effort, str) or not effort:
-                raise HelperError(
-                    f"Codex model {identifier} reasoning level {level_index} has no effort"
-                )
-            if effort in levels:
-                raise HelperError(f"Codex model {identifier} repeats reasoning effort {effort}")
-            levels.append(effort)
-        default = model.get("default_reasoning_level")
-        if levels and (not isinstance(default, str) or default not in levels):
-            raise HelperError(
-                f"Codex model {identifier} default reasoning level is missing or unsupported"
-            )
-        if not levels and default is not None:
-            raise HelperError(
-                f"Codex model {identifier} has a default reasoning level but no supported levels"
-            )
-        raw_tiers = model.get("service_tiers", [])
-        if not isinstance(raw_tiers, list):
-            raise HelperError(f"Codex model {identifier} service_tiers must be an array")
-        tiers: list[str] = []
-        for tier in raw_tiers:
-            tier_id = tier.get("id") if isinstance(tier, dict) else tier
-            if not isinstance(tier_id, str) or not tier_id:
-                raise HelperError(f"Codex model {identifier} has an invalid service tier")
-            if tier_id not in tiers:
-                tiers.append(tier_id)
-        projected.append(
-            {
-                "id": identifier,
-                "default_reasoning_level": default,
-                "reasoning_levels": levels,
-                "service_tiers": tiers,
-            }
-        )
-    if not projected:
-        raise HelperError("Codex model catalog is empty")
-    return {"schema_version": SCHEMA_VERSION, "models": projected}
-
-
-def command_codex_models(args: argparse.Namespace) -> dict[str, Any]:
+        native_catalog_command = adapter.catalog_command(args.catalog_mode)
+    except HarnessError as exc:
+        raise HelperError(str(exc)) from exc
     output = _check_output_path(Path(args.output), replace=args.replace)
     if not math.isfinite(args.timeout_seconds) or args.timeout_seconds <= 0:
         raise HelperError("timeout seconds must be finite and greater than zero")
     if args.catalog_file:
-        if args.bundled:
-            raise HelperError("--bundled cannot be combined with --catalog-file")
-        catalog_path = _require_file(Path(args.catalog_file), "Codex model catalog file")
+        if args.catalog_mode != "live":
+            raise HelperError("a captured catalog file requires --catalog-mode live")
+        catalog_path = _require_file(Path(args.catalog_file), f"{adapter.kind} model catalog file")
         if catalog_path == output:
-            raise HelperError("Codex projection output must not overwrite its raw catalog source")
-        raw = _read(catalog_path, "Codex model catalog file")
+            raise HelperError("model projection output must not overwrite its raw catalog source")
+        raw = _read(catalog_path, f"{adapter.kind} model catalog file")
         source = {"kind": "file", "path": str(catalog_path), "sha256": _sha256(raw)}
     else:
-        codex_program = _validate_program(args.codex, "Codex executable")
-        command = [codex_program, "debug", "models"]
-        if args.bundled:
-            command.append("--bundled")
+        program = _validate_program(args.program or adapter.kind, f"{adapter.kind} executable")
+        command = [program, *native_catalog_command]
         try:
             completed = subprocess.run(
                 command,
@@ -1739,33 +1541,44 @@ def command_codex_models(args: argparse.Namespace) -> dict[str, Any]:
                 timeout=args.timeout_seconds,
             )
         except FileNotFoundError as exc:
-            raise HelperError(f"Codex executable not found: {codex_program}") from exc
+            raise HelperError(f"{adapter.kind} executable not found: {program}") from exc
         except subprocess.TimeoutExpired as exc:
-            raise HelperError("Codex model catalog command timed out") from exc
+            raise HelperError(f"{adapter.kind} model catalog command timed out") from exc
         except OSError as exc:
-            raise HelperError(f"could not execute Codex model catalog command: {exc}") from exc
+            raise HelperError(
+                f"could not execute {adapter.kind} model catalog command: {exc}"
+            ) from exc
         stderr = completed.stderr or b""
         if completed.returncode != 0:
             raise HelperError(
-                "Codex model catalog command failed with exit status "
+                f"{adapter.kind} model catalog command failed with exit status "
                 f"{completed.returncode} (stderr_sha256={_sha256(stderr)})"
             )
         raw = completed.stdout or b""
         source = {
             "kind": "command",
-            "program": codex_program,
-            "bundled": bool(args.bundled),
+            "program": program,
+            "mode": args.catalog_mode,
             "raw_bytes": len(raw),
             "raw_sha256": _sha256(raw),
             "stderr_bytes": len(stderr),
             "stderr_sha256": _sha256(stderr),
         }
-    projection = _catalog_projection(raw, "Codex model catalog")
+    try:
+        projection = adapter.project_catalog(
+            raw,
+            f"{adapter.kind} model catalog",
+            SCHEMA_VERSION,
+            project_root,
+        )
+    except HarnessError as exc:
+        raise HelperError(str(exc)) from exc
     projection_data = _json_bytes(projection)
     _atomic_write(output, projection_data, replace=args.replace)
     return {
         "schema_version": SCHEMA_VERSION,
-        "command": "codex-models",
+        "command": "harness-models",
+        "harness": adapter.kind,
         "path": str(output),
         "bytes": len(projection_data),
         "sha256": _sha256(projection_data),
@@ -1785,7 +1598,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate = subparsers.add_parser(
         "validate-project",
-        help="strictly validate version-2 project config and the 12-section protocol",
+        help="strictly validate version-3 project config and the 12-section protocol",
     )
     validate.add_argument("--project-root", required=True)
     validate.add_argument(
@@ -1922,25 +1735,37 @@ def build_parser() -> argparse.ArgumentParser:
     deliver.set_defaults(handler=command_deliver)
 
     models = subparsers.add_parser(
-        "codex-models",
-        help="write a compact model/effort projection without printing the raw catalog",
+        "harness-models",
+        help="write a compact harness-native model projection without printing raw output",
     )
+    models.add_argument("--kind", required=True, choices=VERIFIED_HARNESS_KINDS)
     models.add_argument("--output", required=True)
+    models.add_argument(
+        "--project-root",
+        default=".",
+        help="project root used for harness-native catalog scope resolution",
+    )
     catalog_source = models.add_mutually_exclusive_group()
     catalog_source.add_argument(
-        "--codex", default="codex", help="Codex executable or absolute path"
+        "--program",
+        help="harness executable or absolute path; defaults to the canonical kind name",
     )
     catalog_source.add_argument(
-        "--catalog-file", help="parse a captured raw catalog instead of executing Codex"
+        "--catalog-file",
+        help="parse a captured native catalog instead of executing the harness",
     )
-    models.add_argument("--bundled", action="store_true", help="pass --bundled to codex debug models")
+    models.add_argument(
+        "--catalog-mode",
+        default="live",
+        help="adapter-defined catalog mode; unsupported kind/mode pairs fail closed",
+    )
     models.add_argument("--replace", action="store_true", help="atomically replace output")
     models.add_argument(
         "--timeout-seconds",
         type=float,
         default=DEFAULT_DELIVERY_TIMEOUT_SECONDS,
     )
-    models.set_defaults(handler=command_codex_models)
+    models.set_defaults(handler=command_harness_models)
     return parser
 
 
@@ -1949,7 +1774,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
     try:
         result = args.handler(args)
-    except HelperError as exc:
+    except (HelperError, HarnessError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     _emit(result)

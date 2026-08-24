@@ -41,11 +41,13 @@ tracked checkout:
 ├── supervisor/
 ├── tools/
 │   ├── herdr_orchestrator.py
-│   └── herdr_balanced_split.py
+│   ├── herdr_balanced_split.py
+│   └── herdr_harnesses/
 └── events.jsonl
 ```
 
-Require exact copies and SHA-256 digests for both helpers, immutable
+Require exact copies and SHA-256 digests for both helpers and every staged
+harness-adapter module, immutable
 launch-time snapshots of the validated config and full protocol, byte-for-byte
 staged assets with a digest-only `context/cards/manifest.json`, a durable
 before-state inventory, and the exact Human task. The run manifest binds the
@@ -140,8 +142,8 @@ preserves the evidence and pane and reports the exact error; unchanged
 prerequisites are not retried and no substitute recipe is used.
 
 Task launch and handoff are complete only when preflight and initialization
-passed without fallback; the saved pack and manifest verify; a fresh Lead has
-the exact configured recipe; the launch event and handoff marker predate the
+passed without runtime substitution; the saved pack and manifest verify; a
+fresh Lead has the exact configured recipe; the launch event and handoff marker predate the
 single accepted delivery; focus targets that Lead; and the Human receives the
 Lead name, repository, run ID/evidence path, and preserved before-state. The
 Launcher then ceases to act as orchestration proxy.

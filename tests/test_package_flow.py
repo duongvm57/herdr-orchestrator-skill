@@ -44,7 +44,8 @@ class RealPackageFlowTests(unittest.TestCase):
                 (before, "## main\n"),
                 (
                     config,
-                    """version = 2
+                    """version = 3
+fallback_peer_recipe = "review"
 
 [roles.lead]
 kind = "codex"

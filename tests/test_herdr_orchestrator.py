@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills/herdr-orchestrator"
 HELPER = SKILL_ROOT / "scripts/herdr_orchestrator.py"
 LAYOUT_HELPER = SKILL_ROOT / "scripts/herdr_balanced_split.py"
+HARNESS_ADAPTERS = SKILL_ROOT / "scripts/herdr_harnesses"
 
 
 def sha256(data: bytes) -> str:
@@ -36,6 +37,17 @@ class HerdrOrchestratorTest(unittest.TestCase):
         if executable:
             path.chmod(0o755)
         return path
+
+    def pi_scope_env(self, patterns: list[str]) -> dict[str, str]:
+        agent_dir = self.root / "pi-agent"
+        agent_dir.mkdir(exist_ok=True)
+        (agent_dir / "settings.json").write_text(
+            json.dumps({"enabledModels": patterns}),
+            encoding="utf-8",
+        )
+        environment = os.environ.copy()
+        environment["PI_CODING_AGENT_DIR"] = str(agent_dir)
+        return environment
 
     def run_cli(
         self,
@@ -66,7 +78,8 @@ class HerdrOrchestratorTest(unittest.TestCase):
         (orchestration / "herdr-orchestrator.toml").write_text(
             textwrap.dedent(
                 """\
-                version = 2
+                version = 3
+                fallback_peer_recipe = "engineer"
 
                 [roles.lead]
                 kind = "codex"
@@ -148,9 +161,18 @@ class HerdrOrchestratorTest(unittest.TestCase):
             "stage-assets",
             "pack",
             "deliver",
-            "codex-models",
+            "harness-models",
         ):
             self.assertIn(command, completed.stdout)
+
+        self.assertNotIn("codex-models", completed.stdout)
+
+        models_help = self.run_cli("harness-models", "--help")
+        self.assertEqual(models_help.returncode, 0, models_help.stderr)
+        for kind in ("codex", "claude", "grok", "pi", "opencode", "omp"):
+            self.assertIn(kind, models_help.stdout)
+        for kind in ("agy", "amp", "cline", "cursor", "devin", "droid", "gemini"):
+            self.assertNotIn(kind, models_help.stdout)
 
         pack_help = self.run_cli("pack", "--help")
         self.assertEqual(pack_help.returncode, 0, pack_help.stderr)
@@ -161,13 +183,60 @@ class HerdrOrchestratorTest(unittest.TestCase):
         completed = self.run_cli("validate-project", "--project-root", str(project))
         self.assertEqual(completed.returncode, 0, completed.stderr)
         result = json.loads(completed.stdout)
-        self.assertEqual(result["config"]["version"], 2)
+        self.assertEqual(result["config"]["version"], 3)
         self.assertEqual(result["languages"], {"artifact": "English", "live": "Vietnamese"})
         self.assertEqual(
             result["recipes"]["lead"],
             {"args": ["--model", "gpt-5.6-sol"], "kind": "codex"},
         )
+        self.assertEqual(
+            result["recipes"]["fallback_peer"],
+            {
+                "name": "engineer",
+                "description": "Writable implementation recipe",
+                "args": ["--model", "gpt-5.6-terra"],
+                "kind": "codex",
+            },
+        )
         self.assertEqual(result["recipes"]["peers"][0]["name"], "engineer")
+
+    def test_validate_project_binds_fallback_to_an_exact_peer_recipe(self) -> None:
+        project = self.valid_project()
+        config = project / ".orchestration/herdr-orchestrator.toml"
+        original = config.read_text(encoding="utf-8")
+
+        for fallback, expected in (
+            ("missing", "must name an exact peer_recipes entry"),
+            ("<fallback>", "non-placeholder string"),
+        ):
+            with self.subTest(fallback=fallback):
+                config.write_text(
+                    original.replace(
+                        'fallback_peer_recipe = "engineer"',
+                        f'fallback_peer_recipe = "{fallback}"',
+                    ),
+                    encoding="utf-8",
+                )
+                completed = self.run_cli(
+                    "validate-project",
+                    "--project-root",
+                    str(project),
+                )
+                self.assertEqual(completed.returncode, 2)
+                self.assertIn(expected, completed.stderr)
+
+        config.write_text(
+            original.replace('fallback_peer_recipe = "engineer"\n', ""),
+            encoding="utf-8",
+        )
+        completed = self.run_cli("validate-project", "--project-root", str(project))
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("missing keys: fallback_peer_recipe", completed.stderr)
+
+        config.write_text(original.replace("version = 3", "version = 2"), encoding="utf-8")
+        completed = self.run_cli("validate-project", "--project-root", str(project))
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("project config version must be 3", completed.stderr)
 
     def test_validate_project_accepts_provider_scoped_model_ids(self) -> None:
         project = self.valid_project()
@@ -204,7 +273,72 @@ class HerdrOrchestratorTest(unittest.TestCase):
                 self.assertEqual(completed.returncode, 2)
                 self.assertIn("unsupported value", completed.stderr)
 
-    def test_validate_project_binds_codex_workspace_write_lead_to_git_common_dir(self) -> None:
+    def test_validate_project_accepts_independent_mixed_harness_profiles(self) -> None:
+        project = self.valid_project()
+        common = self.root / "git-common"
+        common.mkdir()
+        config = project / ".orchestration/herdr-orchestrator.toml"
+        config.write_text(
+            textwrap.dedent(
+                f"""\
+                version = 3
+                fallback_peer_recipe = "opencode-general"
+
+                [roles.lead]
+                kind = "claude"
+                args = ["--model", "claude-sonnet-5", "--effort", "high", "--permission-mode", "acceptEdits", "--add-dir", "{common}", "--disallowedTools", "Agent,Task"]
+
+                [roles.supervisor]
+                kind = "grok"
+                args = ["--model", "grok-4.6", "--reasoning-effort", "high", "--permission-mode", "plan", "--no-subagents"]
+
+                [peer_recipes.codex-review]
+                description = "Codex review profile"
+                kind = "codex"
+                args = ["--model", "gpt-5.6-sol", "--sandbox", "read-only", "--config", "agents.enabled=false"]
+
+                [peer_recipes.pi-fast]
+                description = "Pi fast profile"
+                kind = "pi"
+                args = ["--provider", "openai-codex", "--model", "gpt-5.6-luna", "--models", "openai-codex/gpt-5.6-*", "--thinking", "low", "--exclude-tools", "agent,task"]
+
+                [peer_recipes.opencode-general]
+                description = "OpenCode general profile"
+                kind = "opencode"
+                args = ["--model", "opencode-go/ox-alpha-free", "--agent", "build"]
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        completed = self.run_cli(
+            "validate-project",
+            "--project-root",
+            str(project),
+            "--git-common-dir",
+            str(common),
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        recipes = json.loads(completed.stdout)["recipes"]
+        self.assertEqual(recipes["lead"]["kind"], "claude")
+        self.assertEqual(recipes["supervisor"]["kind"], "grok")
+        self.assertEqual(
+            {profile["kind"] for profile in recipes["peers"]},
+            {"codex", "pi", "opencode"},
+        )
+
+        config.write_text(
+            config.read_text(encoding="utf-8").replace(
+                'kind = "pi"\nargs = ["--provider"',
+                'kind = "opencode"\nargs = ["--provider"',
+            ),
+            encoding="utf-8",
+        )
+        completed = self.run_cli("validate-project", "--project-root", str(project))
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("peer_recipes.pi-fast.args has an unsupported option", completed.stderr)
+
+    def test_validate_project_uses_selected_lead_adapter_for_evidence_root(self) -> None:
         project = self.valid_project()
         common = self.root / "git-common"
         common.mkdir()
@@ -245,6 +379,40 @@ class HerdrOrchestratorTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         result = json.loads(completed.stdout)
         self.assertEqual(result["git_common_dir"], str(common.resolve()))
+
+        claude = original.replace(
+            '[roles.lead]\nkind = "codex"\nargs = ["--model", "gpt-5.6-sol"]',
+            '[roles.lead]\nkind = "claude"\n'
+            'args = ["--model", "claude-sonnet-5", '
+            '"--disallowedTools", "Agent,Task"]',
+        )
+        config.write_text(claude, encoding="utf-8")
+        completed = self.run_cli(
+            "validate-project",
+            "--project-root",
+            str(project),
+            "--git-common-dir",
+            str(common),
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("roles.lead claude", completed.stderr)
+
+        config.write_text(
+            claude.replace(
+                '"--disallowedTools", "Agent,Task"',
+                f'"--disallowedTools", "Agent,Task", "--add-dir", "{common}"',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        completed = self.run_cli(
+            "validate-project",
+            "--project-root",
+            str(project),
+            "--git-common-dir",
+            str(common),
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
     def test_validate_project_binds_canonical_paths_and_protocol_root(self) -> None:
         project = self.valid_project()
@@ -433,7 +601,43 @@ class HerdrOrchestratorTest(unittest.TestCase):
         completed = self.run_cli("validate-project", "--project-root", str(project))
         self.assertEqual(completed.returncode, 2)
         self.assertEqual(completed.stdout, "")
-        self.assertIn("not supported by the safe recipe schema", completed.stderr)
+        self.assertIn("has no verified orchestrator adapter", completed.stderr)
+
+    def test_validate_project_enforces_omp_model_and_subagent_boundary(self) -> None:
+        project = self.valid_project()
+        config = project / ".orchestration/herdr-orchestrator.toml"
+        original = config.read_text(encoding="utf-8")
+        marker = (
+            '[peer_recipes.engineer]\n'
+            'description = "Writable implementation recipe"\n'
+            'kind = "codex"\n'
+            'args = ["--model", "gpt-5.6-terra"]\n'
+        )
+        omp = (
+            '[peer_recipes.engineer]\n'
+            'description = "Read-only OMP review recipe"\n'
+            'kind = "omp"\n'
+            'args = ["--model", "openai-codex/gpt-5.6-luna", "--thinking", '
+            '"low", "--tools", "read,bash", "--no-prewalk", "--no-extensions", '
+            '"--no-skills", "--no-rules", "--approval-mode", "always-ask"]\n'
+        )
+        config.write_text(original.replace(marker, omp), encoding="utf-8")
+
+        completed = self.run_cli("validate-project", "--project-root", str(project))
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+        for configured, expected in (
+            (omp.replace(', "--no-prewalk"', ""), "must include --no-prewalk"),
+            (omp.replace('"read,bash"', '"read,bash,task"'), "native task subagent"),
+            (omp.replace(', "--tools", "read,bash"', ""), "exactly one of --tools"),
+        ):
+            with self.subTest(expected=expected):
+                config.write_text(original.replace(marker, configured), encoding="utf-8")
+                completed = self.run_cli(
+                    "validate-project", "--project-root", str(project)
+                )
+                self.assertEqual(completed.returncode, 2)
+                self.assertIn(expected, completed.stderr)
 
     def test_init_run_publishes_complete_tree_and_digest_only_manifests(self) -> None:
         card = self.write("cards/topology.md", "TOPOLOGY CARD\n")
@@ -447,6 +651,21 @@ class HerdrOrchestratorTest(unittest.TestCase):
         self.assertFalse((run_dir / "tools/layout-state.json").exists())
         self.assertEqual((run_dir / "tools/herdr_balanced_split.py").read_bytes(), LAYOUT_HELPER.read_bytes())
         self.assertEqual((run_dir / "tools/herdr_orchestrator.py").read_bytes(), HELPER.read_bytes())
+        for adapter in HARNESS_ADAPTERS.glob("*.py"):
+            self.assertEqual(
+                (run_dir / "tools/herdr_harnesses" / adapter.name).read_bytes(),
+                adapter.read_bytes(),
+            )
+
+        run_local = subprocess.run(
+            [sys.executable, str(run_dir / "tools/herdr_orchestrator.py"), "--help"],
+            cwd=self.root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(run_local.returncode, 0, run_local.stderr)
+        self.assertIn("harness-models", run_local.stdout)
 
         cards = json.loads((run_dir / "context/cards/manifest.json").read_text(encoding="utf-8"))
         entry = cards["assets"][0]
@@ -466,6 +685,17 @@ class HerdrOrchestratorTest(unittest.TestCase):
         run_manifest = json.loads(run_manifest_text)
         self.assertNotIn("Implement the exact Human task", run_manifest_text)
         self.assertIn("orchestration_helper", run_manifest["artifacts"])
+        self.assertEqual(
+            {
+                artifact["path"]
+                for name, artifact in run_manifest["artifacts"].items()
+                if name.startswith("harness_adapter_")
+            },
+            {
+                f"tools/herdr_harnesses/{adapter.name}"
+                for adapter in HARNESS_ADAPTERS.glob("*.py")
+            },
+        )
         self.assertEqual(
             run_manifest["artifacts"]["project_config"]["sha256"],
             sha256(project_config.read_bytes()),
@@ -1452,66 +1682,335 @@ class HerdrOrchestratorTest(unittest.TestCase):
         self.assertEqual(prepared["state"], "prepared")
         self.assertEqual(writes, 2)
 
-    def test_codex_models_writes_only_compact_projection(self) -> None:
-        raw = {
-            "models": [
-                {
-                    "slug": "gpt-one",
-                    "default_reasoning_level": "medium",
-                    "supported_reasoning_levels": [
-                        {"effort": "low", "description": "RAW_LEVEL_DESCRIPTION"},
-                        {"effort": "medium", "description": "RAW_LEVEL_DESCRIPTION"},
-                    ],
-                    "service_tiers": [{"id": "priority", "description": "RAW_TIER"}],
-                    "base_instructions": "RAW_CATALOG_SECRET_SENTINEL",
-                },
-                {
-                    "slug": "gpt-two",
-                    "default_reasoning_level": "high",
-                    "supported_reasoning_levels": ["medium", "high"],
-                    "service_tiers": [],
-                    "description": "RAW_MODEL_DESCRIPTION",
-                },
-            ]
+    def test_harness_models_projects_each_native_catalog_without_raw_payloads(self) -> None:
+        catalogs = {
+            "codex": (
+                json.dumps(
+                    {
+                        "models": [
+                            {
+                                "slug": "gpt-one",
+                                "default_reasoning_level": "medium",
+                                "supported_reasoning_levels": [
+                                    {"effort": "low", "description": "RAW_LEVEL_DESCRIPTION"},
+                                    {"effort": "medium", "description": "RAW_LEVEL_DESCRIPTION"},
+                                ],
+                                "service_tiers": [
+                                    {"id": "priority", "description": "RAW_TIER"}
+                                ],
+                                "base_instructions": "RAW_CATALOG_SECRET_SENTINEL",
+                            }
+                        ]
+                    }
+                ),
+                [
+                    {
+                        "id": "gpt-one",
+                        "options": {
+                            "reasoning_effort": {
+                                "default": "medium",
+                                "values": ["low", "medium"],
+                            },
+                            "service_tier": {"values": ["priority"]},
+                        },
+                    }
+                ],
+            ),
+            "grok": (
+                "You are not authenticated.\n\nDefault model: grok-4.6\n\n"
+                "Available models:\n  * grok-4.6 (default)\n  * grok-code-fast-1\n",
+                [
+                    {"default": True, "id": "grok-4.6"},
+                    {"id": "grok-code-fast-1"},
+                ],
+            ),
+            "pi": (
+                "provider      model          context  max-out  thinking  images\n"
+                "openai-codex  gpt-5.6-sol    272K     128K     yes       yes\n"
+                "opencode-go   ox-alpha-free  1M       131.1K   yes       no\n",
+                [
+                    {
+                        "capabilities": {"images": True, "thinking": True},
+                        "id": "openai-codex/gpt-5.6-sol",
+                        "limits": {"context": "272K", "output": "128K"},
+                    },
+                    {
+                        "capabilities": {"images": False, "thinking": True},
+                        "id": "opencode-go/ox-alpha-free",
+                        "limits": {"context": "1M", "output": "131.1K"},
+                    },
+                ],
+            ),
+            "opencode": (
+                "opencode/big-pickle\nopencode-go/ox-alpha-free\n",
+                [
+                    {"id": "opencode/big-pickle"},
+                    {"id": "opencode-go/ox-alpha-free"},
+                ],
+            ),
+            "omp": (
+                json.dumps(
+                    {
+                        "models": [
+                            {
+                                "provider": "openai-codex",
+                                "id": "gpt-5.6-luna",
+                                "selector": "openai-codex/gpt-5.6-luna",
+                                "name": "GPT-5.6-Luna",
+                                "contextWindow": 272000,
+                                "maxTokens": 128000,
+                                "reasoning": True,
+                                "thinking": ["low", "medium", "high"],
+                                "input": ["text", "image"],
+                                "cost": {
+                                    "input": 0.2,
+                                    "output": 1.2,
+                                    "cacheRead": 0.02,
+                                    "cacheWrite": 0,
+                                },
+                                "rawOnly": "RAW_OMP_FIELD",
+                            }
+                        ]
+                    }
+                ),
+                [
+                    {
+                        "id": "openai-codex/gpt-5.6-luna",
+                        "capabilities": {"reasoning": True, "images": True},
+                        "cost": {
+                            "input": 0.2,
+                            "output": 1.2,
+                            "cacheRead": 0.02,
+                            "cacheWrite": 0,
+                        },
+                        "options": {
+                            "thinking": {"values": ["low", "medium", "high"]}
+                        },
+                        "limits": {"context": 272000, "output": 128000},
+                    }
+                ],
+            ),
         }
-        catalog = self.write("catalog.json", json.dumps(raw))
-        output = self.root / "models.json"
+
+        for kind, (raw, expected_models) in catalogs.items():
+            with self.subTest(kind=kind):
+                catalog = self.write(f"catalogs/{kind}.txt", raw)
+                output = self.root / f"{kind}-models.json"
+                environment = None
+                if kind == "pi":
+                    environment = self.pi_scope_env(
+                        [
+                            "openai-codex/gpt-5.6-sol",
+                            "opencode-go/ox-alpha-free",
+                        ]
+                    )
+                completed = self.run_cli(
+                    "harness-models",
+                    "--kind",
+                    kind,
+                    "--catalog-file",
+                    str(catalog),
+                    "--output",
+                    str(output),
+                    "--project-root",
+                    str(self.root),
+                    env=environment,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                projection = json.loads(output.read_text(encoding="utf-8"))
+                self.assertEqual(projection["harness"], kind)
+                self.assertEqual(projection["models"], expected_models)
+                metadata = json.loads(completed.stdout)
+                self.assertEqual(metadata["harness"], kind)
+                self.assertEqual(metadata["model_count"], len(expected_models))
+                self.assertEqual(metadata["sha256"], sha256(output.read_bytes()))
+
+        combined = "".join(
+            path.read_text(encoding="utf-8")
+            for path in self.root.glob("*-models.json")
+        )
+        for raw_only in (
+            "RAW_CATALOG_SECRET_SENTINEL",
+            "RAW_LEVEL_DESCRIPTION",
+            "RAW_TIER",
+            "You are not authenticated.",
+            "RAW_OMP_FIELD",
+        ):
+            self.assertNotIn(raw_only, combined)
+
+    def test_omp_harness_models_rejects_malformed_or_duplicate_catalogs(self) -> None:
+        base = {
+            "provider": "openai-codex",
+            "id": "gpt-5.6-luna",
+            "selector": "openai-codex/gpt-5.6-luna",
+            "contextWindow": None,
+            "maxTokens": None,
+            "reasoning": True,
+            "thinking": ["low"],
+            "input": ["text"],
+            "cost": {"input": 0.2, "output": 1.2, "cacheRead": 0, "cacheWrite": 0},
+        }
+        cases = (
+            (b"not-json", "not valid JSON"),
+            (json.dumps({"models": [base, base]}).encode(), "repeats model"),
+            (
+                json.dumps({"models": [{**base, "selector": "other/model"}]}).encode(),
+                "does not match provider and model",
+            ),
+            (json.dumps({"models": []}).encode(), "is empty"),
+        )
+        for index, (raw, expected) in enumerate(cases):
+            with self.subTest(expected=expected):
+                catalog = self.root / f"omp-invalid-{index}.json"
+                catalog.write_bytes(raw)
+                output = self.root / f"omp-invalid-{index}-projection.json"
+                completed = self.run_cli(
+                    "harness-models",
+                    "--kind",
+                    "omp",
+                    "--catalog-file",
+                    str(catalog),
+                    "--output",
+                    str(output),
+                )
+                self.assertEqual(completed.returncode, 2)
+                self.assertIn(expected, completed.stderr)
+                self.assertFalse(output.exists())
+
+    def test_pi_harness_models_projects_only_effective_model_scope(self) -> None:
+        catalog = self.write(
+            "pi-models.txt",
+            "provider model context max-out thinking images\n"
+            "openai-codex gpt-5.6-sol 272K 128K yes yes\n"
+            "opencode-go ox-alpha-free 1M 131.1K yes no\n"
+            "opencode-go qwen3.7-plus 1M 65.5K yes yes\n"
+            "openrouter stealth/ox-alpha 1M 131.1K yes yes\n"
+            "xai grok-4.6 500K 500K yes yes\n",
+        )
+        environment = self.pi_scope_env(["xai/*"])
+        project = self.root / "project"
+        (project / ".pi").mkdir(parents=True)
+        (project / ".pi/settings.json").write_text(
+            json.dumps(
+                {
+                    "enabledModels": [
+                        "opencode-go/*:high",
+                        "openai-codex/gpt-5.6-sol",
+                        "openrouter/**",
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        output = self.root / "projection.json"
+
         completed = self.run_cli(
-            "codex-models",
+            "harness-models",
+            "--kind",
+            "pi",
+            "--catalog-file",
+            str(catalog),
+            "--output",
+            str(output),
+            "--project-root",
+            str(project),
+            env=environment,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        models = json.loads(output.read_text(encoding="utf-8"))["models"]
+        self.assertEqual(
+            [model["id"] for model in models],
+            [
+                "opencode-go/ox-alpha-free",
+                "opencode-go/qwen3.7-plus",
+                "openai-codex/gpt-5.6-sol",
+                "openrouter/stealth/ox-alpha",
+            ],
+        )
+        self.assertEqual(models[0]["scope"], {"thinking": "high"})
+        self.assertEqual(models[1]["scope"], {"thinking": "high"})
+        self.assertNotIn("scope", models[2])
+        self.assertNotIn("xai/grok-4.6", {model["id"] for model in models})
+
+    def test_pi_harness_models_fails_closed_without_a_resolved_scope(self) -> None:
+        catalog = self.write(
+            "pi-models.txt",
+            "provider model context max-out thinking images\n"
+            "openai-codex gpt-5.6-sol 272K 128K yes yes\n",
+        )
+        output = self.root / "projection.json"
+        environment = self.pi_scope_env([])
+
+        missing = self.run_cli(
+            "harness-models",
+            "--kind",
+            "pi",
+            "--catalog-file",
+            str(catalog),
+            "--output",
+            str(output),
+            "--project-root",
+            str(self.root),
+            env=environment,
+        )
+        self.assertEqual(missing.returncode, 2)
+        self.assertIn("model scope is not configured", missing.stderr)
+        self.assertFalse(output.exists())
+
+        sentinel = "missing-provider/MODEL_SCOPE_SENTINEL"
+        environment = self.pi_scope_env([sentinel])
+        unmatched = self.run_cli(
+            "harness-models",
+            "--kind",
+            "pi",
+            "--catalog-file",
+            str(catalog),
+            "--output",
+            str(output),
+            "--project-root",
+            str(self.root),
+            env=environment,
+        )
+        self.assertEqual(unmatched.returncode, 2)
+        self.assertIn("scope entry 0 matches no available model", unmatched.stderr)
+        self.assertNotIn(sentinel, unmatched.stderr)
+        self.assertFalse(output.exists())
+
+    def test_harness_models_rejects_a_kind_without_a_bounded_catalog_adapter(self) -> None:
+        catalog = self.write("claude-models.txt", "claude-sonnet-5\n")
+        completed = self.run_cli(
+            "harness-models",
+            "--kind",
+            "claude",
+            "--catalog-file",
+            str(catalog),
+            "--output",
+            str(self.root / "projection.json"),
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("no bounded model catalog adapter", completed.stderr)
+
+    def test_harness_models_rejects_unprojectable_native_fields_without_leaking_them(self) -> None:
+        sentinel = "RAW_NATIVE_LIMIT_SECRET"
+        catalog = self.write(
+            "invalid-pi-models.txt",
+            "provider model context max-out thinking images\n"
+            f"openai gpt-safe {sentinel} 128K yes yes\n",
+        )
+        output = self.root / "projection.json"
+        completed = self.run_cli(
+            "harness-models",
+            "--kind",
+            "pi",
             "--catalog-file",
             str(catalog),
             "--output",
             str(output),
         )
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        projection = json.loads(output.read_text(encoding="utf-8"))
-        self.assertEqual(
-            projection["models"],
-            [
-                {
-                    "id": "gpt-one",
-                    "default_reasoning_level": "medium",
-                    "reasoning_levels": ["low", "medium"],
-                    "service_tiers": ["priority"],
-                },
-                {
-                    "id": "gpt-two",
-                    "default_reasoning_level": "high",
-                    "reasoning_levels": ["medium", "high"],
-                    "service_tiers": [],
-                },
-            ],
-        )
-        for secret in (
-            "RAW_CATALOG_SECRET_SENTINEL",
-            "RAW_LEVEL_DESCRIPTION",
-            "RAW_MODEL_DESCRIPTION",
-        ):
-            self.assertNotIn(secret, output.read_text(encoding="utf-8"))
-            self.assertNotIn(secret, completed.stdout)
-        metadata = json.loads(completed.stdout)
-        self.assertEqual(metadata["model_count"], 2)
-        self.assertEqual(metadata["sha256"], sha256(output.read_bytes()))
+        self.assertEqual(completed.returncode, 2)
+        self.assertFalse(output.exists())
+        self.assertNotIn(sentinel, completed.stderr)
 
 
 if __name__ == "__main__":

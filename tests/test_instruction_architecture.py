@@ -157,7 +157,7 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("Choose configuration mode", setup)
         self.assertIn("Guided setup", setup)
         self.assertIn("Configure TOML yourself", setup)
-        self.assertIn("version-2 TOML", normalized)
+        self.assertIn("version-3 TOML", normalized)
         self.assertIn("so the Human can create or edit it", normalized)
         self.assertIn("assets/config.toml", setup)
         self.assertIn("from chat or", normalized)
@@ -185,6 +185,59 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertLess(
             normalized.index("Each row independently selects its harness"),
             normalized.index("then discover and choose its model"),
+        )
+
+    def test_peer_fallback_is_explicit_and_envelope_bound(self) -> None:
+        template = read("assets/config.toml")
+        setup = read("references/launcher/setup.md")
+        lifecycle = read("references/lead/peer-lifecycle.md")
+
+        self.assertIn('fallback_peer_recipe = "<fallback-recipe-name>"', template)
+        self.assertIn("naming an exact Peer recipe", setup)
+        self.assertIn("Human chooses reuse and one fallback recipe", setup)
+        self.assertIn("If no specialized recipe fits", lifecycle)
+        self.assertIn("record that fallback choice in the Assignment", lifecycle)
+        self.assertIn("outside it", lifecycle)
+
+    def test_harness_specific_logic_lives_in_separate_adapter_modules(self) -> None:
+        helper = read("scripts/herdr_orchestrator.py")
+        adapter_root = SKILL_ROOT / "scripts/herdr_harnesses"
+        registry = (adapter_root / "__init__.py").read_text(encoding="utf-8")
+        registered = set(re.findall(r'(?m)^    "([a-z][a-z0-9]*)",$', registry))
+        module_names = {
+            path.stem
+            for path in adapter_root.glob("*.py")
+            if path.name not in {"__init__.py", "base.py"}
+        }
+
+        self.assertEqual(module_names, registered)
+        self.assertEqual(
+            registered,
+            {"codex", "claude", "grok", "pi", "opencode", "omp"},
+        )
+        self.assertNotIn(
+            "model_only_adapter",
+            (adapter_root / "base.py").read_text(encoding="utf-8"),
+        )
+
+        for kind in ("codex", "claude", "grok", "pi", "opencode", "omp"):
+            module = (adapter_root / f"{kind}.py").read_text(encoding="utf-8")
+            self.assertIn(f'kind="{kind}"', module)
+            self.assertIn("HarnessAdapter(", module)
+            self.assertNotRegex(helper, rf"[\"']{kind}[\"']")
+
+        for kind in ("codex", "grok", "pi", "opencode", "omp"):
+            module = (adapter_root / f"{kind}.py").read_text(encoding="utf-8")
+            self.assertIn("def project_catalog", module)
+
+        setup = read("references/launcher/setup.md")
+        normalized_setup = " ".join(setup.split())
+        self.assertIn("harness-models --kind <kind>", setup)
+        self.assertIn("--project-root", setup)
+        self.assertIn("exact harness adapter", setup)
+        self.assertIn(
+            "Pi projects only effective native `enabledModels` scope",
+            normalized_setup,
         )
 
     def test_lead_asset_names_match_launch_staging_contract(self) -> None:

@@ -64,16 +64,19 @@ You need Git, Python 3.11+, a running Herdr server, a Launcher session inside a
 Herdr-managed pane, and every configured harness/model installed and
 authenticated. The Launcher's native permission profile must also allow the
 Herdr socket and run-evidence writes in the repository's absolute Git common
-directory. On current Codex, `workspace-write` needs
-`--config sandbox_workspace_write.network_access=true` plus
-`--add-dir <absolute-git-common-dir>`; these broaden network and Git-metadata
-access, so choose them deliberately and verify both with bounded canaries.
+directory. Each configured profile selects its own harness and native argument
+vector; its harness adapter validates those flags without translating them into
+a shared sandbox or effort vocabulary. Verify broadened network, filesystem,
+and Git-metadata access with bounded canaries.
 
 Install into the harness used as Launcher:
 
 ```bash
 npx skills add duongvm57/herdr-orchestrator --skill herdr-orchestrator --agent codex
 ```
+
+Replace `codex` with the harness used by the Launcher when the installer
+supports that target.
 
 Leads, Peers, and Supervisors do not need the skill installed; their
 role-specific context is sent directly when they are created.
@@ -86,12 +89,20 @@ From the repository, invoke:
 $herdr-orchestrator set up orchestration for this repository
 ```
 
-Setup first maps every Herdr-supported local harness by executable, version, and
-integration state. It then performs deeper model, effort, access, and
-native-spawn discovery only for the harnesses you select (or name in the setup
-request). It shows exact native choices before asking which recipes are
+Setup first intersects the orchestrator's verified adapter registry with
+Herdr-supported, installed local harnesses. Herdr kinds without a verified
+adapter are shown as unavailable rather than accepted through a generic
+fallback. Setup then performs deeper model, effort, access, and native-spawn
+discovery only for the harnesses you select. It shows exact native choices before asking which recipes are
 permitted, then asks about cost, authority, review gates, expensive reversals,
 and Human-only decisions and creates two tracked files:
+
+Bounded native catalog discovery uses the common `harness-models --kind ...`
+interface; Codex, Grok CLI, Pi, OpenCode, and OMP each implement their parser in
+a separate adapter module. OMP exposes models from its current authenticated
+providers. A harness without a verified adapter cannot be configured. Pi exposes only the effective
+`enabledModels` scope; an absent or stale scope stops discovery instead of
+falling back to its full authenticated-provider catalog.
 
 - `.orchestration/herdr-orchestrator.toml` — complete native launch recipes for
   the Lead, a project-defined catalog of reusable Peer recipes, and an optional
@@ -119,7 +130,7 @@ $herdr-orchestrator implement issue #42 and preserve my uncommitted changes
 The Launcher validates the project contract and configured live recipes,
 inventories existing agents/panes/worktrees/user changes, stores run evidence
 outside the checkout, starts a fresh Lead, and transfers focus. Missing
-capability stops launch at the exact entry without fallback; existing state is
+Lead capability stops launch without runtime substitution; existing state is
 preserved.
 
 Fresh-agent panes are placed by a deterministic helper using only panes
@@ -134,8 +145,9 @@ and rejecting unexplained pane disappearance.
 After handoff, work with the Lead. A tiny task may need zero or one Peer.
 Architecture-sensitive work may use a fresh Architect, one Engineer, and a fresh
 Reviewer. The Lead decides the number and dispositions per task and may reuse or
-mix approved harness/model recipes. Configured recipes are capabilities, not a
-fixed list of Peer types; agent count never substitutes for evidence.
+mix approved harness/model recipes. If no specialized recipe matches, it uses
+the configured fallback recipe without changing that recipe's model or access
+envelope. Recipes are capabilities, not a fixed list of Peer types.
 
 ## Request a Supervisor
 
