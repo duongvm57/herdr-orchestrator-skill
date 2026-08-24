@@ -46,8 +46,7 @@ class OCRPeerReviewerContractTests(unittest.TestCase):
         normalized_peer = normalized(peer)
         normalized_lifecycle = normalized(lifecycle)
 
-        self.assertIn("load `ocr-peer-reviewer`", peer)
-        self.assertIn("available skill catalog", normalized_peer)
+        self.assertIn("use `ocr-peer-reviewer` when available", normalized_peer)
         self.assertIn("explicitly require the Peer to load it", normalized_lifecycle)
         self.assertIn("Review procedure: <ocr-delegate | direct>", lifecycle)
         self.assertIn("OCR status:", lifecycle)
@@ -99,7 +98,7 @@ class OCRPeerReviewerContractTests(unittest.TestCase):
             self.assertIn(status, combined)
         self.assertIn("OCR_SKILL_SKIPPED", skill)
         self.assertIn("continue with direct exact-candidate review", normalized_skill)
-        self.assertIn("review the exact candidate directly", normalized_peer)
+        self.assertIn("otherwise review directly", normalized_peer)
 
     def test_ocr_never_owns_project_acceptance(self) -> None:
         skill = read_ocr_skill()
@@ -145,15 +144,15 @@ class OCRPeerReviewerContractTests(unittest.TestCase):
 
     def test_zero_reviewable_files_cannot_yield_ocr_approval(self) -> None:
         skill = read_ocr_skill()
-        peer = read_orchestrator("references/roles/peer.md")
         normalized_skill = normalized(skill)
+        peer = normalized(read_orchestrator("references/roles/peer.md"))
 
         self.assertIn("If `reviewable_files` is empty", skill)
         self.assertIn("do not invoke `rule`", normalized_skill)
         self.assertIn("NO_REVIEWABLE_FILES", skill)
         self.assertIn("never from zero-of-zero OCR coverage", normalized_skill)
-        self.assertIn("direct path reports the absent/returned status", normalized(peer))
-        self.assertIn("establishes its own coverage", normalized(peer))
+        self.assertIn("directly inspects the exact candidate", normalized_skill)
+        self.assertIn("Only complete coverage supports `APPROVE`", peer)
 
     def test_ocr_skill_is_valid_packaged_skill(self) -> None:
         skill_path = OCR_SKILL_ROOT / "SKILL.md"
