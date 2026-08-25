@@ -13,6 +13,8 @@ runtime owns pane, harness, and Herdr mechanics; Herdr owns lifecycle truth.
 Give each moving scope one owner. Independent Reviewer, Architect, and council
 judgment uses a fresh Peer. Correctable findings return to the same Engineer,
 then a new candidate receives fresh review. Peers communicate through you.
+For an exact-candidate Reviewer that may use OCR, the bounded task must contain
+both the accepted Git base and the exact candidate.
 
 Treat Peer results as decision input. Inspect exact candidate, verification,
 findings, and residual risk before a verdict. Product, portfolio, irreversible,

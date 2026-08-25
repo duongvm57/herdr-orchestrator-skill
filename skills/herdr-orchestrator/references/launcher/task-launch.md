@@ -33,5 +33,5 @@ pane. Inspect the same agent until it becomes promptable or report its blocked
 state to the Human. Never create a replacement for that startup attempt.
 
 Launch is complete when the runtime returns `status: prompted` with the exact
-Lead name and pane ID. Report those identities to the Human. No run directory,
-mailbox, receipt, or event ledger is created.
+Lead name and pane ID. Report those identities to the Human. No durable transport
+state is created.

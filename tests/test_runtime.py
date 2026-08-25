@@ -163,6 +163,10 @@ class RuntimeTests(unittest.TestCase):
         prompt = commands[3][3]
         self.assertIn("# Workspace Protocol", prompt)
         self.assertIn("Available Peer profiles", prompt)
+        self.assertIn(
+            "bounded task must contain\nboth the accepted Git base and the exact candidate",
+            prompt,
+        )
         after = {path.relative_to(self.project) for path in self.project.rglob("*")}
         self.assertEqual(after, before)
 

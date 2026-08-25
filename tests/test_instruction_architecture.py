@@ -262,6 +262,46 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("The runtime owns pane, harness, and Herdr mechanics", normalized)
         self.assertIn("smallest useful topology", normalized)
 
+    def test_runtime_preflight_contains_only_launch_inputs_and_validation(self) -> None:
+        preflight = read("references/launcher/preflight.md")
+
+        self.assertIn("`HERDR_ENV=1`", preflight)
+        self.assertIn("canonical project root", preflight)
+        self.assertIn("launch-specific validation", preflight)
+        for obsolete_command in (
+            "herdr agent list",
+            "pane current",
+            "git status",
+            "git worktree list",
+            "pane list",
+            "validate-project",
+        ):
+            self.assertNotIn(obsolete_command, preflight)
+
+    def test_lead_references_exclude_legacy_runtime_transport(self) -> None:
+        lead_references = "\n".join(
+            read(path)
+            for path in (
+                "references/roles/lead.md",
+                "references/lead/peer-lifecycle.md",
+                "references/lead/candidate-and-verdict.md",
+                "references/lead/topology.md",
+            )
+        )
+
+        for obsolete_term in (
+            "assignments/",
+            "reports/inbox",
+            "result.accepted.json",
+            "events.jsonl",
+            "delivery receipt",
+            "handoff receipt",
+            "prepared/active/collected",
+            "run-created Peer panes",
+            "Terminal output is not the report",
+        ):
+            self.assertNotIn(obsolete_term, lead_references)
+
     def test_repository_instruction_pointers_resolve(self) -> None:
         documents = [
             SKILL_ROOT / "SKILL.md",
