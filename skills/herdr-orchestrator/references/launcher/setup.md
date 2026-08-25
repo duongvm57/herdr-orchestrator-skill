@@ -6,7 +6,7 @@ task via the task-launch route.
 
 ## 1. Preserve and discover
 
-Resolve repository and absolute Git-common roots. Inventory status, worktrees,
+Resolve repository and Git-common roots. Inventory status, worktrees,
 agents/panes, and destinations. Understand and preserve Human-owned or unrelated
 changes; present an in-place diff.
 
@@ -51,8 +51,7 @@ provider catalog. Pi projects only effective native `enabledModels` scope and
 stops if absent or stale. Missing adapters fail closed;
 prove each choice with a bounded native check or approved smoke. Decide:
 
-- live orchestration and durable artifact languages on first setup, invalid
-  existing values, or an explicit language change;
+- live orchestration and artifact languages on first setup or change;
 - project risk, review triggers, costly reversals, and minimum verdict proof;
 - edit, commit, push, deploy, publish, and other external-effect authority; and
 - scope expansion, reserved architecture, budget, and Human-only boundaries.
