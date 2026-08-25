@@ -62,6 +62,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     resume = commands.add_parser("resume", help="resume or start project setup")
     resume.add_argument("--project-root", required=True)
+    resume.add_argument(
+        "--restart",
+        action="store_true",
+        help="archive any existing session and start from current discovery",
+    )
 
     answer = commands.add_parser("answer", help="submit engine-issued typed answers")
     answer.add_argument("--session-id", required=True)
@@ -80,7 +85,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     engine = SetupEngine(codex_executable=arguments.codex_executable)
     try:
         if arguments.command == "resume":
-            sys.stdout.buffer.write(render_setup_view(engine.resume(arguments.project_root)))
+            sys.stdout.buffer.write(
+                render_setup_view(
+                    engine.resume(arguments.project_root, restart=arguments.restart)
+                )
+            )
         elif arguments.command == "answer":
             sys.stdout.buffer.write(
                 render_setup_view(

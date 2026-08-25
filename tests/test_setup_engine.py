@@ -314,6 +314,26 @@ class SetupEngineTests(unittest.TestCase):
         with self.assertRaises(SetupStateError):
             self.engine().resume(str(self.project))
 
+    def test_explicit_restart_archives_an_incompatible_session_without_migration(self) -> None:
+        initial = self.engine().resume(str(self.project))
+        state_file = next(
+            (self.project / ".orchestration/setup/sessions").glob("*.json")
+        )
+        legacy = b'{"schema":"unsupported-old-session"}\n'
+        state_file.write_bytes(legacy)
+
+        restarted = self.engine().resume(str(self.project), restart=True)
+
+        self.assertEqual(restarted.status, SetupStatus.NEEDS_HUMAN_INPUT)
+        self.assertEqual(restarted.revision, 0)
+        archives = tuple(
+            (self.project / ".orchestration/setup/sessions").glob(
+                f"{initial.session_id}.superseded-*.json"
+            )
+        )
+        self.assertEqual(len(archives), 1)
+        self.assertEqual(archives[0].read_bytes(), legacy)
+
     def test_failed_smoke_requires_typed_retry_before_reproof(self) -> None:
         failing = SetupEngine(
             codex_executable=self.executable,

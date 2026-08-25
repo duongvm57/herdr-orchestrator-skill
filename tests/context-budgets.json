@@ -16,7 +16,7 @@
         "skills/herdr-orchestrator/references/launcher/setup.md"
       ],
       "hard_limit": 3000,
-      "baseline": 1296
+      "baseline": 1355
     },
     "task_launcher": {
       "render": "concat",

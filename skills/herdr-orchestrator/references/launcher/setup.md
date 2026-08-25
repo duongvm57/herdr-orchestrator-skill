@@ -64,6 +64,11 @@ canonical string exactly; the engine supplies no options or default.
 engine recovery question. Present that question exactly. Never retry, reset
 Human decisions, weaken authority, or substitute a model without its answer.
 
+An incompatible pre-redesign session is not migrated. If `resume` reports an
+unsupported session schema, explain that explicit restart archives the old
+bytes and resets its unanswered decisions. After the Human confirms that exact
+recovery, rerun `resume --restart`; never add the flag proactively.
+
 ## Present the candidate
 
 When status is `AWAITING_ACCEPTANCE`, show:

@@ -745,6 +745,39 @@ def _write_state(sessions: Path, path: Path, state: _SessionState) -> None:
             pass
 
 
+def _archive_session(sessions: Path, path: Path, session_id: str) -> None:
+    """Move an explicitly restarted session aside without interpreting it."""
+
+    try:
+        descriptor = _open_no_follow(path, os.O_RDONLY)
+    except FileNotFoundError:
+        return
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > SESSION_MAX_BYTES:
+            raise SetupStateError("setup session is not a bounded regular file")
+        payload = b""
+        while len(payload) < metadata.st_size:
+            chunk = os.read(descriptor, min(metadata.st_size - len(payload), 1024 * 1024))
+            if not chunk:
+                break
+            payload += chunk
+        if len(payload) != metadata.st_size:
+            raise SetupStateError("setup session changed while being archived")
+    finally:
+        os.close(descriptor)
+    digest = hashlib.sha256(payload).hexdigest()
+    archive = sessions / f"{session_id}.superseded-{digest}.json"
+    if archive.exists():
+        raise SetupStateError("superseded session archive already exists")
+    os.replace(path, archive)
+    directory = os.open(sessions, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
 def _option_projection(option: SetupOption) -> dict[str, object]:
     return {
         "value": option.value,
@@ -1795,7 +1828,7 @@ class SetupEngine:
                 )
         return state, evaluation
 
-    def resume(self, project_root: str) -> SetupView:
+    def resume(self, project_root: str, *, restart: bool = False) -> SetupView:
         """Resume the stable project session or create its first discovery revision."""
 
         try:
@@ -1811,6 +1844,8 @@ class SetupEngine:
         try:
             fcntl.flock(lock_descriptor, fcntl.LOCK_EX)
             outcome = self._discover(canonical)
+            if restart:
+                _archive_session(sessions, state_path, session_id)
             state = _read_state(state_path)
             created = state is None
             if state is None:
