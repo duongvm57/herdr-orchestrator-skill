@@ -120,7 +120,6 @@ class SetupEngineTests(unittest.TestCase):
             "authority.lead_project_write": False,
             "policy.commit_authority": "human_only",
             "policy.architecture_boundary": "human_review",
-            "policy.native_agent_policy": "disabled",
             "policy.live_language": "Vietnamese",
             "policy.artifact_language": "English",
         }
@@ -185,10 +184,13 @@ class SetupEngineTests(unittest.TestCase):
                 "authority.lead_project_write",
                 "policy.commit_authority",
                 "policy.architecture_boundary",
-                "policy.native_agent_policy",
                 "policy.live_language",
                 "policy.artifact_language",
             },
+        )
+        self.assertNotIn(
+            "policy.native_agent_policy",
+            {question.identifier for question in view.questions},
         )
         rendered = render_setup_view(view)
         self.assertNotIn(b"recommend", rendered.lower())

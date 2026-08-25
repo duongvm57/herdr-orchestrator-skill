@@ -1213,9 +1213,8 @@ def compile_setup_candidate(
         ),
         ProvenanceRecord(
             "/compiled_policy/native_agent_policy",
-            ProvenanceKind.HUMAN_APPROVED,
-            "human_decisions",
-            human_decisions.human_decisions_digest,
+            ProvenanceKind.DEFAULTED,
+            "herdr_control_plane_invariant",
         ),
     ]
     for index, repository in enumerate(discovery.repositories):

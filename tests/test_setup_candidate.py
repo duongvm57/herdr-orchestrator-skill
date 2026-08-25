@@ -371,6 +371,10 @@ class SetupCandidateTests(unittest.TestCase):
             ProvenanceKind.OBSERVED,
         )
         self.assertEqual(
+            provenance["/compiled_policy/native_agent_policy"],
+            ProvenanceKind.DEFAULTED,
+        )
+        self.assertEqual(
             provenance["/model_bindings/lead"],
             ProvenanceKind.HUMAN_APPROVED,
         )

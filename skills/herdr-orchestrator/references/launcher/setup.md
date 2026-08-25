@@ -5,11 +5,18 @@ only `resume`, `answer`, and `accept`; it does not discover facts, construct
 questions, rank models, compile authority, write configuration, run its own
 smoke, or claim completion.
 
-Resolve the canonical project root, then invoke the sibling helper with Python
-3.11+:
+Resolve two paths independently:
+
+- `<absolute-project-root>` is the canonical root of the project being set up.
+- `<installed-skill-root>` is the absolute directory containing the loaded
+  `SKILL.md`. Never resolve helper paths from the project root or current
+  working directory.
+
+Invoke the installed helper with Python 3.11+:
 
 ```text
-python3 scripts/herdr_setup_cli.py resume --project-root <absolute-project-root>
+python3 <installed-skill-root>/scripts/herdr_setup_cli.py resume \
+  --project-root <absolute-project-root>
 ```
 
 The helper returns one canonical `SetupView` JSON document. Treat every field
@@ -27,10 +34,14 @@ If a question has more options than the UI permits, show the complete numbered
 engine list and ask for one exact value. Questions may be batched, but submit
 only answers to questions open in the same revision.
 
+Never ask the Human to write JSON, typed-answer objects, or command-line
+payloads. Ask in ordinary language while preserving the engine's exact option
+values, then translate the Human's reply into the typed payload yourself.
+
 Return typed answers unchanged:
 
 ```text
-python3 scripts/herdr_setup_cli.py answer \
+python3 <installed-skill-root>/scripts/herdr_setup_cli.py answer \
   --session-id <session_id> \
   --revision <revision> \
   --answers-json '[{"id":"<question-id>","kind":"CHOICE","value":"<exact-value>"}]'
@@ -59,7 +70,7 @@ Ask the Human to accept the exact Candidate Digest. A generic “yes” is not a
 digest confirmation. On exact confirmation, call:
 
 ```text
-python3 scripts/herdr_setup_cli.py accept \
+python3 <installed-skill-root>/scripts/herdr_setup_cli.py accept \
   --session-id <session_id> \
   --candidate-digest <candidate_digest>
 ```

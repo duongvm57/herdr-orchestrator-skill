@@ -987,13 +987,6 @@ def _setup_questions(
                 SetupOption("lead_within_protocol", "Lead within protocol"),
             ),
         ),
-        _choice_question(
-            "policy.native_agent_policy",
-            "Which native-agent policy should Herdr enforce?",
-            "Setup supports Herdr as the sole control plane and proves "
-            "native spawning disabled.",
-            (SetupOption("disabled", "Disabled"),),
-        ),
         _text_question(
             "policy.live_language",
             "Which language should live orchestration messages use?",

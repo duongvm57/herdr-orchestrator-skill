@@ -321,13 +321,16 @@ out-of-option answers write nothing.
 
 The alpha question compiler asks only policy unresolved by facts: enabled role
 profile, Lead project-write authority, commit authority, irreversible
-architecture boundary, explicit native-agent policy, an exact repository when
+architecture boundary, an exact repository when
 multiple Git roots exist, and one harness/model/reasoning binding per enabled
 role. Model options are the mechanical Codex catalog cross-product with
 supported reasoning controls, sorted without quality, price, speed, or fit
 ranking. One-repository discovery is selected mechanically; multi-repository
 alpha requires one explicit repository binding and defers cross-repository
 routing.
+
+The sole-control-plane native-agent policy is a project invariant and is
+recorded as `DEFAULTED`, not presented as a one-option Human decision.
 
 The pure Setup View contains engine questions, issues, digest identities, and
 the complete selected role bindings/effective envelopes. The Launcher procedure

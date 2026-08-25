@@ -149,9 +149,12 @@ class InstructionArchitectureTests(unittest.TestCase):
         normalized = " ".join(setup.split())
 
         self.assertIn("calls only `resume`, `answer`, and `accept`", normalized)
+        self.assertIn("<installed-skill-root>/scripts/herdr_setup_cli.py", setup)
+        self.assertNotIn("python3 scripts/herdr_setup_cli.py", setup)
         self.assertIn("herdr_setup_cli.py resume", setup)
         self.assertIn("herdr_setup_cli.py answer", setup)
         self.assertIn("herdr_setup_cli.py accept", setup)
+        self.assertIn("Never ask the Human to write JSON", setup)
         self.assertIn("A generic “yes” is not a digest confirmation", normalized)
         self.assertIn("only runtime authority", normalized)
         self.assertNotIn("Configure TOML yourself", setup)
