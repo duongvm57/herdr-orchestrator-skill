@@ -1,4 +1,4 @@
-"""Load one accepted setup and bind its logical roles to exact runtime paths."""
+"""Load one accepted setup and bind profiles to exact Assignment envelopes."""
 
 from __future__ import annotations
 
@@ -7,10 +7,11 @@ import json
 import os
 import re
 import stat
+import subprocess
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Iterable
 
 
 PUBLICATION_SCHEMA = "herdr.setup-publication"
@@ -42,7 +43,7 @@ RESOURCE_BINDINGS = {
     "project:assigned": "workspace",
     "git-common:assigned": "git_common",
     "orchestration:control": "orchestration",
-    "control:run": "evidence",
+    "control:run": "control",
     "evidence:assignment": "evidence",
     "notebook:session": "notebook",
 }
@@ -176,8 +177,8 @@ class RuntimeFilesystemGrant:
 
 
 @dataclass(frozen=True)
-class RuntimeRoleTemplate:
-    role: str
+class RuntimeAuthorityTemplate:
+    name: str
     adapter_kind: str
     executable: str
     runtime_root: str
@@ -193,15 +194,58 @@ class RuntimeProjectConfig:
     candidate_digest: str
     discovery_digest: str
     project_root: str
-    repository_root: str
-    git_common_dir: str
     live_language: str
     artifact_language: str
-    roles: tuple[RuntimeRoleTemplate, ...]
+    repositories: tuple["RuntimeRepository", ...]
+    model_inventory: tuple["RuntimeModel", ...]
+    routes: tuple["RuntimeRoute", ...]
+    authority_templates: tuple[RuntimeAuthorityTemplate, ...]
 
     @property
-    def role_map(self) -> dict[str, RuntimeRoleTemplate]:
-        return {role.role: role for role in self.roles}
+    def authority_map(self) -> dict[str, RuntimeAuthorityTemplate]:
+        return {template.name: template for template in self.authority_templates}
+
+    @property
+    def route_map(self) -> dict[str, "RuntimeRoute"]:
+        return {route.profile: route for route in self.routes}
+
+
+@dataclass(frozen=True, order=True)
+class RuntimeRepository:
+    identifier: str
+    relative_path: str
+    path: str
+    git_common_dir: str
+
+
+@dataclass(frozen=True, order=True)
+class RuntimeModel:
+    harness: str
+    executable: str
+    runtime_root: str
+    model: str
+    reasoning_effort: str
+
+
+@dataclass(frozen=True, order=True)
+class RuntimeRoute:
+    profile: str
+    harness: str
+    model: str
+    reasoning_effort: str
+
+
+@dataclass(frozen=True, order=True)
+class LaunchRepositoryBinding:
+    workspace: str
+    git_common_dir: str
+
+
+@dataclass(frozen=True, order=True)
+class ModelSelection:
+    harness: str
+    model: str
+    reasoning_effort: str
 
 
 @dataclass(frozen=True)
@@ -229,8 +273,11 @@ class AcceptedProject:
 
 
 @dataclass(frozen=True)
-class BoundRoleLaunch:
-    role: str
+class BoundLaunch:
+    profile: str
+    disposition: str
+    authority_template: str
+    route_source: str
     kind: str
     executable: str
     cwd: str
@@ -264,7 +311,7 @@ def _parse_artifacts(value: object, *, sizes: bool) -> tuple[dict[str, object], 
     return tuple(result)
 
 
-def _validate_role_shape(role: str, grants: tuple[RuntimeFilesystemGrant, ...]) -> None:
+def _validate_template_shape(name: str, grants: tuple[RuntimeFilesystemGrant, ...]) -> None:
     access = {grant.resource: grant.access for grant in grants}
     required = {"runtime:codex": "read", "project:assigned": "read"}
     allowed: dict[str, set[str]] = {
@@ -275,14 +322,14 @@ def _validate_role_shape(role: str, grants: tuple[RuntimeFilesystemGrant, ...]) 
             "orchestration:control",
             "control:run",
         },
-        "engineer": {
+        "peer_writable": {
             "runtime:codex",
             "project:assigned",
             "git-common:assigned",
             "orchestration:control",
             "evidence:assignment",
         },
-        "reviewer": {
+        "peer_readonly": {
             "runtime:codex",
             "project:assigned",
             "git-common:assigned",
@@ -295,28 +342,31 @@ def _validate_role_shape(role: str, grants: tuple[RuntimeFilesystemGrant, ...]) 
         },
     }
     required_by_role: dict[str, dict[str, str]] = {
-        "lead": {"git-common:assigned": "read", "control:run": "write"},
-        "engineer": {
+        "lead": {
             "project:assigned": "write",
+            "git-common:assigned": "write",
+            "control:run": "write",
+        },
+        "peer_writable": {
+            "project:assigned": "write",
+            "git-common:assigned": "write",
             "evidence:assignment": "write",
         },
-        "reviewer": {
+        "peer_readonly": {
             "git-common:assigned": "read",
             "evidence:assignment": "write",
         },
         "supervisor": {"notebook:session": "write"},
     }
-    expected = {**required, **required_by_role[role]}
+    if name not in allowed:
+        raise RuntimeConfigError(f"unknown authority template: {name}")
+    expected = {**required, **required_by_role[name]}
     if any(access.get(resource) != expected_access for resource, expected_access in expected.items()):
-        raise RuntimeConfigError(f"role {role} is missing required closed-world authority")
-    if set(access) - allowed[role]:
-        raise RuntimeConfigError(f"role {role} has unsupported authority")
-    if role in {"reviewer", "supervisor"} and access["project:assigned"] != "read":
-        raise RuntimeConfigError(f"role {role} must keep project mutation denied")
-    if role == "lead" and access.get("git-common:assigned") != "read":
-        raise RuntimeConfigError("Lead Git metadata must remain read-only")
-    if role == "engineer" and access.get("git-common:assigned") not in {"read", "write"}:
-        raise RuntimeConfigError("Engineer Git metadata authority is invalid")
+        raise RuntimeConfigError(f"template {name} is missing required closed-world authority")
+    if set(access) - allowed[name]:
+        raise RuntimeConfigError(f"template {name} has unsupported authority")
+    if name in {"peer_readonly", "supervisor"} and access["project:assigned"] != "read":
+        raise RuntimeConfigError(f"template {name} must keep project mutation denied")
 
 
 def parse_runtime_config(payload: bytes) -> RuntimeProjectConfig:
@@ -331,12 +381,13 @@ def parse_runtime_config(payload: bytes) -> RuntimeProjectConfig:
         "candidate_digest",
         "discovery_digest",
         "project_root",
-        "repository_root",
-        "git_common_dir",
         "live_orchestration_language",
         "durable_artifact_language",
         "native_agent_policy",
-        "roles",
+        "repositories",
+        "model_inventory",
+        "routes",
+        "authority_templates",
     }
     if not isinstance(document, dict) or set(document) != expected:
         raise RuntimeConfigError("accepted project config has the wrong top-level fields")
@@ -345,21 +396,56 @@ def parse_runtime_config(payload: bytes) -> RuntimeProjectConfig:
     if document["native_agent_policy"] != "disabled":
         raise RuntimeConfigError("accepted project config must disable native agents")
     project_root = _canonical_directory(document["project_root"], "configured project root")
-    repository_root = _canonical_directory(
-        document["repository_root"], "configured repository root"
-    )
-    git_common_dir = _canonical_directory(
-        document["git_common_dir"], "configured Git common directory"
-    )
-    if not repository_root.is_relative_to(project_root):
-        raise RuntimeConfigError("configured repository root escapes the project root")
-    raw_roles = document["roles"]
-    if not isinstance(raw_roles, dict) or set(raw_roles) not in (
-        {"lead", "engineer", "reviewer"},
-        {"lead", "engineer", "reviewer", "supervisor"},
-    ):
-        raise RuntimeConfigError("accepted project config has an unsupported role set")
-    roles: list[RuntimeRoleTemplate] = []
+    raw_repositories = document["repositories"]
+    if not isinstance(raw_repositories, list) or not raw_repositories:
+        raise RuntimeConfigError("accepted project config requires repository inventory")
+    repositories: list[RuntimeRepository] = []
+    for raw in raw_repositories:
+        if not isinstance(raw, dict) or set(raw) != {"identifier", "relative_path", "path", "git_common_dir"}:
+            raise RuntimeConfigError("repository inventory entry has the wrong fields")
+        path = _canonical_directory(raw["path"], "inventory repository path")
+        common = _canonical_directory(raw["git_common_dir"], "inventory Git common directory")
+        repositories.append(RuntimeRepository(
+            _require_text(raw["identifier"], "repository identifier", maximum=512),
+            _require_text(raw["relative_path"], "repository relative path", maximum=4096),
+            str(path),
+            str(common),
+        ))
+    raw_models = document["model_inventory"]
+    if not isinstance(raw_models, list) or not raw_models:
+        raise RuntimeConfigError("accepted project config requires model inventory")
+    models: list[RuntimeModel] = []
+    for raw in raw_models:
+        if not isinstance(raw, dict) or set(raw) != {"harness", "executable", "runtime_root", "model", "reasoning_effort"}:
+            raise RuntimeConfigError("model inventory entry has the wrong fields")
+        models.append(RuntimeModel(
+            _require_identifier(raw["harness"], "model harness"),
+            str(_canonical_file(raw["executable"], "model executable")),
+            str(_canonical_directory(raw["runtime_root"], "model runtime root")),
+            _require_text(raw["model"], "model identifier", maximum=128),
+            _require_identifier(raw["reasoning_effort"], "model reasoning effort"),
+        ))
+    raw_routes = document["routes"]
+    if not isinstance(raw_routes, dict) or set(raw_routes) != {"lead", "peer", "supervisor", "fallback"}:
+        raise RuntimeConfigError("accepted project config has the wrong routes")
+    routes: list[RuntimeRoute] = []
+    for profile in sorted(raw_routes):
+        raw = raw_routes[profile]
+        if not isinstance(raw, dict) or set(raw) != {"harness", "model", "reasoning_effort"}:
+            raise RuntimeConfigError(f"route {profile} has the wrong fields")
+        route = RuntimeRoute(
+            profile,
+            _require_identifier(raw["harness"], f"route {profile} harness"),
+            _require_text(raw["model"], f"route {profile} model", maximum=128),
+            _require_identifier(raw["reasoning_effort"], f"route {profile} effort"),
+        )
+        if not any((item.harness, item.model, item.reasoning_effort) == (route.harness, route.model, route.reasoning_effort) for item in models):
+            raise RuntimeConfigError(f"route {profile} is absent from accepted model inventory")
+        routes.append(route)
+    raw_roles = document["authority_templates"]
+    if not isinstance(raw_roles, dict) or set(raw_roles) != {"lead", "peer_writable", "peer_readonly", "supervisor"}:
+        raise RuntimeConfigError("accepted project config has an unsupported authority template set")
+    templates: list[RuntimeAuthorityTemplate] = []
     role_fields = {
         "adapter_kind",
         "executable",
@@ -402,10 +488,10 @@ def parse_runtime_config(payload: bytes) -> RuntimeProjectConfig:
         grants_tuple = tuple(sorted(grants))
         if len({grant.resource for grant in grants_tuple}) != len(grants_tuple):
             raise RuntimeConfigError(f"role {role} repeats a filesystem resource")
-        _validate_role_shape(role, grants_tuple)
-        roles.append(
-            RuntimeRoleTemplate(
-                role=role,
+        _validate_template_shape(role, grants_tuple)
+        templates.append(
+            RuntimeAuthorityTemplate(
+                name=role,
                 adapter_kind="codex",
                 executable=str(executable),
                 runtime_root=str(runtime_root),
@@ -426,15 +512,16 @@ def parse_runtime_config(payload: bytes) -> RuntimeProjectConfig:
         candidate_digest=_require_digest(document["candidate_digest"], "candidate digest"),
         discovery_digest=_require_digest(document["discovery_digest"], "discovery digest"),
         project_root=str(project_root),
-        repository_root=str(repository_root),
-        git_common_dir=str(git_common_dir),
         live_language=_require_text(
             document["live_orchestration_language"], "live orchestration language", maximum=128
         ),
         artifact_language=_require_text(
             document["durable_artifact_language"], "durable artifact language", maximum=128
         ),
-        roles=tuple(roles),
+        repositories=tuple(sorted(repositories)),
+        model_inventory=tuple(sorted(models)),
+        routes=tuple(routes),
+        authority_templates=tuple(templates),
     )
 
 
@@ -454,7 +541,7 @@ def _validate_setup_plan(
         "human_decisions_digest",
         "compiled_policy",
         "model_bindings",
-        "roles",
+        "authority_templates",
         "provenance",
         "candidate_digest",
     }
@@ -467,11 +554,11 @@ def _validate_setup_plan(
         or _digest("herdr-setup-candidate", projection) != candidate_digest
     ):
         raise RuntimeConfigError("Setup Plan identity does not match activation")
-    roles = document["roles"]
+    roles = document["authority_templates"]
     if not isinstance(roles, list):
         raise RuntimeConfigError("Setup Plan roles must be an array")
     expected_role_fields = {
-        "role",
+        "template",
         "requirement",
         "selector_receipt",
         "native_launch_spec",
@@ -481,17 +568,17 @@ def _validate_setup_plan(
     for role_plan in roles:
         if not isinstance(role_plan, dict) or set(role_plan) != expected_role_fields:
             raise RuntimeConfigError("Setup Plan role has the wrong fields")
-        role = role_plan["role"]
+        role = role_plan["template"]
         launch = role_plan["native_launch_spec"]
         if not isinstance(role, str) or not isinstance(launch, dict):
             raise RuntimeConfigError("Setup Plan role launch is invalid")
         role_names.append(role)
         launch_by_role[role] = launch
-    configured_roles = tuple(role.role for role in config.roles)
+    configured_roles = tuple(template.name for template in config.authority_templates)
     if tuple(role_names) != configured_roles or len(launch_by_role) != len(role_names):
         raise RuntimeConfigError("Setup Plan role set does not match runtime config")
-    for template in config.roles:
-        launch = launch_by_role[template.role]
+    for template in config.authority_templates:
+        launch = launch_by_role[template.name]
         required_launch_fields = {
             "adapter_kind",
             "executable",
@@ -509,7 +596,7 @@ def _validate_setup_plan(
         }
         if set(launch) != required_launch_fields:
             raise RuntimeConfigError(
-                f"Setup Plan launch has the wrong fields: {template.role}"
+                f"Setup Plan launch has the wrong fields: {template.name}"
             )
         if (
             launch["adapter_kind"] != template.adapter_kind
@@ -523,7 +610,7 @@ def _validate_setup_plan(
             != template.proof_launch_spec_digest
         ):
             raise RuntimeConfigError(
-                f"Setup Plan launch does not match runtime template: {template.role}"
+                f"Setup Plan launch does not match runtime template: {template.name}"
             )
         rules = launch["filesystem_rules"]
         if not isinstance(rules, list):
@@ -561,7 +648,7 @@ def _validate_setup_plan(
             or runtime_path != template.runtime_root
         ):
             raise RuntimeConfigError(
-                f"Setup Plan filesystem authority does not match runtime template: {template.role}"
+                f"Setup Plan filesystem authority does not match runtime template: {template.name}"
             )
 
 
@@ -579,7 +666,7 @@ def _validate_runtime_proof(
         "candidate_digest",
         "discovery_digest",
         "current_discovery_digest",
-        "roles",
+        "authority_templates",
         "receipt_digest",
     }
     if set(document) != fields:
@@ -592,7 +679,7 @@ def _validate_runtime_proof(
         or document["receipt_digest"] != proof_digest
     ):
         raise RuntimeConfigError("Runtime Proof does not prove the accepted candidate")
-    roles = document["roles"]
+    roles = document["authority_templates"]
     if not isinstance(roles, list):
         raise RuntimeConfigError("Runtime Proof roles must be an array")
     role_fields = {
@@ -615,7 +702,7 @@ def _validate_runtime_proof(
         "detail_digest",
     }
     proof_roles: list[str] = []
-    template_by_role = config.role_map
+    template_by_role = config.authority_map
     for role_receipt in roles:
         if not isinstance(role_receipt, dict) or set(role_receipt) != role_fields:
             raise RuntimeConfigError("Runtime Proof role receipt has the wrong fields")
@@ -656,7 +743,7 @@ def _validate_runtime_proof(
         ):
             raise RuntimeConfigError("Runtime Proof role digest does not match its content")
         proof_roles.append(role)
-    configured_roles = tuple(role.role for role in config.roles)
+    configured_roles = tuple(template.name for template in config.authority_templates)
     if tuple(proof_roles) != configured_roles or len(set(proof_roles)) != len(proof_roles):
         raise RuntimeConfigError("Runtime Proof role set does not match runtime config")
     projection = {key: document[key] for key in fields - {"receipt_digest"}}
@@ -807,6 +894,9 @@ def load_accepted_project(project_root: str) -> AcceptedProject:
         discovery_digest=discovery_digest,
         config=config,
     )
+    protocol_snapshot = artifact_payloads["workspace-protocol.md"]
+    if _stable_regular_bytes(root / "WORKSPACE_PROTOCOL.md", "Workspace Protocol") != protocol_snapshot:
+        raise RuntimeConfigError("tracked Workspace Protocol does not match accepted setup")
     return AcceptedProject(
         project_root=str(root),
         activation_path=str(current),
@@ -842,55 +932,158 @@ def _permission_override(filesystem: tuple[tuple[str, str, str], ...]) -> str:
     )
 
 
-def bind_role_launch(
+def _verified_repository_binding(
     config: RuntimeProjectConfig,
-    role: str,
-    *,
-    cwd: str,
-    bindings: Mapping[str, str],
-) -> BoundRoleLaunch:
-    """Compile one role template with exact Assignment paths; grant no unused root."""
-
-    template = config.role_map.get(role)
-    if template is None:
-        raise RuntimeConfigError(f"role is not enabled by the accepted setup: {role}")
-    canonical_cwd = _canonical_directory(cwd, "role cwd")
-    supplied = dict(bindings)
-    if set(supplied) - {"workspace", "git_common", "orchestration", "evidence", "notebook"}:
-        raise RuntimeConfigError("role binding contains an unsupported source")
-    fixed = {"runtime": template.runtime_root}
-    required_sources = {
-        grant.binding for grant in template.filesystem if grant.binding != "runtime"
-    }
-    if set(supplied) != required_sources:
-        missing = sorted(required_sources - set(supplied))
-        extra = sorted(set(supplied) - required_sources)
-        detail = []
-        if missing:
-            detail.append("missing " + ",".join(missing))
-        if extra:
-            detail.append("extra " + ",".join(extra))
-        raise RuntimeConfigError("role binding source mismatch: " + "; ".join(detail))
-    paths = {
-        source: str(_canonical_directory(value, f"role {source} binding"))
-        for source, value in supplied.items()
-    }
-    paths.update(fixed)
-    filesystem = tuple(
-        sorted(
-            (
-                grant.resource,
-                paths[grant.binding],
-                grant.access,
-            )
-            for grant in template.filesystem
+    binding: LaunchRepositoryBinding,
+) -> LaunchRepositoryBinding:
+    workspace = _canonical_directory(binding.workspace, "launch repository workspace")
+    common = _canonical_directory(binding.git_common_dir, "launch Git common directory")
+    try:
+        completed = subprocess.run(
+            ("git", "-C", str(workspace), "rev-parse", "--git-common-dir"),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeConfigError("launch repository is not a usable Git worktree") from exc
+    observed = Path(completed.stdout.strip())
+    if not observed.is_absolute():
+        observed = workspace / observed
+    try:
+        observed = observed.resolve(strict=True)
+    except OSError as exc:
+        raise RuntimeConfigError("launch Git common directory is unavailable") from exc
+    accepted_commons = {repository.git_common_dir for repository in config.repositories}
+    if str(observed) != str(common) or str(common) not in accepted_commons:
+        raise RuntimeConfigError("launch repository is outside the accepted Git inventory")
+    return LaunchRepositoryBinding(str(workspace), str(common))
+
+
+def _select_model(
+    config: RuntimeProjectConfig,
+    profile: str,
+    disposition: str,
+    explicit: ModelSelection | None,
+    runtime_route: ModelSelection | None,
+) -> tuple[RuntimeModel, str]:
+    if explicit is not None:
+        desired, source = explicit, "human_override"
+    elif runtime_route is not None:
+        desired, source = runtime_route, "lead_runtime_route"
+    else:
+        route_name = (
+            "fallback"
+            if profile == "peer"
+            and disposition not in {"engineer", "reviewer", "architect", "scout"}
+            else profile
+        )
+        route = config.route_map[route_name]
+        desired = ModelSelection(route.harness, route.model, route.reasoning_effort)
+        source = "global_fallback" if route_name == "fallback" else "profile_default"
+    match = next(
+        (
+            item
+            for item in config.model_inventory
+            if (item.harness, item.model, item.reasoning_effort)
+            == (desired.harness, desired.model, desired.reasoning_effort)
+        ),
+        None,
     )
+    if match is None:
+        raise RuntimeConfigError("selected model route is absent from accepted inventory")
+    return match, source
+
+
+def bind_launch(
+    config: RuntimeProjectConfig,
+    *,
+    profile: str,
+    disposition: str,
+    authority: str,
+    cwd: str,
+    repositories: Iterable[LaunchRepositoryBinding],
+    evidence_root: str | None = None,
+    notebook_root: str | None = None,
+    control_root: str | None = None,
+    model_override: ModelSelection | None = None,
+    runtime_route: ModelSelection | None = None,
+) -> BoundLaunch:
+    """Compile one explicit Assignment envelope into an exact native launch."""
+
+    if profile not in {"lead", "peer", "supervisor"}:
+        raise RuntimeConfigError("launch profile must be lead, peer, or supervisor")
+    _require_identifier(disposition, "launch disposition")
+    expected_authority = {
+        "lead": {"project_writable": "lead"},
+        "peer": {
+            "project_writable": "peer_writable",
+            "project_readonly": "peer_readonly",
+        },
+        "supervisor": {"project_readonly": "supervisor"},
+    }[profile]
+    template_name = expected_authority.get(authority)
+    if template_name is None:
+        raise RuntimeConfigError("authority is incompatible with the selected profile")
+    template = config.authority_map.get(template_name)
+    if template is None:
+        raise RuntimeConfigError("accepted setup lacks the selected authority template")
+    bound_repositories = tuple(
+        _verified_repository_binding(config, item) for item in repositories
+    )
+    if not bound_repositories:
+        raise RuntimeConfigError("launch requires at least one exact repository binding")
+    if len(set(bound_repositories)) != len(bound_repositories):
+        raise RuntimeConfigError("launch repeats a repository binding")
+    selected_model, route_source = _select_model(
+        config, profile, disposition, model_override, runtime_route
+    )
+    if selected_model.harness != template.adapter_kind:
+        raise RuntimeConfigError("selected model route has no compatible authority adapter")
+    roots = {
+        "runtime": selected_model.runtime_root,
+        "orchestration": str(_canonical_directory(
+            str(Path(config.project_root) / ".orchestration"),
+            "orchestration control root",
+        )),
+    }
+    optional = {
+        "evidence": evidence_root,
+        "notebook": notebook_root,
+        "control": control_root,
+    }
+    for source, value in optional.items():
+        if value is not None:
+            roots[source] = str(_canonical_directory(value, f"launch {source} root"))
+    required_single = {
+        grant.binding
+        for grant in template.filesystem
+        if grant.binding not in {"runtime", "workspace", "git_common", "orchestration"}
+    }
+    if required_single != (set(roots) & required_single):
+        raise RuntimeConfigError("launch is missing its evidence, notebook, or control root")
+    filesystem_values: list[tuple[str, str, str]] = []
+    for grant in template.filesystem:
+        if grant.binding == "workspace":
+            filesystem_values.extend(
+                (f"{grant.resource}.{index}", item.workspace, grant.access)
+                for index, item in enumerate(bound_repositories)
+            )
+        elif grant.binding == "git_common":
+            filesystem_values.extend(
+                (f"{grant.resource}.{index}", item.git_common_dir, grant.access)
+                for index, item in enumerate(bound_repositories)
+            )
+        else:
+            filesystem_values.append((grant.resource, roots[grant.binding], grant.access))
+    filesystem = tuple(sorted(filesystem_values))
+    canonical_cwd = _canonical_directory(cwd, "launch cwd")
     accessible = tuple(
         path for _resource, path, access in filesystem if access in {"read", "write"}
     )
     if not any(_contains(path, str(canonical_cwd)) for path in accessible):
-        raise RuntimeConfigError("role cwd is outside its effective filesystem authority")
+        raise RuntimeConfigError("launch cwd is outside its effective filesystem authority")
     path_access: dict[str, str] = {":minimal": "read"}
     for _resource, path, access in filesystem:
         if path_access.get(path) != "write":
@@ -904,12 +1097,12 @@ def bind_role_launch(
             tuple(("", path, access) for path, access in sorted(path_access.items()))
         ),
         "agents.enabled=false",
-        f"model_reasoning_effort={_toml_string(template.reasoning_effort)}",
+        f"model_reasoning_effort={_toml_string(selected_model.reasoning_effort)}",
     )
     arguments = (
         "--strict-config",
         "--model",
-        template.model,
+        selected_model.model,
         "--ask-for-approval",
         "never",
         "--config",
@@ -925,12 +1118,15 @@ def bind_role_launch(
     )
     projection = {
         "candidate_digest": config.candidate_digest,
-        "role": role,
+        "profile": profile,
+        "disposition": disposition,
+        "authority_template": template_name,
+        "route_source": route_source,
         "kind": template.adapter_kind,
-        "executable": template.executable,
+        "executable": selected_model.executable,
         "cwd": str(canonical_cwd),
-        "model": template.model,
-        "reasoning_effort": template.reasoning_effort,
+        "model": selected_model.model,
+        "reasoning_effort": selected_model.reasoning_effort,
         "selected_binding_id": template.selected_binding_id,
         "arguments": list(arguments),
         "filesystem": [
@@ -938,13 +1134,16 @@ def bind_role_launch(
             for resource, path, access in normalized_filesystem
         ],
     }
-    return BoundRoleLaunch(
-        role=role,
+    return BoundLaunch(
+        profile=profile,
+        disposition=disposition,
+        authority_template=template_name,
+        route_source=route_source,
         kind=template.adapter_kind,
-        executable=template.executable,
+        executable=selected_model.executable,
         cwd=str(canonical_cwd),
-        model=template.model,
-        reasoning_effort=template.reasoning_effort,
+        model=selected_model.model,
+        reasoning_effort=selected_model.reasoning_effort,
         selected_binding_id=template.selected_binding_id,
         arguments=arguments,
         filesystem=normalized_filesystem,

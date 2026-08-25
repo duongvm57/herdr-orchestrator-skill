@@ -46,17 +46,17 @@ Choose a disposition and enforce its boundary:
   evidence, exclusions, and the decision informed. The title grants no extra
   authority.
 
-Select one compatible accepted role template from Assignment authority:
+Select one compatible accepted authority template from Assignment authority:
 
-- project mutation required → `engineer`;
-- project read plus evidence write → `reviewer`.
+- project mutation required → `peer_writable`;
+- project read plus evidence write → `peer_readonly`.
 
 Architect, Reviewer, Scout, proof-auditor, and read-only feature-owner
-dispositions use `reviewer` only when that envelope satisfies the complete
-Assignment. The disposition grants no authority. Zero compatible roles is a
+dispositions use `peer_readonly` only when that envelope satisfies the complete
+Assignment. The disposition grants no authority. Zero compatible templates is a
 setup-policy conflict and requires a Human-approved setup update. Multiple
-future compatible roles require one explicit selector before launch. An
-unknown Assignment never routes to a writable role.
+compatible templates require one explicit selector before launch. An unknown
+Assignment never gains writable authority from fallback model routing.
 
 Reserve a collision-free return path before start. A project-read-only Peer
 uses `reports/inbox/<agent-name>/report.md`; its exclusive inbox directory is
@@ -138,12 +138,13 @@ Project every repository instruction that governs assigned paths into the
 constraints while preserving its scope. A mailbox cwd does not bypass
 repository authority discovery.
 
-Invoke the run-local helper's `bind-role` with the selected role, snapshotted
-config and digest, and only its exact `required_bindings`. Bind `workspace` to
-the assigned checkout/worktree, `git_common` to that repository's exact Git
-common directory, `evidence` to the reserved inbox, and `orchestration` only
-when required. Use the owned workspace as Engineer cwd and the exclusive inbox
-as Reviewer cwd. Save the result as
+Invoke the run-local helper's `bind-launch --profile peer` with the disposition,
+explicit `project_writable` or `project_readonly` authority, snapshotted config
+and digest, every exact `--repository workspace=git-common` pair, and the
+reserved `--evidence-root`. Use an owned workspace as writable Peer cwd and the
+exclusive inbox as read-only Peer cwd. The Lead may supply `--runtime-route`
+from accepted inventory; otherwise the Peer profile default applies, with the
+global fallback used only for an ad-hoc disposition. Save the result as
 `assignments/<agent-name>-launch.json`; it is the native recipe and authority
 receipt for this Assignment.
 

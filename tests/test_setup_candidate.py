@@ -358,7 +358,7 @@ class SetupCandidateTests(unittest.TestCase):
             document["human_decisions_digest"],
             candidate.human_decisions_digest,
         )
-        launch = document["roles"][0]["native_launch_spec"]
+        launch = document["authority_templates"][0]["native_launch_spec"]
         self.assertEqual(launch["model"], "gpt-5.6-luna")
         self.assertFalse(launch["native_agents_enabled"])
         self.assertFalse(launch["network_enabled"])

@@ -393,7 +393,7 @@ def _runtime_receipt_projection(receipt: RuntimeProofReceipt) -> dict[str, objec
         "candidate_digest": receipt.candidate_digest,
         "discovery_digest": receipt.discovery_digest,
         "current_discovery_digest": receipt.current_discovery_digest,
-        "roles": [
+        "authority_templates": [
             {
                 **_role_receipt_projection(role),
                 "receipt_digest": role.receipt_digest,
@@ -888,12 +888,12 @@ def parse_runtime_proof(payload: bytes) -> RuntimeProofReceipt:
         "candidate_digest",
         "discovery_digest",
         "current_discovery_digest",
-        "roles",
+        "authority_templates",
         "receipt_digest",
     }
     if not isinstance(document, dict) or set(document) != expected_root:
         raise ValueError("runtime proof payload has the wrong fields")
-    roles_document = document["roles"]
+    roles_document = document["authority_templates"]
     if not isinstance(roles_document, list):
         raise ValueError("runtime proof roles must be a list")
     roles: list[RoleProofReceipt] = []

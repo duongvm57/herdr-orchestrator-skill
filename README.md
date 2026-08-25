@@ -72,9 +72,9 @@ requires explicit Human invocation.
 You need Git, Python 3.11+, a running Herdr server, a Launcher session inside a
 Herdr-managed pane, and Codex installed and authenticated. The Launcher's native
 permission profile must also allow the Herdr socket and run-evidence writes in
-the selected repository's absolute Git common directory. The current setup
-supports Codex first; later harnesses require their own normalized authority adapter and
-runtime proof.
+the task-selected Git common directories. Setup inventories all known
+harnesses; Codex is the first enforceable authority adapter, while detected
+unadapted harnesses remain visible and ineligible.
 
 Use the standard multi-skill installer:
 
@@ -115,11 +115,12 @@ From the repository, invoke:
 $herdr-orchestrator set up orchestration for this repository
 ```
 
-The deterministic setup engine discovers Git repositories and the Codex runtime,
-normalizes native controls, solves each role's closed-world authority, and asks
-only unresolved Human decisions: role profile, commit/architecture authority,
-Lead write authority, both communication languages, and exact model/reasoning
-bindings. Model options are native inventory facts, not quality or price
+The deterministic setup engine discovers nested Git repositories and installed
+harnesses, normalizes native controls, and proves closed-world authority. It
+asks one batch for default Lead, Peer, and Supervisor model routes, a global
+ad-hoc Peer fallback route, and both communication languages. It does not ask
+for a role set, Lead write permission, commit policy, architecture ownership, or
+one setup repository. Model options are inventory facts, not quality or price
 rankings.
 
 After static validation and deterministic native allow/deny probes, setup shows
@@ -128,6 +129,9 @@ complete generation under `.orchestration/setup/generations/` and atomically
 activates it through `.orchestration/setup/current.json`. That Activation
 Manifest is the only runtime configuration authority. A partial, stale,
 tampered, or unaccepted generation cannot launch.
+The accepted generation also snapshots the tracked root
+`WORKSPACE_PROTOCOL.md`; nested repositories inherit that one project policy
+source.
 
 Re-run setup after changing the machine, Codex installation, model, authority,
 or policy. Setup is resumable through project-local typed state and never relies
@@ -141,7 +145,8 @@ $herdr-orchestrator implement issue #42 and preserve my uncommitted changes
 
 The Launcher verifies the accepted generation and receipts,
 inventories existing agents/panes/worktrees/user changes, stores run evidence
-outside the checkout, binds the logical Lead template to exact run paths,
+outside the checkout, binds the Lead profile and explicit authority to one or
+more exact task-selected repository/worktree scopes,
 starts a fresh Lead, and transfers focus. Missing capability stops launch
 without runtime substitution; existing state is preserved.
 
@@ -157,14 +162,17 @@ and rejecting unexplained pane disappearance.
 After handoff, work with the Lead. A tiny task may need zero or one Peer.
 Architecture-sensitive work may use a fresh Architect, one Engineer, and a fresh
 Reviewer. The Lead decides the number and dispositions per task, then selects a
-compatible accepted role envelope: `engineer` for bounded project mutation or
-`reviewer` for project-read/evidence-write work. Runtime binding compiles exact
+compatible accepted authority template: `peer_writable` for bounded project
+mutation or `peer_readonly` for project-read/evidence-write work. Engineer,
+Reviewer, Architect, and Scout are Assignment dispositions and grant no
+authority. Runtime binding compiles exact
 workspace, Git-common, evidence, and notebook paths per Assignment. No match
 fails closed and returns to Human-approved setup.
 
 ## Request a Supervisor
 
-A configured Supervisor is never started automatically:
+A Supervisor is never created or started automatically. Create one durable
+identity once, then attach it to Human-approved observation scopes:
 
 ```text
 $herdr-orchestrator attach a Supervisor to run <run-id> and Lead <lead-name>
@@ -173,10 +181,11 @@ $herdr-orchestrator attach a Supervisor to run <run-id> and Lead <lead-name>
 Refocus an installed Launcher session before invoking that command; the fresh
 Lead does not need or invoke the skill.
 
-The Launcher binds a fresh project-read-only Supervisor to exact Lead/project/run
-identities. It observes evidence, asks open questions, and relays exact Human
-decisions. It never creates Peers, edits project code, or issues a project
-verdict.
+Each observation session uses the target project's accepted Supervisor default
+and binds the existing identity read-only to exact Lead/project/run scope plus a
+session inside its durable notebook. It observes evidence, asks the Lead open
+questions, reports to the Human, and relays exact Human decisions. It never
+directs Peers, edits project code, or issues a project verdict.
 
 ## Evidence and verdicts
 

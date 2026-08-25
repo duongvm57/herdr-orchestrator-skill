@@ -77,7 +77,7 @@ class InstructionArchitectureTests(unittest.TestCase):
 
         self.assertNotIn("references/roles/supervisor.md", launch)
         self.assertNotIn("init-run", supervisor)
-        self.assertIn("stage-assets", supervisor)
+        self.assertIn("create-supervisor", supervisor)
 
     def test_run_context_uses_launch_time_project_snapshots(self) -> None:
         launch = read("references/launcher/task-launch.md")
@@ -85,29 +85,23 @@ class InstructionArchitectureTests(unittest.TestCase):
 
         self.assertIn("--expected-activation-sha256", launch)
         self.assertIn("setup-activation.json", launch)
-        self.assertIn("bind-role --role lead", launch)
+        self.assertIn("bind-launch", launch)
         self.assertIn("context/lead-launch.json", launch)
         self.assertIn("context/project-config.toml", launch)
         self.assertIn("context/workspace-protocol.md", launch)
         self.assertIn("├── human-task.md", launch)
-        self.assertIn("filtered selection manifest", supervisor)
-        self.assertIn("context/workspace-protocol.md", supervisor)
+        self.assertIn("target project's accepted config and Workspace Protocol", supervisor)
         self.assertNotIn(".orchestration/herdr-orchestrator.toml", launch)
 
     def test_supervisor_attachment_is_collision_and_language_bound(self) -> None:
         supervisor = read("references/launcher/supervisor-attachment.md")
 
-        self.assertIn("<attachment-id>", supervisor)
-        self.assertIn("[a-z][a-z0-9_-]{0,31}", supervisor)
-        self.assertIn("--selection-output", supervisor)
-        self.assertIn("attachment-assignment.md", supervisor)
-        self.assertIn("delivery-receipt.json", supervisor)
-        self.assertIn("local-receipt.md", supervisor)
-        self.assertIn("lead-notification-receipt.json", supervisor)
-        self.assertIn("bind-role --role supervisor", supervisor)
-        self.assertIn("configured artifact", supervisor)
-        self.assertIn("configured live language", supervisor)
-        self.assertIn("Cross-project observation requires a later authority slice", supervisor)
+        self.assertIn("durable Human-owned logical identity", supervisor)
+        self.assertIn("--profile supervisor", supervisor)
+        self.assertIn("--authority project_readonly", supervisor)
+        self.assertIn("--notebook-root", supervisor)
+        self.assertIn("one or multiple repositories", supervisor)
+        self.assertIn("Each project supplies its own accepted Supervisor default", supervisor)
 
     def test_readme_stays_user_facing(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -156,14 +150,14 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("herdr_setup_cli.py accept", setup)
         self.assertIn("Never ask the Human to write JSON", setup)
         self.assertIn("A generic “yes” is not a digest confirmation", normalized)
-        self.assertIn("only runtime authority", normalized)
+        self.assertIn("immutable generation", normalized)
         self.assertNotIn("Configure TOML yourself", setup)
 
     def test_setup_defers_harness_model_and_authority_to_engine_view(self) -> None:
         setup = read("references/launcher/setup.md")
         normalized = " ".join(setup.split())
 
-        self.assertIn("every `role_binding`", setup)
+        self.assertIn("every `authority_binding`", setup)
         self.assertIn("complete effective authority", normalized)
         self.assertIn("add no option, recommendation, model ranking", normalized)
         self.assertIn("Never retry, reset Human decisions, weaken authority", normalized)
@@ -175,10 +169,10 @@ class InstructionArchitectureTests(unittest.TestCase):
         lifecycle = read("references/lead/peer-lifecycle.md")
         normalized_setup = " ".join(setup.split())
 
-        self.assertIn("no mutable compatibility config", normalized_setup)
-        self.assertIn("project mutation required → `engineer`", lifecycle)
-        self.assertIn("project read plus evidence write → `reviewer`", lifecycle)
-        self.assertIn("unknown Assignment never routes to a writable role", lifecycle)
+        self.assertIn("without choosing task topology", normalized_setup)
+        self.assertIn("project mutation required → `peer_writable`", lifecycle)
+        self.assertIn("project read plus evidence write → `peer_readonly`", lifecycle)
+        self.assertIn("never gains writable authority from fallback model routing", lifecycle)
 
     def test_codex_authority_and_runtime_binding_have_separate_modules(self) -> None:
         helper = read("scripts/herdr_orchestrator.py")
@@ -190,8 +184,8 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("def probe_codex", codex_authority)
         self.assertIn("def compile_codex", codex_authority)
         self.assertIn("def load_accepted_project", runtime)
-        self.assertIn("def bind_role_launch", runtime)
-        self.assertIn("bind_role_launch", helper)
+        self.assertIn("def bind_launch", runtime)
+        self.assertIn("bind_launch", helper)
         self.assertNotIn("--permission-profile", engine)
 
     def test_lead_asset_names_match_launch_staging_contract(self) -> None:

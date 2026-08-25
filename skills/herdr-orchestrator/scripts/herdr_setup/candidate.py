@@ -37,9 +37,12 @@ CANDIDATE_SCHEMA = "herdr.setup-candidate"
 CODEX_ADAPTER_CONTRACT = "codex-permission-profile"
 MAX_DISCOVERED_FILE_BYTES = 16 * 1024 * 1024
 POLICY_FILENAMES = frozenset({"AGENTS.md", "CLAUDE.md"})
+WORKSPACE_PROTOCOL_PATH = "WORKSPACE_PROTOCOL.md"
 COPILOT_POLICY_PATH = ".github/copilot-instructions.md"
 ACTIVATION_PATH = ".orchestration/setup/current.json"
-SUPPORTED_ROLES = frozenset({"lead", "engineer", "reviewer", "supervisor"})
+SUPPORTED_ROLES = frozenset(
+    {"lead", "peer_writable", "peer_readonly", "supervisor"}
+)
 IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9._-]{0,127}\Z")
 DIGEST_RE = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -304,6 +307,7 @@ class DiscoverySnapshot:
     harnesses: tuple[HarnessObservation, ...]
     adapters: tuple[AdapterObservation, ...]
     policy_sources: tuple[FileObservation, ...]
+    workspace_protocol: FileObservation
     existing_activation: FileObservation
     discovery_digest: str = field(init=False)
 
@@ -340,6 +344,11 @@ class DiscoverySnapshot:
         )
         if any(not source.exists for source in policy_sources):
             raise ValueError("policy source observations must exist")
+        if (
+            not isinstance(self.workspace_protocol, FileObservation)
+            or self.workspace_protocol.relative_path != WORKSPACE_PROTOCOL_PATH
+        ):
+            raise ValueError("workspace protocol observation has the wrong canonical path")
         if not isinstance(self.existing_activation, FileObservation):
             raise TypeError("existing activation must be a FileObservation")
         if self.existing_activation.relative_path != ACTIVATION_PATH:
@@ -571,6 +580,11 @@ def discover_setup(
         harnesses=tuple(harnesses),
         adapters=tuple(adapters),
         policy_sources=policy_sources,
+        workspace_protocol=_observe_file(
+            root,
+            root / WORKSPACE_PROTOCOL_PATH,
+            optional=True,
+        ),
         existing_activation=_observe_file(root, root / ACTIVATION_PATH, optional=True),
     )
 
@@ -1459,6 +1473,7 @@ def _discovery_projection(snapshot: DiscoverySnapshot) -> dict[str, object]:
         "policy_sources": [
             _file_projection(source) for source in snapshot.policy_sources
         ],
+        "workspace_protocol": _file_projection(snapshot.workspace_protocol),
         "existing_activation": _file_projection(snapshot.existing_activation),
     }
 
@@ -1558,9 +1573,9 @@ def _candidate_projection(candidate: SetupCandidate) -> dict[str, object]:
         "model_bindings": [
             _model_binding_projection(binding) for binding in candidate.model_bindings
         ],
-        "roles": [
+        "authority_templates": [
             {
-                "role": plan.role,
+                "template": plan.role,
                 "requirement": _requirement_projection(plan.requirement),
                 "selector_receipt": {
                     "selector": plan.selector_receipt.selector,

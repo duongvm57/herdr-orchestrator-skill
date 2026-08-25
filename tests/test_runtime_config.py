@@ -12,8 +12,10 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from herdr_runtime import (  # noqa: E402
+    LaunchRepositoryBinding,
+    ModelSelection,
     RuntimeConfigError,
-    bind_role_launch,
+    bind_launch,
     load_accepted_project,
 )
 from herdr_setup.acceptance import (  # noqa: E402
@@ -56,28 +58,27 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertEqual(accepted.config.live_language, "Vietnamese")
         self.assertEqual(accepted.config.artifact_language, "English")
         self.assertEqual(
-            set(accepted.config.role_map),
-            {"lead", "engineer", "reviewer", "supervisor"},
+            set(accepted.config.route_map),
+            {"lead", "peer", "supervisor", "fallback"},
         )
         self.assertFalse(
             (self.project / ".orchestration/herdr-orchestrator.toml").exists()
         )
 
-    def test_bind_role_replaces_proof_paths_with_exact_assignment_paths(self) -> None:
+    def test_bind_launch_replaces_proof_paths_with_exact_assignment_paths(self) -> None:
         self.accept_project()
         accepted = load_accepted_project(str(self.project))
         inbox = self.root / "run/reports/inbox/reviewer"
         inbox.mkdir(parents=True)
 
-        launch = bind_role_launch(
+        launch = bind_launch(
             accepted.config,
-            "reviewer",
+            profile="peer",
+            disposition="reviewer",
+            authority="project_readonly",
             cwd=str(inbox),
-            bindings={
-                "workspace": str(self.project),
-                "git_common": str(self.project / ".git"),
-                "evidence": str(inbox),
-            },
+            repositories=(LaunchRepositoryBinding(str(self.project), str(self.project / ".git")),),
+            evidence_root=str(inbox),
         )
 
         authority = {resource: (path, access) for resource, path, access in launch.filesystem}
@@ -86,7 +87,7 @@ class RuntimeConfigTests(unittest.TestCase):
             (str(inbox), "write"),
         )
         self.assertEqual(
-            authority["project:assigned"],
+            authority["project:assigned.0"],
             (str(self.project), "read"),
         )
         self.assertNotIn(str(self.evidence), launch.arguments)
@@ -98,12 +99,88 @@ class RuntimeConfigTests(unittest.TestCase):
         config = load_accepted_project(str(self.project)).config
 
         with self.assertRaises(RuntimeConfigError):
-            bind_role_launch(
+            bind_launch(
                 config,
-                "reviewer",
+                profile="peer",
+                disposition="reviewer",
+                authority="project_writable",
                 cwd=str(self.project),
-                bindings={"workspace": str(self.project)},
+                repositories=(),
             )
+
+    def test_model_routing_precedence_never_changes_peer_authority(self) -> None:
+        self.accept_project()
+        config = load_accepted_project(str(self.project)).config
+        inbox = self.root / "route-inbox"
+        inbox.mkdir()
+        repository = LaunchRepositoryBinding(str(self.project), str(self.project / ".git"))
+        accepted_model = ModelSelection("codex", "human-selected-model", "medium")
+
+        fallback = bind_launch(
+            config,
+            profile="peer",
+            disposition="custom_audit",
+            authority="project_readonly",
+            cwd=str(inbox),
+            repositories=(repository,),
+            evidence_root=str(inbox),
+        )
+        routed = bind_launch(
+            config,
+            profile="peer",
+            disposition="reviewer",
+            authority="project_readonly",
+            cwd=str(inbox),
+            repositories=(repository,),
+            evidence_root=str(inbox),
+            runtime_route=accepted_model,
+        )
+        overridden = bind_launch(
+            config,
+            profile="peer",
+            disposition="reviewer",
+            authority="project_readonly",
+            cwd=str(inbox),
+            repositories=(repository,),
+            evidence_root=str(inbox),
+            model_override=accepted_model,
+            runtime_route=accepted_model,
+        )
+
+        self.assertEqual(fallback.route_source, "global_fallback")
+        self.assertEqual(routed.route_source, "lead_runtime_route")
+        self.assertEqual(overridden.route_source, "human_override")
+        for launch in (fallback, routed, overridden):
+            access = {resource: value for resource, _path, value in launch.filesystem}
+            self.assertEqual(access["project:assigned.0"], "read")
+            self.assertEqual(launch.authority_template, "peer_readonly")
+
+    def test_one_launch_can_bind_multiple_discovered_repositories(self) -> None:
+        backend = self.project / "backend"
+        backend.mkdir()
+        import subprocess
+        subprocess.run(("git", "init", "-q", str(backend)), check=True)
+        self.accept_project()
+        config = load_accepted_project(str(self.project)).config
+        inbox = self.root / "multi-inbox"
+        inbox.mkdir()
+
+        launch = bind_launch(
+            config,
+            profile="peer",
+            disposition="engineer",
+            authority="project_writable",
+            cwd=str(self.project),
+            repositories=(
+                LaunchRepositoryBinding(str(self.project), str(self.project / ".git")),
+                LaunchRepositoryBinding(str(backend), str(backend / ".git")),
+            ),
+            evidence_root=str(inbox),
+        )
+
+        access = {resource: (path, mode) for resource, path, mode in launch.filesystem}
+        self.assertEqual(access["project:assigned.0"], (str(self.project), "write"))
+        self.assertEqual(access["project:assigned.1"], (str(backend), "write"))
 
     def test_tampered_generation_is_never_loaded(self) -> None:
         self.accept_project()
@@ -132,7 +209,7 @@ class RuntimeConfigTests(unittest.TestCase):
     def test_self_consistent_but_incomplete_setup_plan_is_not_accepted(self) -> None:
         project = self.root / "incomplete-plan-project"
         project.mkdir()
-        publish_accepted_setup(project, omit_plan_role="reviewer")
+        publish_accepted_setup(project, omit_plan_role="peer_readonly")
 
         with self.assertRaisesRegex(RuntimeConfigError, "role set"):
             load_accepted_project(str(project))

@@ -84,6 +84,8 @@ class HerdrOrchestratorTest(unittest.TestCase):
             "init-run",
             "--git-common-dir",
             str(common),
+            "--repository-root",
+            str(project),
             "--run-id",
             "20260823T010203Z-ab12",
             "--project-root",
@@ -108,7 +110,8 @@ class HerdrOrchestratorTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         for command in (
             "validate-project",
-            "bind-role",
+            "bind-launch",
+            "create-supervisor",
             "init-run",
             "stage-assets",
             "pack",
@@ -120,6 +123,37 @@ class HerdrOrchestratorTest(unittest.TestCase):
         self.assertEqual(pack_help.returncode, 0, pack_help.stderr)
         self.assertIn("--role {lead,peer,supervisor}", pack_help.stdout)
 
+    def test_create_supervisor_publishes_one_durable_identity_and_notebook(self) -> None:
+        identity = self.root / "supervisors" / "governance"
+        identity.parent.mkdir()
+
+        completed = self.run_cli(
+            "create-supervisor",
+            "--identity-dir",
+            str(identity),
+            "--name",
+            "governance",
+            "--notebook-language",
+            "English",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        metadata = json.loads(completed.stdout)
+        document = json.loads((identity / "identity.json").read_bytes())
+        self.assertEqual(document["name"], "governance")
+        self.assertEqual(metadata["identity_digest"], document["identity_digest"])
+        self.assertTrue((identity / "notebook").is_dir())
+        repeated = self.run_cli(
+            "create-supervisor",
+            "--identity-dir",
+            str(identity),
+            "--name",
+            "governance",
+            "--notebook-language",
+            "English",
+        )
+        self.assertEqual(repeated.returncode, 2)
+
     def test_validate_project_returns_compact_metadata(self) -> None:
         project = self.valid_project()
         completed = self.run_cli("validate-project", "--project-root", str(project))
@@ -127,13 +161,13 @@ class HerdrOrchestratorTest(unittest.TestCase):
         result = json.loads(completed.stdout)
         self.assertEqual(result["languages"], {"artifact": "English", "live": "Vietnamese"})
         self.assertEqual(
-            {role["role"] for role in result["roles"]},
-            {"lead", "engineer", "reviewer", "supervisor"},
+            {item["name"] for item in result["authority_templates"]},
+            {"lead", "peer_readonly", "peer_writable", "supervisor"},
         )
         self.assertTrue(result["activation"]["path"].endswith("setup/current.json"))
-        self.assertEqual(result["repository_root"], str(project))
+        self.assertEqual(result["repositories"][0]["path"], str(project))
 
-    def test_bind_role_writes_one_digest_bound_exact_launch_receipt(self) -> None:
+    def test_bind_launch_writes_one_digest_bound_exact_launch_receipt(self) -> None:
         project = self.valid_project()
         validated = self.run_cli("validate-project", "--project-root", str(project))
         self.assertEqual(validated.returncode, 0, validated.stderr)
@@ -143,28 +177,32 @@ class HerdrOrchestratorTest(unittest.TestCase):
         output = self.root / "review-launch.json"
 
         completed = self.run_cli(
-            "bind-role",
+            "bind-launch",
             "--project-config-file",
             preflight["config"]["path"],
             "--expected-project-config-sha256",
             preflight["config"]["sha256"],
-            "--role",
+            "--profile",
+            "peer",
+            "--disposition",
             "reviewer",
+            "--authority",
+            "project_readonly",
             "--cwd",
             str(inbox),
-            "--bind",
-            f"workspace={project}",
-            "--bind",
-            f"git_common={project / '.git'}",
-            "--bind",
-            f"evidence={inbox}",
+            "--repository",
+            f"{project}={project / '.git'}",
+            "--evidence-root",
+            str(inbox),
             "--output",
             str(output),
         )
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
         receipt = json.loads(output.read_bytes())
-        self.assertEqual(receipt["role"], "reviewer")
+        self.assertEqual(receipt["profile"], "peer")
+        self.assertEqual(receipt["disposition"], "reviewer")
+        self.assertEqual(receipt["authority_template"], "peer_readonly")
         self.assertEqual(receipt["kind"], "codex")
         self.assertIn(str(inbox), "\n".join(receipt["arguments"]))
         self.assertEqual(json.loads(completed.stdout)["launch_digest"], receipt["launch_digest"])
@@ -194,7 +232,7 @@ class HerdrOrchestratorTest(unittest.TestCase):
             text=True,
         )
         self.assertEqual(run_local.returncode, 0, run_local.stderr)
-        self.assertIn("bind-role", run_local.stdout)
+        self.assertIn("bind-launch", run_local.stdout)
 
         cards = json.loads((run_dir / "context/cards/manifest.json").read_text(encoding="utf-8"))
         entry = cards["assets"][0]
@@ -259,6 +297,8 @@ class HerdrOrchestratorTest(unittest.TestCase):
             "init-run",
             "--git-common-dir",
             str(common),
+            "--repository-root",
+            str(project),
             "--run-id",
             "authority-bind",
             "--project-root",

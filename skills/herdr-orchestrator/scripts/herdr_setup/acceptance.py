@@ -185,23 +185,11 @@ def _render_config(candidate: SetupCandidate) -> bytes:
     artifact_language = policy_answers.get("policy.artifact_language")
     if not isinstance(live_language, str) or not isinstance(artifact_language, str):
         raise ValueError("runtime publication requires both Human-selected languages")
-    repository_paths = {
-        rule.resource: rule.path
-        for plan in candidate.role_plans
-        for rule in plan.launch_spec.filesystem_rules
-        if rule.resource in {"project:assigned", "git-common:assigned"}
-    }
-    repository_root = repository_paths.get("project:assigned")
-    git_common_dir = repository_paths.get("git-common:assigned")
-    if repository_root is None or git_common_dir is None:
-        raise ValueError("runtime publication requires repository and Git-common bindings")
     lines = [
         f"schema = {_toml_string(PUBLICATION_SCHEMA)}",
         f"candidate_digest = {_toml_string(candidate.candidate_digest)}",
         f"discovery_digest = {_toml_string(candidate.discovery_digest)}",
         f"project_root = {_toml_string(candidate.discovery.project_root)}",
-        f"repository_root = {_toml_string(repository_root)}",
-        f"git_common_dir = {_toml_string(git_common_dir)}",
         f"live_orchestration_language = {_toml_string(live_language)}",
         f"durable_artifact_language = {_toml_string(artifact_language)}",
         (
@@ -209,12 +197,59 @@ def _render_config(candidate: SetupCandidate) -> bytes:
             f"{_toml_string(candidate.compiled_policy.native_agent_policy.value)}"
         ),
     ]
+    for repository in candidate.discovery.repositories:
+        lines.extend(
+            (
+                "",
+                "[[repositories]]",
+                f"identifier = {_toml_string(repository.identifier)}",
+                f"relative_path = {_toml_string(repository.relative_path)}",
+                f"path = {_toml_string(repository.path)}",
+                f"git_common_dir = {_toml_string(repository.git_common_dir)}",
+            )
+        )
+    for harness in candidate.discovery.harnesses:
+        if harness.status.value != "READY" or harness.executable is None:
+            continue
+        runtime_roots = {runtime.runtime_root for runtime in harness.runtimes}
+        if len(runtime_roots) != 1:
+            raise ValueError("one harness installation reported multiple runtime roots")
+        runtime_root = next(iter(runtime_roots))
+        for model in harness.models:
+            for effort in model.reasoning_efforts:
+                lines.extend(
+                    (
+                        "",
+                        "[[model_inventory]]",
+                        f"harness = {_toml_string(harness.kind)}",
+                        f"executable = {_toml_string(harness.executable)}",
+                        f"runtime_root = {_toml_string(runtime_root)}",
+                        f"model = {_toml_string(model.identifier)}",
+                        f"reasoning_effort = {_toml_string(effort)}",
+                    )
+                )
+    for profile in ("lead", "peer", "supervisor", "fallback"):
+        route = {
+            key: policy_answers.get(f"route.{profile}.{key}")
+            for key in ("harness", "model", "reasoning_effort")
+        }
+        if not all(isinstance(value, str) for value in route.values()):
+            raise ValueError(f"runtime publication requires route {profile}")
+        lines.extend(
+            (
+                "",
+                f"[routes.{profile}]",
+                f"harness = {_toml_string(route['harness'])}",
+                f"model = {_toml_string(route['model'])}",
+                f"reasoning_effort = {_toml_string(route['reasoning_effort'])}",
+            )
+        )
     for plan in candidate.role_plans:
         launch = plan.launch_spec
         lines.extend(
             (
                 "",
-                f"[roles.{plan.role}]",
+                f"[authority_templates.{plan.role}]",
                 f"adapter_kind = {_toml_string(launch.adapter_kind)}",
                 f"executable = {_toml_string(launch.executable)}",
                 f"runtime_root = {_toml_string(next(rule.path for rule in launch.filesystem_rules if rule.resource == 'runtime:codex'))}",
@@ -238,7 +273,7 @@ def _render_config(candidate: SetupCandidate) -> bytes:
             "project:assigned": "workspace",
             "git-common:assigned": "git_common",
             "orchestration:control": "orchestration",
-            "control:run": "evidence",
+            "control:run": "control",
             "evidence:assignment": "evidence",
             "notebook:session": "notebook",
         }
@@ -246,7 +281,7 @@ def _render_config(candidate: SetupCandidate) -> bytes:
             binding_source = binding_sources.get(resource)
             if binding_source is None:
                 raise ValueError(f"runtime publication has no binding source for {resource}")
-            lines.extend(("", f"[[roles.{plan.role}.filesystem]]"))
+            lines.extend(("", f"[[authority_templates.{plan.role}.filesystem]]"))
             lines.extend(
                 (
                     f"resource = {_toml_string(resource)}",
@@ -266,81 +301,42 @@ def _markdown_capabilities(values: Iterable[object]) -> str:
 
 
 def _render_protocol(candidate: SetupCandidate) -> bytes:
-    policy_by_role = {
-        decision.role: decision.policy
-        for decision in candidate.compiled_policy.role_authority
-    }
+    observed = candidate.discovery.workspace_protocol
+    if observed.exists:
+        path = Path(candidate.discovery.project_root) / observed.relative_path
+        payload = _stable_regular_bytes(path)
+        if len(payload) != observed.size or hashlib.sha256(payload).hexdigest() != observed.sha256:
+            raise ValueError("Workspace Protocol changed after discovery")
+        return payload
     lines = [
         "# Workspace Protocol",
         "",
-        "This is a deterministic projection of a Human-decision-bound setup candidate.",
+        "This project uses Herdr as its sole orchestration control plane.",
         "",
-        "## Identity",
+        "## Roles and topology",
         "",
-        f"- Candidate digest: `{candidate.candidate_digest}`",
-        f"- Discovery digest: `{candidate.discovery_digest}`",
-        f"- Human decisions digest: `{candidate.human_decisions_digest}`",
-        (
-            "- Native agent policy: "
-            f"`{candidate.compiled_policy.native_agent_policy.value}`"
-        ),
-        (
-            "- Live orchestration language: `"
-            f"{next(answer.value for answer in candidate.compiled_policy.policy_answers if answer.identifier == 'policy.live_language')}`"
-        ),
-        (
-            "- Durable artifact language: `"
-            f"{next(answer.value for answer in candidate.compiled_policy.policy_answers if answer.identifier == 'policy.artifact_language')}`"
-        ),
+        "- Lead owns task decomposition and may implement directly or create Peers.",
+        "- Peer is one durable profile; Engineer, Reviewer, Architect, and Scout are Assignment dispositions.",
+        "- A disposition describes work. Only an explicit Assignment authority envelope grants access.",
+        "- Supervisor is an independent, Human-attached observer with a durable identity and notebook.",
         "",
-        "## Repositories",
+        "## Authority",
         "",
+        "- Lead receives normal project authority and decides whether a task is small enough to handle directly.",
+        "- Each writable scope has one active writer. Runtime scope may cover one or multiple repositories.",
+        "- Read-only Peers may read assigned project scope and write only assigned evidence.",
+        "- Supervisor may read approved scope and write only its notebook.",
+        "- Native agent spawning and network access are disabled unless this protocol is explicitly changed.",
+        "",
+        "## Human decisions",
+        "",
+        "Human retains product intent, destructive or external effects, publication and deployment, material cost, and changes to this protocol.",
+        "Lead owns ordinary technical architecture within these constraints.",
+        "",
+        "## Evidence and acceptance",
+        "",
+        "Claims require inspectable evidence. Acceptance belongs to the authority named by the task, never to the producing Peer or Supervisor.",
     ]
-    for repository in candidate.discovery.repositories:
-        lines.append(
-            f"- `{repository.identifier}`: `{repository.relative_path}` "
-            f"(Git common: `{repository.git_common_dir}`)"
-        )
-    lines.extend(("", "## Human-approved policy answers", ""))
-    if candidate.compiled_policy.policy_answers:
-        for answer in candidate.compiled_policy.policy_answers:
-            value = json.dumps(answer.value, ensure_ascii=True)
-            lines.append(f"- `{answer.identifier}` ({answer.kind.value}): `{value}`")
-    else:
-        lines.append("- none")
-    lines.extend(("", "## Role authority", ""))
-    for plan in candidate.role_plans:
-        requirement = plan.requirement
-        policy = policy_by_role[plan.role]
-        launch = plan.launch_spec
-        lines.extend(
-            (
-                f"### {plan.role}",
-                "",
-                f"- Must have: {_markdown_capabilities(requirement.must_have)}",
-                f"- May have ceiling: {_markdown_capabilities(requirement.may_have)}",
-                f"- Role forbidden: {_markdown_capabilities(requirement.must_not_have)}",
-                f"- Human permitted: {_markdown_capabilities(policy.permitted)}",
-                f"- Policy forbidden: {_markdown_capabilities(policy.must_not_have)}",
-                (
-                    "- Effective: "
-                    f"{_markdown_capabilities(launch.effective_envelope.effective)}"
-                ),
-                f"- Selected binding: `{launch.selected_binding_id}`",
-                (
-                    f"- Human-selected model: `{launch.adapter_kind}` / "
-                    f"`{launch.model}` / `{launch.reasoning_effort}`"
-                ),
-                "",
-            )
-        )
-    lines.extend(("## Provenance", ""))
-    for record in candidate.provenance:
-        digest = f" (`{record.source_digest}`)" if record.source_digest else ""
-        lines.append(
-            f"- `{record.subject}`: {record.kind.value} from "
-            f"`{record.source}`{digest}"
-        )
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
@@ -727,6 +723,7 @@ def _matches_observation(project_root: Path, observation: FileObservation) -> bo
 def _input_observations(snapshot: DiscoverySnapshot) -> tuple[FileObservation, ...]:
     return (
         *snapshot.policy_sources,
+        snapshot.workspace_protocol,
         snapshot.existing_activation,
     )
 
@@ -898,6 +895,22 @@ def _activate(setup_root: Path, content: bytes) -> None:
             pass
 
 
+def _publish_workspace_protocol(root: Path, publication: SetupPublication) -> None:
+    artifact = next(
+        item for item in publication.artifacts
+        if item.relative_path == "workspace-protocol.md"
+    )
+    target = root / "WORKSPACE_PROTOCOL.md"
+    try:
+        current = _stable_regular_bytes(target)
+    except FileNotFoundError:
+        _write_new_file(target, artifact.content)
+        _fsync_directory(root)
+        return
+    if current != artifact.content:
+        raise _UnsafeTarget("Workspace Protocol changed after candidate compilation")
+
+
 def _result(
     status: AcceptanceStatus,
     code: AcceptanceRejectionCode,
@@ -958,6 +971,7 @@ def accept_setup_publication(
                     _generation_path(root, receipt),
                     _expected_generation_files(publication, receipt),
                 )
+                _publish_workspace_protocol(root, publication)
                 return AcceptanceResult(AcceptanceStatus.ACCEPTED, receipt, ())
             if not _snapshot_is_live(current_discovery):
                 return _result(
@@ -971,6 +985,7 @@ def accept_setup_publication(
                     AcceptanceRejectionCode.CURRENT_STATE_CHANGED,
                 )
             _activate(setup_root, activation)
+            _publish_workspace_protocol(root, publication)
             return AcceptanceResult(AcceptanceStatus.ACCEPTED, receipt, ())
         finally:
             os.close(lock_descriptor)

@@ -99,18 +99,35 @@ class SetupAcceptanceTests(unittest.TestCase):
         config = tomllib.loads(artifacts["herdr-orchestrator.toml"].content.decode())
         self.assertEqual(config["candidate_digest"], candidate.candidate_digest)
         self.assertEqual(
-            set(config["roles"]),
-            {"lead", "engineer", "reviewer", "supervisor"},
+            set(config["authority_templates"]),
+            {"lead", "peer_readonly", "peer_writable", "supervisor"},
         )
-        self.assertFalse(config["roles"]["reviewer"]["native_agents_enabled"])
+        self.assertFalse(config["authority_templates"]["peer_readonly"]["native_agents_enabled"])
         plan = json.loads(artifacts["setup-plan.json"].content)
         proof = json.loads(artifacts["runtime-proof.json"].content)
         self.assertEqual(plan["candidate_digest"], candidate.candidate_digest)
         self.assertEqual(proof["candidate_digest"], candidate.candidate_digest)
-        self.assertIn(
-            candidate.candidate_digest,
-            artifacts["workspace-protocol.md"].content.decode(),
+        protocol = artifacts["workspace-protocol.md"].content.decode()
+        self.assertIn("Herdr as its sole orchestration control plane", protocol)
+        self.assertNotIn(candidate.candidate_digest, protocol)
+
+    def test_existing_root_workspace_protocol_is_authoritative_and_snapshotted_exactly(self) -> None:
+        expected = b"# Workspace Protocol\n\nHuman-owned policy.\n"
+        (self.project / "WORKSPACE_PROTOCOL.md").write_bytes(expected)
+
+        _, candidate, snapshot, publication = self.prepared()
+        artifact = next(
+            item for item in publication.artifacts
+            if item.relative_path == "workspace-protocol.md"
         )
+        self.assertEqual(artifact.content, expected)
+        accepted = accept_setup_publication(
+            publication,
+            snapshot,
+            candidate.candidate_digest,
+        )
+        self.assertEqual(accepted.status, AcceptanceStatus.ACCEPTED)
+        self.assertEqual((self.project / "WORKSPACE_PROTOCOL.md").read_bytes(), expected)
 
     def test_failed_runtime_proof_cannot_prepare_a_publication(self) -> None:
         candidate, snapshot = self.candidate()

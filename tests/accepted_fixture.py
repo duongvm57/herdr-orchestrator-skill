@@ -34,17 +34,17 @@ def _grants(name: str) -> tuple[tuple[str, str, str], ...]:
     return {
         "lead": (
             ("runtime:codex", "runtime", "read"),
-            ("project:assigned", "workspace", "read"),
-            ("git-common:assigned", "git_common", "read"),
-            ("control:run", "evidence", "write"),
+            ("project:assigned", "workspace", "write"),
+            ("git-common:assigned", "git_common", "write"),
+            ("control:run", "control", "write"),
         ),
-        "engineer": (
+        "peer_writable": (
             ("runtime:codex", "runtime", "read"),
             ("project:assigned", "workspace", "write"),
-            ("git-common:assigned", "git_common", "read"),
+            ("git-common:assigned", "git_common", "write"),
             ("evidence:assignment", "evidence", "write"),
         ),
-        "reviewer": (
+        "peer_readonly": (
             ("runtime:codex", "runtime", "read"),
             ("project:assigned", "workspace", "read"),
             ("git-common:assigned", "git_common", "read"),
@@ -106,10 +106,10 @@ native_agents_enabled = false
 network_enabled = false
 proof_launch_spec_digest = "{launch_digest}"
 '''
-    sections = [f"[roles.{name}]\n{common_fields}"]
+    sections = [f"[authority_templates.{name}]\n{common_fields}"]
     for resource, binding, access in _grants(name):
         sections.append(
-            f'''[[roles.{name}.filesystem]]
+            f'''[[authority_templates.{name}.filesystem]]
 resource = {json.dumps(resource)}
 binding = {json.dumps(binding)}
 access = {json.dumps(access)}
@@ -144,13 +144,12 @@ def publish_accepted_setup(
     if not common.is_absolute():
         common = (project / common).resolve()
     discovery = "2" * 64
-    roles = ["engineer", "lead", "reviewer"]
-    if supervisor:
-        roles.append("supervisor")
+    del supervisor
+    roles = ["lead", "peer_readonly", "peer_writable", "supervisor"]
     launches = {role: _native_launch(role, project, common) for role in roles}
     role_plans = [
         {
-            "role": role,
+            "template": role,
             "requirement": {},
             "selector_receipt": {},
             "native_launch_spec": launches[role],
@@ -166,7 +165,7 @@ def publish_accepted_setup(
         "human_decisions_digest": "5" * 64,
         "compiled_policy": {},
         "model_bindings": [],
-        "roles": role_plans,
+        "authority_templates": role_plans,
         "provenance": [],
     }
     candidate = digest("herdr-setup-candidate", plan_projection)
@@ -204,7 +203,7 @@ def publish_accepted_setup(
         "candidate_digest": candidate,
         "discovery_digest": discovery,
         "current_discovery_digest": discovery,
-        "roles": proof_roles,
+        "authority_templates": proof_roles,
     }
     proof = digest("herdr-runtime-proof", proof_projection)
     runtime_proof = canonical({**proof_projection, "receipt_digest": proof}) + b"\n"
@@ -213,11 +212,42 @@ def publish_accepted_setup(
 candidate_digest = "{candidate}"
 discovery_digest = "{discovery}"
 project_root = {json.dumps(str(project))}
-repository_root = {json.dumps(str(project))}
-git_common_dir = {json.dumps(str(common))}
 live_orchestration_language = "Vietnamese"
 durable_artifact_language = "English"
 native_agent_policy = "disabled"
+
+[[repositories]]
+identifier = "root"
+relative_path = "."
+path = {json.dumps(str(project))}
+git_common_dir = {json.dumps(str(common))}
+
+[[model_inventory]]
+harness = "codex"
+executable = "/usr/bin/true"
+runtime_root = "/usr/bin"
+model = "gpt-test"
+reasoning_effort = "medium"
+
+[routes.lead]
+harness = "codex"
+model = "gpt-test"
+reasoning_effort = "medium"
+
+[routes.peer]
+harness = "codex"
+model = "gpt-test"
+reasoning_effort = "medium"
+
+[routes.supervisor]
+harness = "codex"
+model = "gpt-test"
+reasoning_effort = "medium"
+
+[routes.fallback]
+harness = "codex"
+model = "gpt-test"
+reasoning_effort = "medium"
 
 '''
         + "\n".join(
@@ -286,6 +316,9 @@ native_agent_policy = "disabled"
     }
     current = setup_root / "current.json"
     current.write_bytes(canonical(activation) + b"\n")
+    (project / "WORKSPACE_PROTOCOL.md").write_bytes(
+        artifacts_data["workspace-protocol.md"]
+    )
     return {
         "project": project,
         "common": common,

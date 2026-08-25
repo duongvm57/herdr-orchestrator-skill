@@ -1,81 +1,69 @@
-# Supervisor attachment
+# Supervisor identity and attachment
 
 Read `references/launcher/preflight.md` completely and pass it before this
-branch. The current setup attaches one fresh Supervisor to one exact accepted project
-and run. Cross-project observation requires a later authority slice.
+branch. A Supervisor is a durable Human-owned logical identity, not a Lead
+child or a task role. Setup stores only each project's default Supervisor model
+route and never creates or attaches an observer.
 
-## 1. Bind existing evidence
+## 1. Create an identity only on explicit Human request
 
-Require the Human's exact project root, run ID, and live Lead name. Resolve the
-run through the preflight Git common directory and verify its run manifest,
-launch event, Lead context digest, `launcher-handoff.md`, saved Activation
-Manifest/config/protocol, and one live unique Lead.
-
-Choose an attachment ID matching `[a-z][a-z0-9_-]{0,31}` and absent from the
-run. Reserve
-`<run>/supervisor/attachments/<attachment-id>/` exclusively. Prove one
-create/write/fsync/remove canary there with no residue. Existing attachments
-and notebook bytes remain immutable.
-
-Invoke the run-local helper's `bind-role --role supervisor` against the saved
-config and `run-manifest.json.artifacts.project_config.sha256`. Supply exactly
-its `required_bindings`:
+Create a new durable identity once, outside any run:
 
 ```text
-python3 <run>/tools/herdr_orchestrator.py bind-role \
-  --project-config-file <run>/context/project-config.toml \
-  --expected-project-config-sha256 <project_config.sha256> \
-  --role supervisor \
-  --cwd <attachment-root> \
-  --bind workspace=<repository_root> \
-  --bind notebook=<attachment-root> \
-  --output <attachment-root>/launch.json
+python3 <helper> create-supervisor \
+  --identity-dir <new-supervisor-identity-directory> \
+  --name <stable-name> \
+  --notebook-language <language>
 ```
 
-This receipt must show project read, attachment-notebook write, native agents
-disabled, and network denied. A missing Supervisor role or any binding mismatch
-stops the attachment.
+Retain `identity.json` and `notebook/`. Reuse this identity across observation
+sessions. An existing destination fails closed; attachment never replaces or
+forks the identity.
 
-## 2. Assemble the Supervisor pack opaquely
+## 2. Bind one Human-approved observation scope
 
-Invoke `stage-assets` with packaged
-`references/anti-patterns/responses.md` as `anti-pattern-details` and
-`--selection-output
-supervisor/attachments/<attachment-id>/card-manifest.json` to create a
-filtered selection manifest. Then atomically save
-`<attachment-root>/attachment-assignment.md` in the configured artifact
-language with the attachment, project/Lead/run/context, notebook, launch
-digest, observation scope, and Human-only boundaries.
+Require the Human's exact Supervisor identity, accepted project, observed Lead
+or run, and repository/worktree scope. Create a collision-free session folder
+under the durable notebook, labelled by project and observation session. The
+scope may contain one or multiple repositories whose Git common directories
+belong to the accepted project inventory.
 
-Invoke `pack --role supervisor` in this exact order:
+Bind the project Supervisor default with no model prompt:
 
-1. `--role-source`: packaged `references/roles/supervisor.md`, packaged
-   `references/anti-patterns/index.md`, then the filtered card manifest;
-2. `--protocol-source`: the bound run's `context/project-config.toml`, then
-   `context/workspace-protocol.md`;
-3. `--assignment-source`: the saved attachment Assignment.
+```text
+python3 <helper> bind-launch \
+  --project-config-file <accepted-project-config> \
+  --expected-project-config-sha256 <config-sha256> \
+  --profile supervisor \
+  --disposition observer \
+  --authority project_readonly \
+  --cwd <session-notebook-directory> \
+  --repository <workspace-1>=<git-common-1> \
+  [--repository <workspace-N>=<git-common-N>] \
+  --notebook-root <session-notebook-directory> \
+  --output <session-notebook-directory>/launch.json
+```
 
-Pass absolute paths without opening opaque role/card bodies. Save exact bytes
-as `<attachment-root>/context.md` and retain its digest.
+Each project supplies its own accepted Supervisor default. Reusing one durable
+identity across projects does not merge project authority, protocols, evidence,
+or notebook records. A Human model override is explicit and must exist in the
+target project's accepted inventory.
 
-## 3. Start, deliver, and notify
+## 3. Assemble, start, and deliver
 
-Use the run-local layout helper to create a fresh pane whose cwd is the
-attachment root. Choose a unique Supervisor name and start the exact
-`launch.json` kind and argument vector with no prompt. Never resume, fork, or
-replace another agent.
+Save an Assignment containing the durable identity digest, project and Lead/run
+identities, exact read scope, notebook boundary, evidence sources, language,
+and Human-only decisions. Pack, in order:
 
-Invoke `deliver` once with the saved context, configured live language,
-`<attachment-root>/delivery-receipt.json`, and localized opening/closing files.
-After accepted delivery, atomically write `local-receipt.md` containing the
-attachment ID, Supervisor identity, context and launch digests, run binding,
-and notebook boundary. Prompt the Lead once with only that receipt path and
-digest; save the immediate result as `lead-notification-receipt.json`. The Lead
-retains ledger and acceptance authority. Focus the Supervisor unless the Human
-specified another target.
+1. packaged `references/roles/supervisor.md`, anti-pattern index, and verified
+   disclosed-card manifest;
+2. target project's accepted config and Workspace Protocol;
+3. the scoped observation Assignment.
 
-Completion requires the accepted setup, run binding, reserved attachment,
-bound launch, pack, fresh agent, delivery, local receipt, and Lead notification
-to agree. A failure preserves created evidence and reports the exact error. A
-Supervisor recommendation remains notebook evidence, never project acceptance
-or protocol mutation.
+Start or resume the Herdr agent identity according to Herdr lifecycle truth,
+then deliver the new scoped context once and record its receipt. Supervisor may
+question the Lead with evidence, relay an exact Human decision, and report to
+the Human. It never directs a Peer, mutates project files, changes protocol, or
+accepts work. Completion requires the durable identity, scoped notebook,
+launch receipt, context digest, delivery receipt, and project/run references to
+agree.

@@ -20,7 +20,7 @@ path remains.
 ## Exact runtime binding
 
 The accepted TOML contains logical Runtime Role Templates, not proof-time paths
-or raw recipe authority. `bind-role` requires the exact snapshotted config
+or raw recipe authority. `bind-launch` requires the exact snapshotted config
 digest plus exactly the binding sources named by one role. It canonicalizes all
 paths and compiles one Codex argument vector and permission profile for the
 Assignment. Missing, extra, unavailable, or out-of-envelope paths fail closed.

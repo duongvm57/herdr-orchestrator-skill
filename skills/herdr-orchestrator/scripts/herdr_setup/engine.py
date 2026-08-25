@@ -76,6 +76,7 @@ from .runtime_proof import (
     prove_candidate,
     render_runtime_proof,
 )
+from .harness_discovery import discover_unadapted_harnesses
 
 
 SESSION_SCHEMA = "herdr.setup-session"
@@ -85,19 +86,21 @@ SESSION_MAX_BYTES = 8 * 1024 * 1024
 IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9._-]{0,127}\Z")
 DIGEST_RE = re.compile(r"[0-9a-f]{64}\Z")
 
-ROLE_PROFILES: dict[str, tuple[str, ...]] = {
+AUTHORITY_TEMPLATES: dict[str, tuple[str, ...]] = {
     "lead": (
         "strong reasoning",
         "planning",
         "reliable tool use",
     ),
-    "engineer": (
+    "peer_writable": (
         "strong coding",
         "balanced reasoning",
+        "assigned project write",
     ),
-    "reviewer": (
+    "peer_readonly": (
         "strong critical reasoning",
         "code understanding",
+        "project read and evidence write",
     ),
     "supervisor": (
         "strong observation",
@@ -254,12 +257,12 @@ class SetupIssue:
 
 
 @dataclass(frozen=True, order=True)
-class RoleRequirementView:
-    role: str
+class AuthorityRequirementView:
+    template: str
     capability_profile: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        _validate_identifier(self.role, "role requirement view role")
+        _validate_identifier(self.template, "authority requirement template")
         values = tuple(self.capability_profile)
         if not values or any(not isinstance(value, str) for value in values):
             raise ValueError("role requirement view requires capability labels")
@@ -267,8 +270,8 @@ class RoleRequirementView:
 
 
 @dataclass(frozen=True, order=True)
-class RoleBindingView:
-    role: str
+class AuthorityBindingView:
+    template: str
     harness: str
     model: str
     reasoning_effort: str
@@ -278,7 +281,7 @@ class RoleBindingView:
 
     def __post_init__(self) -> None:
         for value, label in (
-            (self.role, "role binding role"),
+            (self.template, "authority binding template"),
             (self.harness, "role binding harness"),
             (self.reasoning_effort, "role binding effort"),
             (self.binding_id, "role binding identifier"),
@@ -293,6 +296,24 @@ class RoleBindingView:
         object.__setattr__(self, "effective_authority", authority)
 
 
+@dataclass(frozen=True, order=True)
+class HarnessInventoryView:
+    kind: str
+    status: str
+    executable: str | None
+    version: str | None
+    models: tuple[str, ...]
+    issue_codes: tuple[str, ...]
+
+
+@dataclass(frozen=True, order=True)
+class RepositoryInventoryView:
+    identifier: str
+    relative_path: str
+    path: str
+    git_common_dir: str
+
+
 @dataclass(frozen=True)
 class SetupView:
     status: SetupStatus
@@ -300,10 +321,12 @@ class SetupView:
     revision: int
     project_root: str
     discovery_digest: str
-    role_requirements: tuple[RoleRequirementView, ...]
+    harnesses: tuple[HarnessInventoryView, ...]
+    repositories: tuple[RepositoryInventoryView, ...]
+    authority_requirements: tuple[AuthorityRequirementView, ...]
     questions: tuple[SetupQuestion, ...] = ()
     issues: tuple[SetupIssue, ...] = ()
-    role_bindings: tuple[RoleBindingView, ...] = ()
+    authority_bindings: tuple[AuthorityBindingView, ...] = ()
     candidate_digest: str | None = None
     runtime_proof_digest: str | None = None
     publication_digest: str | None = None
@@ -330,14 +353,18 @@ class SetupView:
         ):
             if value is not None:
                 _validate_digest(value, label)
-        if any(not isinstance(item, RoleRequirementView) for item in self.role_requirements):
-            raise TypeError("setup view role requirements are invalid")
+        if any(not isinstance(item, AuthorityRequirementView) for item in self.authority_requirements):
+            raise TypeError("setup view authority requirements are invalid")
+        if any(not isinstance(item, HarnessInventoryView) for item in self.harnesses):
+            raise TypeError("setup view harness inventory is invalid")
+        if any(not isinstance(item, RepositoryInventoryView) for item in self.repositories):
+            raise TypeError("setup view repository inventory is invalid")
         if any(not isinstance(item, SetupQuestion) for item in self.questions):
             raise TypeError("setup view questions are invalid")
         if any(not isinstance(item, SetupIssue) for item in self.issues):
             raise TypeError("setup view issues are invalid")
-        if any(not isinstance(item, RoleBindingView) for item in self.role_bindings):
-            raise TypeError("setup view role bindings are invalid")
+        if any(not isinstance(item, AuthorityBindingView) for item in self.authority_bindings):
+            raise TypeError("setup view authority bindings are invalid")
 
 
 class SetupEngineError(RuntimeError):
@@ -373,6 +400,7 @@ class _SessionState:
     project_root: str
     discovery_digest: str
     initial_activation: FileObservation
+    initial_workspace_protocol: FileObservation
     answers: tuple[SetupTypedAnswer, ...] = ()
     runtime_proof: bytes | None = field(default=None, repr=False)
     acceptance_receipt: bytes | None = field(default=None, repr=False)
@@ -389,6 +417,8 @@ class _SessionState:
         _validate_digest(self.discovery_digest, "session discovery digest")
         if not isinstance(self.initial_activation, FileObservation):
             raise TypeError("session activation observation is invalid")
+        if not isinstance(self.initial_workspace_protocol, FileObservation):
+            raise TypeError("session Workspace Protocol observation is invalid")
         answers = tuple(sorted(self.answers, key=lambda answer: answer.identifier))
         if any(not isinstance(answer, SetupTypedAnswer) for answer in answers):
             raise TypeError("session answers are invalid")
@@ -479,6 +509,7 @@ def _state_projection(state: _SessionState) -> dict[str, object]:
         "project_root": state.project_root,
         "discovery_digest": state.discovery_digest,
         "initial_activation": _file_projection(state.initial_activation),
+        "initial_workspace_protocol": _file_projection(state.initial_workspace_protocol),
         "answers": [_answer_projection(answer) for answer in state.answers],
         "runtime_proof": (
             None if state.runtime_proof is None else json.loads(state.runtime_proof)
@@ -511,6 +542,7 @@ def _parse_state(payload: bytes) -> _SessionState:
         "project_root",
         "discovery_digest",
         "initial_activation",
+        "initial_workspace_protocol",
         "answers",
         "runtime_proof",
         "acceptance_receipt",
@@ -531,6 +563,11 @@ def _parse_state(payload: bytes) -> _SessionState:
         "sha256",
     }:
         raise SetupStateError("setup session activation observation is invalid")
+    protocol = document["initial_workspace_protocol"]
+    if not isinstance(protocol, dict) or set(protocol) != {
+        "relative_path", "exists", "size", "sha256"
+    }:
+        raise SetupStateError("setup session Workspace Protocol observation is invalid")
     answers_document = document["answers"]
     if not isinstance(answers_document, list):
         raise SetupStateError("setup session answers are invalid")
@@ -567,6 +604,12 @@ def _parse_state(payload: bytes) -> _SessionState:
                 exists=activation["exists"],
                 size=activation["size"],
                 sha256=activation["sha256"],
+            ),
+            initial_workspace_protocol=FileObservation(
+                relative_path=protocol["relative_path"],
+                exists=protocol["exists"],
+                size=protocol["size"],
+                sha256=protocol["sha256"],
             ),
             answers=answers,
             runtime_proof=proof,
@@ -720,9 +763,9 @@ def _question_projection(question: SetupQuestion) -> dict[str, object]:
     }
 
 
-def _role_binding_projection(binding: RoleBindingView) -> dict[str, object]:
+def _authority_binding_projection(binding: AuthorityBindingView) -> dict[str, object]:
     return {
-        "role": binding.role,
+        "template": binding.template,
         "harness": binding.harness,
         "model": binding.model,
         "reasoning_effort": binding.reasoning_effort,
@@ -740,12 +783,32 @@ def _view_projection(view: SetupView) -> dict[str, object]:
         "revision": view.revision,
         "project_root": view.project_root,
         "discovery_digest": view.discovery_digest,
-        "role_requirements": [
+        "harnesses": [
             {
-                "role": requirement.role,
+                "kind": item.kind,
+                "status": item.status,
+                "executable": item.executable,
+                "version": item.version,
+                "models": list(item.models),
+                "issue_codes": list(item.issue_codes),
+            }
+            for item in view.harnesses
+        ],
+        "repositories": [
+            {
+                "identifier": item.identifier,
+                "relative_path": item.relative_path,
+                "path": item.path,
+                "git_common_dir": item.git_common_dir,
+            }
+            for item in view.repositories
+        ],
+        "authority_requirements": [
+            {
+                "template": requirement.template,
                 "capability_profile": list(requirement.capability_profile),
             }
-            for requirement in view.role_requirements
+            for requirement in view.authority_requirements
         ],
         "questions": [_question_projection(question) for question in view.questions],
         "issues": [
@@ -757,8 +820,8 @@ def _view_projection(view: SetupView) -> dict[str, object]:
             }
             for issue in view.issues
         ],
-        "role_bindings": [
-            _role_binding_projection(binding) for binding in view.role_bindings
+        "authority_bindings": [
+            _authority_binding_projection(binding) for binding in view.authority_bindings
         ],
         "candidate_digest": view.candidate_digest,
         "runtime_proof_digest": view.runtime_proof_digest,
@@ -792,15 +855,16 @@ def _project_setup_view(state: _SessionState, evaluation: _Evaluation) -> SetupV
         else _selected_roles({answer.identifier: answer for answer in state.answers})
     )
     if not role_names:
-        role_names = ("lead", "engineer", "reviewer", "supervisor")
+        role_names = ("lead", "peer_writable", "peer_readonly", "supervisor")
     requirements = tuple(
-        RoleRequirementView(role, ROLE_PROFILES[role]) for role in sorted(role_names)
+        AuthorityRequirementView(role, AUTHORITY_TEMPLATES[role])
+        for role in sorted(role_names)
     )
-    bindings: tuple[RoleBindingView, ...] = ()
+    bindings: tuple[AuthorityBindingView, ...] = ()
     if evaluation.candidate is not None:
         bindings = tuple(
-            RoleBindingView(
-                role=plan.role,
+            AuthorityBindingView(
+                template=plan.role,
                 harness=plan.launch_spec.adapter_kind,
                 model=plan.launch_spec.model,
                 reasoning_effort=plan.launch_spec.reasoning_effort,
@@ -819,10 +883,30 @@ def _project_setup_view(state: _SessionState, evaluation: _Evaluation) -> SetupV
         revision=state.revision,
         project_root=state.project_root,
         discovery_digest=state.discovery_digest,
-        role_requirements=requirements,
+        harnesses=tuple(
+            HarnessInventoryView(
+                item.kind,
+                item.status.value,
+                item.executable,
+                item.version,
+                tuple(model.identifier for model in item.models),
+                item.issue_codes,
+            )
+            for item in evaluation.discovery.harnesses
+        ),
+        repositories=tuple(
+            RepositoryInventoryView(
+                item.identifier,
+                item.relative_path,
+                item.path,
+                item.git_common_dir,
+            )
+            for item in evaluation.discovery.repositories
+        ),
+        authority_requirements=requirements,
         questions=evaluation.questions,
         issues=evaluation.issues,
-        role_bindings=bindings,
+        authority_bindings=bindings,
         candidate_digest=(
             None
             if evaluation.candidate is None
@@ -894,98 +978,81 @@ def _text_question(
     )
 
 
-def _model_option_value(model: str, effort: str) -> str:
+def _model_option_value(harness: str, model: str, effort: str) -> str:
     return "binding-" + _digest(
         "herdr-setup-model-option",
-        {"harness": "codex", "model": model, "reasoning_effort": effort},
+        {"harness": harness, "model": model, "reasoning_effort": effort},
     )[:24]
 
 
 def _model_options(snapshot: DiscoverySnapshot) -> tuple[SetupOption, ...]:
-    harness = snapshot.harness_map.get("codex")
-    if harness is None:
-        return ()
     return tuple(
         SetupOption(
-            _model_option_value(model.identifier, effort),
-            f"Codex / {model.identifier} / {effort}",
+            _model_option_value(harness.kind, model.identifier, effort),
+            f"{harness.kind} / {model.identifier} / {effort}",
             (
-                ("harness", "codex"),
+                ("harness", harness.kind),
                 ("model", model.identifier),
                 ("reasoning_effort", effort),
             ),
         )
+        for harness in snapshot.harnesses
+        if harness.status is HarnessStatus.READY
+        and harness.kind in snapshot.adapter_map
         for model in harness.models
         for effort in model.reasoning_efforts
     )
 
 
 def _selected_roles(answers: dict[str, SetupTypedAnswer]) -> tuple[str, ...]:
-    profile = answers.get("roles.profile")
-    if profile is None:
+    """Return proof templates once every project preference is resolved.
+
+    These are authority templates, not durable orchestration roles. Both Peer
+    templates share the one Human-selected Peer model binding.
+    """
+
+    required = {
+        "binding.lead",
+        "binding.peer",
+        "binding.supervisor",
+        "binding.fallback",
+        "policy.live_language",
+        "policy.artifact_language",
+    }
+    if not required <= set(answers):
         return ()
-    if profile.value == "core":
-        return ("lead", "engineer", "reviewer")
-    if profile.value == "core_with_supervisor":
-        return ("lead", "engineer", "reviewer", "supervisor")
-    return ()
+    return ("lead", "peer_writable", "peer_readonly", "supervisor")
 
 
 def _setup_questions(
     snapshot: DiscoverySnapshot,
     answers: dict[str, SetupTypedAnswer],
 ) -> tuple[SetupQuestion, ...]:
+    model_options = _model_options(snapshot)
     questions: list[SetupQuestion] = [
         _choice_question(
-            "roles.profile",
-            "Which role profile should this project enable?",
-            "The role set determines which authority envelopes and runtime proofs are compiled.",
-            (
-                SetupOption(
-                    "core",
-                    "Lead + Engineer + Reviewer",
-                    (
-                        ("engineer_authority", "project_write"),
-                        ("network", "denied"),
-                        ("reviewer_authority", "project_read,evidence_write"),
-                        ("roles", "lead,engineer,reviewer"),
-                    ),
-                ),
-                SetupOption(
-                    "core_with_supervisor",
-                    "Lead + Engineer + Reviewer + Supervisor",
-                    (
-                        ("engineer_authority", "project_write"),
-                        ("network", "denied"),
-                        ("reviewer_authority", "project_read,evidence_write"),
-                        ("roles", "lead,engineer,reviewer,supervisor"),
-                        ("supervisor_authority", "project_read,notebook_write"),
-                    ),
-                ),
-            ),
-        ),
-        _boolean_question(
-            "authority.lead_project_write",
-            "May the Lead mutate the selected project repository?",
-            "Lead project mutation is policy-owned and is denied unless explicitly granted.",
+            "binding.lead",
+            "Choose the default harness, model, and reasoning effort for Lead.",
+            "Requirement: strong reasoning, planning, and reliable tool use. Options are observed, not ranked.",
+            model_options,
         ),
         _choice_question(
-            "policy.commit_authority",
-            "Who may write Git metadata for commits?",
-            "Git metadata authority is compiled separately from project-file authority.",
-            (
-                SetupOption("human_only", "Human only"),
-                SetupOption("assigned_engineer", "Assigned Engineer"),
-            ),
+            "binding.peer",
+            "Choose the default harness, model, and reasoning effort for Peer.",
+            "Lead may override this at runtime from the accepted live inventory. Options are observed, not ranked.",
+            model_options,
         ),
         _choice_question(
-            "policy.architecture_boundary",
-            "Who may accept expensive-to-reverse architecture changes?",
-            "The generated protocol records the irreversible decision boundary as Human policy.",
-            (
-                SetupOption("human_review", "Human review required"),
-                SetupOption("lead_within_protocol", "Lead within protocol"),
-            ),
+            "binding.supervisor",
+            "Choose the project default harness, model, and reasoning effort for Supervisor.",
+            "This stores a project preference; setup does not create or attach a Supervisor. Options are observed, not ranked.",
+            model_options,
+        ),
+        _choice_question(
+            "binding.fallback",
+            "Choose the global fallback harness, model, and reasoning effort.",
+            "The fallback routes an ad-hoc Peer disposition only; it grants no authority. Options are observed, not ranked.",
+            model_options,
         ),
         _text_question(
             "policy.live_language",
@@ -998,40 +1065,6 @@ def _setup_questions(
             "The runtime records this exact Human-selected artifact language.",
         ),
     ]
-    if len(snapshot.repositories) > 1:
-        questions.append(
-            _choice_question(
-                "repository.binding",
-                "Which exact Git repository should this candidate bind?",
-                "Setup compiles one exact repository/worktree/Git-common "
-                "envelope; cross-repository routing is deferred.",
-                tuple(
-                    SetupOption(
-                        repository.identifier,
-                        repository.relative_path,
-                        (
-                            ("path", repository.path),
-                            ("git_common_dir", repository.git_common_dir),
-                        ),
-                    )
-                    for repository in snapshot.repositories
-                ),
-            )
-        )
-    selected_roles = _selected_roles(answers)
-    if selected_roles:
-        options = _model_options(snapshot)
-        for role in selected_roles:
-            questions.append(
-                _choice_question(
-                    f"model.{role}",
-                    f"Choose the exact harness/model/reasoning binding for {role}.",
-                    "Requirement: "
-                    + ", ".join(ROLE_PROFILES[role])
-                    + ". Options are mechanically probed and are not ranked.",
-                    options,
-                )
-            )
     return tuple(
         question for question in questions if question.identifier not in answers
     )
@@ -1059,26 +1092,15 @@ def _bounded_detail(value: str | None) -> str | None:
     ).hexdigest()
 
 
-def _repository_by_identifier(
-    snapshot: DiscoverySnapshot,
-    identifier: str,
-) -> RepositoryObservation:
-    for repository in snapshot.repositories:
-        if repository.identifier == identifier:
-            return repository
-    raise ValueError("selected repository is not in discovery")
-
-
 def _selected_repository(
     snapshot: DiscoverySnapshot,
     answers: dict[str, SetupTypedAnswer],
 ) -> RepositoryObservation:
-    if len(snapshot.repositories) == 1:
-        return snapshot.repositories[0]
-    answer = answers.get("repository.binding")
-    if answer is None or not isinstance(answer.value, str):
-        raise ValueError("repository binding is unresolved")
-    return _repository_by_identifier(snapshot, answer.value)
+    del answers
+    return next(
+        (repository for repository in snapshot.repositories if repository.relative_path == "."),
+        snapshot.repositories[0],
+    )
 
 
 def _model_choice(
@@ -1086,7 +1108,13 @@ def _model_choice(
     role: str,
     answers: dict[str, SetupTypedAnswer],
 ) -> tuple[str, str, str]:
-    answer = answers.get(f"model.{role}")
+    answer_id = {
+        "lead": "binding.lead",
+        "peer_writable": "binding.peer",
+        "peer_readonly": "binding.peer",
+        "supervisor": "binding.supervisor",
+    }[role]
+    answer = answers.get(answer_id)
     if answer is None or not isinstance(answer.value, str):
         raise ValueError(f"model binding for {role} is unresolved")
     option = next(
@@ -1144,22 +1172,12 @@ def _role_authority(
             }
         )
         resources.append(RuntimePathBinding("control:run", str(control)))
-        lead_write = answers["authority.lead_project_write"].value
-        if lead_write is True:
-            effective.add(write_project)
-            if _contains(Path(repository.path), orchestration_root):
-                effective.add(Capability("fs.read", "orchestration:control"))
-                resources.append(
-                    RuntimePathBinding(
-                        "orchestration:control",
-                        str(orchestration_root),
-                    )
-                )
-        else:
-            forbidden.add(write_project)
-        forbidden.add(write_git)
-    elif role == "engineer":
-        evidence = state_root / "engineer"
+        effective.update({write_project, write_git})
+        if _contains(Path(repository.path), orchestration_root):
+            effective.add(Capability("fs.read", "orchestration:control"))
+            resources.append(RuntimePathBinding("orchestration:control", str(orchestration_root)))
+    elif role == "peer_writable":
+        evidence = state_root / "peer_writable"
         effective.update(
             {
                 write_project,
@@ -1180,12 +1198,9 @@ def _role_authority(
                     str(orchestration_root),
                 )
             )
-        if answers["policy.commit_authority"].value == "assigned_engineer":
-            effective.add(write_git)
-        else:
-            forbidden.add(write_git)
-    elif role == "reviewer":
-        evidence = state_root / "reviewer"
+        effective.add(write_git)
+    elif role == "peer_readonly":
+        evidence = state_root / "peer_readonly"
         effective.update(
             {
                 read_git,
@@ -1198,6 +1213,7 @@ def _role_authority(
         )
         resources.append(RuntimePathBinding("evidence:assignment", str(evidence)))
         forbidden.add(write_project)
+        forbidden.add(write_git)
     elif role == "supervisor":
         notebook = state_root / "supervisor"
         effective.update(
@@ -1228,6 +1244,7 @@ def _role_authority(
 
 
 def _human_policy_answers(
+    snapshot: DiscoverySnapshot,
     answers: dict[str, SetupTypedAnswer],
 ) -> tuple[PolicyAnswer, ...]:
     values: list[PolicyAnswer] = []
@@ -1242,6 +1259,24 @@ def _human_policy_answers(
                 value=answer.value,
             )
         )
+    for profile in ("lead", "peer", "supervisor", "fallback"):
+        answer = answers.get(f"binding.{profile}")
+        if answer is None or not isinstance(answer.value, str):
+            continue
+        option = next(
+            (item for item in _model_options(snapshot) if item.value == answer.value),
+            None,
+        )
+        if option is None:
+            continue
+        for key, value in option.facts:
+            values.append(
+                PolicyAnswer(
+                    f"route.{profile}.{key}",
+                    DecisionValueKind.CHOICE,
+                    value,
+                )
+            )
     return tuple(values)
 
 
@@ -1339,7 +1374,7 @@ def _build_candidate(
         role_authority=tuple(authority_decisions),
         model_bindings=tuple(model_bindings),
         binding_choices=tuple(binding_choices),
-        policy_answers=_human_policy_answers(answers),
+        policy_answers=_human_policy_answers(snapshot, answers),
     )
     result = compile_setup_candidate(snapshot, decisions, compilations)
     if result.status is CandidateCompileStatus.COMPILED:
@@ -1371,7 +1406,7 @@ def _ensure_role_state(project_root: Path, roles: Iterable[str]) -> None:
         (".orchestration", "setup", "role-state"),
     )
     for role in roles:
-        if role in {"lead", "engineer", "reviewer", "supervisor"}:
+        if role in AUTHORITY_TEMPLATES:
             _safe_directory(root, (role,))
 
 
@@ -1388,16 +1423,17 @@ def _discovery_with_codex(
     probe: Callable[..., CodexProbeResult],
 ) -> _DiscoveryOutcome:
     adapter = observe_codex_adapter()
+    other_harnesses = discover_unadapted_harnesses(excluded=("codex",))
     preliminary = discover_setup(
         project_root,
-        harnesses=(HarnessObservation("codex", HarnessStatus.NOT_INSTALLED),),
+        harnesses=(HarnessObservation("codex", HarnessStatus.NOT_INSTALLED), *other_harnesses),
         adapters=(adapter,),
     )
     if executable is None:
         harness = HarnessObservation("codex", HarnessStatus.NOT_INSTALLED)
         snapshot = discover_setup(
             project_root,
-            harnesses=(harness,),
+            harnesses=(harness, *other_harnesses),
             adapters=(adapter,),
         )
         return _DiscoveryOutcome(
@@ -1457,7 +1493,7 @@ def _discovery_with_codex(
         ready = False
     snapshot = discover_setup(
         project_root,
-        harnesses=(harness,),
+        harnesses=(harness, *other_harnesses),
         adapters=(adapter,),
     )
     return _DiscoveryOutcome(
@@ -1474,7 +1510,11 @@ def _bound_discovery(
 ) -> DiscoverySnapshot | None:
     if current.discovery_digest == state.discovery_digest:
         return current
-    rebound = replace(current, existing_activation=state.initial_activation)
+    rebound = replace(
+        current,
+        existing_activation=state.initial_activation,
+        workspace_protocol=state.initial_workspace_protocol,
+    )
     return rebound if rebound.discovery_digest == state.discovery_digest else None
 
 
@@ -1780,6 +1820,7 @@ class SetupEngine:
                     project_root=canonical,
                     discovery_digest=outcome.snapshot.discovery_digest,
                     initial_activation=outcome.snapshot.existing_activation,
+                    initial_workspace_protocol=outcome.snapshot.workspace_protocol,
                 )
             before = state
             state, evaluation = self._advance(state, outcome)
@@ -1845,6 +1886,7 @@ class SetupEngine:
                     project_root=project_root,
                     discovery_digest=outcome.snapshot.discovery_digest,
                     initial_activation=outcome.snapshot.existing_activation,
+                    initial_workspace_protocol=outcome.snapshot.workspace_protocol,
                 )
             elif evaluation.status is SetupStatus.STALE:
                 expected = action.get("setup.restart")

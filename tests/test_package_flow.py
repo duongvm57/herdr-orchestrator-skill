@@ -60,6 +60,8 @@ class RealPackageFlowTests(unittest.TestCase):
                 "init-run",
                 "--git-common-dir",
                 str(common),
+                "--repository-root",
+                str(project),
                 "--run-id",
                 "integration-test",
                 "--project-root",

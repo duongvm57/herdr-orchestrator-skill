@@ -20,7 +20,9 @@ python3 <installed-skill-root>/scripts/herdr_setup_cli.py resume \
 ```
 
 The helper returns one canonical `SetupView` JSON document. Treat every field
-as engine-owned state.
+as engine-owned state. Summarize its `harnesses` and `repositories` inventory
+before the questions, including partial and unsupported harness statuses; do not
+turn inventory entries into selectable options unless the engine does.
 
 ## Present unresolved questions
 
@@ -36,6 +38,13 @@ only answers to questions open in the same revision.
 
 Never ask the Human to write JSON or CLI payloads. Ask in ordinary language,
 preserve exact option values, and translate the reply into typed input.
+
+Normal setup asks one batch of six project preferences: default Lead, Peer, and
+Supervisor harness/model/effort; the global ad-hoc Peer routing fallback; live
+language; and artifact language. Supervisor is a stored project default, not a
+task participant. Repository inventory, Lead write authority, Git operations,
+technical architecture ownership, and Supervisor attachment are runtime facts
+or protocol invariants and are not setup questions.
 
 Return typed answers unchanged:
 
@@ -61,7 +70,7 @@ When status is `AWAITING_ACCEPTANCE`, show:
 
 - the exact Candidate Digest, Discovery Digest, Runtime Proof Digest, and
   Publication Digest;
-- every `role_binding`, including harness, model, reasoning effort, cwd,
+- every `authority_binding`, including harness, model, reasoning effort, proof cwd,
   selected binding, and complete effective authority; and
 - all engine issues, if any.
 
@@ -80,8 +89,11 @@ Receipt digests. Any other result is not completion.
 
 ## Current boundary
 
-The current setup supports Codex and binds one exact discovered Git repository for Lead,
-Engineer, Reviewer, and optional Supervisor proof. Acceptance publishes the
-only runtime authority through `.orchestration/setup/current.json`. Task
-launch resolves that immutable generation and binds its logical role templates
-to exact run/Assignment paths; no mutable compatibility config is generated.
+Discovery inventories every known harness and every nested Git repository.
+Harnesses without an enforceable authority adapter remain visible and
+ineligible; Codex is the first implemented adapter. The candidate proves Lead,
+Peer-writable, Peer-readonly/evidence-write, and Supervisor-notebook authority
+templates without choosing task topology. Acceptance publishes the immutable
+generation through `.orchestration/setup/current.json` and publishes or
+snapshots the tracked root `WORKSPACE_PROTOCOL.md`. Runtime selects one or more
+exact repository/worktree scopes and binds one compatible authority template.

@@ -115,37 +115,33 @@ class SetupEngineTests(unittest.TestCase):
 
     @staticmethod
     def answer_value(question, *, repository: str | None = None):
+        del repository
         fixed = {
-            "roles.profile": "core_with_supervisor",
-            "authority.lead_project_write": False,
-            "policy.commit_authority": "human_only",
-            "policy.architecture_boundary": "human_review",
             "policy.live_language": "Vietnamese",
             "policy.artifact_language": "English",
         }
-        if question.identifier == "repository.binding":
-            assert repository is not None
-            return repository
         return fixed[question.identifier]
 
     def answer_policy(self, engine: SetupEngine, view, *, repository=None):
+        del repository
         answers = tuple(
             SetupTypedAnswer(
                 question.identifier,
                 question.kind,
-                self.answer_value(question, repository=repository),
+                self.answer_value(question),
             )
             for question in view.questions
+            if question.identifier.startswith("policy.")
         )
         return engine.answer(view.session_id, view.revision, answers)
 
     @staticmethod
     def answer_models(engine: SetupEngine, view):
         targets = {
-            "model.lead": ("gpt-5.6-sol", "xhigh"),
-            "model.engineer": ("gpt-5.6-terra", "medium"),
-            "model.reviewer": ("gpt-5.6-sol", "high"),
-            "model.supervisor": ("gpt-5.6-luna", "low"),
+            "binding.lead": ("gpt-5.6-sol", "xhigh"),
+            "binding.peer": ("gpt-5.6-terra", "medium"),
+            "binding.supervisor": ("gpt-5.6-luna", "low"),
+            "binding.fallback": ("gpt-5.6-terra", "high"),
         }
         answers = []
         for question in view.questions:
@@ -168,7 +164,15 @@ class SetupEngineTests(unittest.TestCase):
     def prepare(self):
         engine = self.engine()
         initial = engine.resume(str(self.project))
-        policy = self.answer_policy(engine, initial)
+        language_questions = tuple(q for q in initial.questions if q.identifier.startswith("policy."))
+        policy = engine.answer(
+            initial.session_id,
+            initial.revision,
+            tuple(
+                SetupTypedAnswer(q.identifier, q.kind, self.answer_value(q))
+                for q in language_questions
+            ),
+        )
         prepared = self.answer_models(engine, policy)
         return engine, initial, policy, prepared
 
@@ -177,13 +181,16 @@ class SetupEngineTests(unittest.TestCase):
 
         self.assertEqual(view.status, SetupStatus.NEEDS_HUMAN_INPUT)
         self.assertEqual(view.revision, 0)
+        inventory = {item.kind: item for item in view.harnesses}
+        self.assertEqual(inventory["codex"].status, "READY")
+        self.assertTrue({"claude", "gemini", "opencode", "pi"} <= set(inventory))
         self.assertEqual(
             {question.identifier for question in view.questions},
             {
-                "roles.profile",
-                "authority.lead_project_write",
-                "policy.commit_authority",
-                "policy.architecture_boundary",
+                "binding.lead",
+                "binding.peer",
+                "binding.supervisor",
+                "binding.fallback",
                 "policy.live_language",
                 "policy.artifact_language",
             },
@@ -205,7 +212,7 @@ class SetupEngineTests(unittest.TestCase):
         self.assertEqual(policy.status, SetupStatus.NEEDS_HUMAN_INPUT)
         self.assertEqual(
             {question.identifier for question in policy.questions},
-            {"model.lead", "model.engineer", "model.reviewer", "model.supervisor"},
+            {"binding.lead", "binding.peer", "binding.supervisor", "binding.fallback"},
         )
         for question in policy.questions:
             self.assertTrue(question.options)
@@ -223,11 +230,11 @@ class SetupEngineTests(unittest.TestCase):
         self.assertIsNotNone(prepared.runtime_proof_digest)
         self.assertIsNotNone(prepared.publication_digest)
         self.assertEqual(
-            {binding.role for binding in prepared.role_bindings},
-            {"lead", "engineer", "reviewer", "supervisor"},
+            {binding.template for binding in prepared.authority_bindings},
+            {"lead", "peer_writable", "peer_readonly", "supervisor"},
         )
         reviewer = next(
-            binding for binding in prepared.role_bindings if binding.role == "reviewer"
+            binding for binding in prepared.authority_bindings if binding.template == "peer_readonly"
         )
         self.assertIn("fs.write(evidence:assignment)", reviewer.effective_authority)
         self.assertNotIn("fs.write(project:assigned)", reviewer.effective_authority)
@@ -366,7 +373,7 @@ class SetupEngineTests(unittest.TestCase):
         self.assertEqual(restarted.status, SetupStatus.NEEDS_HUMAN_INPUT)
         self.assertGreater(restarted.revision, policy.revision)
         self.assertNotEqual(restarted.discovery_digest, policy.discovery_digest)
-        self.assertIn("roles.profile", {q.identifier for q in restarted.questions})
+        self.assertIn("binding.lead", {q.identifier for q in restarted.questions})
 
     def test_accept_requires_exact_digest_then_resumes_as_verified_accepted(self) -> None:
         engine, _, _, prepared = self.prepare()
@@ -401,26 +408,23 @@ class SetupEngineTests(unittest.TestCase):
         )
         self.assertEqual(retried, receipt)
 
-    def test_nested_repository_is_an_explicit_human_binding(self) -> None:
+    def test_nested_repositories_are_inventory_not_setup_questions(self) -> None:
         backend = self.project / "backend"
         backend.mkdir()
         run("git", "init", "-q", str(backend))
         engine = self.engine()
         initial = engine.resume(str(self.project))
-        repository = next(
-            option.value
-            for question in initial.questions
-            if question.identifier == "repository.binding"
-            for option in question.options
-            if option.label == "backend"
+        self.assertNotIn(
+            "repository.binding",
+            {question.identifier for question in initial.questions},
         )
-        policy = self.answer_policy(engine, initial, repository=repository)
+        policy = self.answer_policy(engine, initial)
         prepared = self.answer_models(engine, policy)
 
         self.assertEqual(prepared.status, SetupStatus.AWAITING_ACCEPTANCE)
-        self.assertTrue(prepared.role_bindings)
+        self.assertTrue(prepared.authority_bindings)
         self.assertTrue(
-            all(binding.cwd == str(backend) for binding in prepared.role_bindings)
+            all(binding.cwd == str(self.project) for binding in prepared.authority_bindings)
         )
 
 

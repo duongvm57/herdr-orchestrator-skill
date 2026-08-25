@@ -89,9 +89,9 @@
       "scenario": "Deterministic checks verify the Activation Manifest, generation, publication and Acceptance Receipts, artifact digests, role templates, explicit languages, and exact Assignment bindings; tampering, stale identities, missing paths, and extra authority fail closed.",
       "test_selectors": [
         "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_returns_compact_metadata",
-        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_bind_role_writes_one_digest_bound_exact_launch_receipt",
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_bind_launch_writes_one_digest_bound_exact_launch_receipt",
         "tests.test_runtime_config.RuntimeConfigTests.test_load_verifies_the_active_generation_and_projects_runtime_templates",
-        "tests.test_runtime_config.RuntimeConfigTests.test_bind_role_replaces_proof_paths_with_exact_assignment_paths",
+        "tests.test_runtime_config.RuntimeConfigTests.test_bind_launch_replaces_proof_paths_with_exact_assignment_paths",
         "tests.test_runtime_config.RuntimeConfigTests.test_tampered_generation_is_never_loaded",
         "tests.test_runtime_config.RuntimeConfigTests.test_self_consistent_but_failed_runtime_proof_is_not_accepted",
         "tests.test_runtime_config.RuntimeConfigTests.test_self_consistent_but_incomplete_setup_plan_is_not_accepted",

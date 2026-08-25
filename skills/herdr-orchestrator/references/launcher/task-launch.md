@@ -12,6 +12,7 @@ project root, selected Git common directory, and Activation Manifest digest:
 ```text
 python3 <helper> init-run \
   --project-root <project_root> \
+  --repository-root <run-repository-root> \
   --git-common-dir <git_common_dir> \
   --expected-activation-sha256 <activation.sha256> \
   --run-id <collision-free-run-id> \
@@ -53,29 +54,31 @@ outside the tracked checkout.
 
 ## 2. Bind the exact Lead launch
 
-Invoke the run-local helper's `bind-role --role lead` against
+Invoke the run-local helper's `bind-launch` against
 `context/project-config.toml` and
 `run-manifest.json.artifacts.project_config.sha256`. Supply exactly the Lead
 template's returned `required_bindings`:
 
 ```text
-python3 <run>/tools/herdr_orchestrator.py bind-role \
+python3 <run>/tools/herdr_orchestrator.py bind-launch \
   --project-config-file <run>/context/project-config.toml \
   --expected-project-config-sha256 <project_config.sha256> \
-  --role lead \
-  --cwd <repository_root> \
-  --bind workspace=<repository_root> \
-  --bind git_common=<git_common_dir> \
-  --bind evidence=<run_directory> \
-  --bind orchestration=<project_root>/.orchestration \
+  --profile lead \
+  --disposition lead \
+  --authority project_writable \
+  --cwd <Lead-selected-cwd> \
+  --repository <workspace-1>=<git-common-1> \
+  [--repository <workspace-N>=<git-common-N>] \
+  --control-root <run_directory> \
   --output <run>/context/lead-launch.json
 ```
 
-Include `--bind orchestration=...` only when `required_bindings` contains
-`orchestration`; include no unrequested binding. The helper compiles the logical
-template into one native Codex permission profile, exact argument vector,
-effective filesystem receipt, and bound launch digest. A missing, extra,
-noncanonical, or unavailable path fails closed.
+The Lead selects one or multiple repositories/worktrees from the accepted Git
+inventory according to the task; setup does not impose topology. The helper
+compiles the Lead profile, explicit writable authority, selected scope, and
+default route into one native permission profile and bound launch digest. An
+explicit Human model override may replace the route. A missing, duplicate,
+noncanonical, stale, or incompatible binding fails closed.
 
 ## 3. Assemble the Lead pack opaquely
 

@@ -38,8 +38,10 @@ if str(SCRIPT_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIRECTORY))
 
 from herdr_runtime import (  # noqa: E402 - standalone sibling module
+    LaunchRepositoryBinding,
+    ModelSelection,
     RuntimeConfigError,
-    bind_role_launch,
+    bind_launch,
     load_accepted_project,
     parse_runtime_config,
 )
@@ -229,8 +231,8 @@ def command_validate_project(args: argparse.Namespace) -> dict[str, Any]:
     config = accepted.config
     if args.git_common_dir:
         supplied = _require_directory(Path(args.git_common_dir), "Git common directory")
-        if str(supplied) != config.git_common_dir:
-            raise HelperError("Git common directory does not match the accepted setup")
+        if str(supplied) not in {item.git_common_dir for item in config.repositories}:
+            raise HelperError("Git common directory is absent from the accepted inventory")
     artifacts = accepted.artifact_map
     project_config = artifacts["herdr-orchestrator.toml"]
     protocol = artifacts["workspace-protocol.md"]
@@ -238,8 +240,15 @@ def command_validate_project(args: argparse.Namespace) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "command": "validate-project",
         "project_root": accepted.project_root,
-        "repository_root": config.repository_root,
-        "git_common_dir": config.git_common_dir,
+        "repositories": [
+            {
+                "identifier": item.identifier,
+                "relative_path": item.relative_path,
+                "path": item.path,
+                "git_common_dir": item.git_common_dir,
+            }
+            for item in config.repositories
+        ],
         "activation": {
             "path": accepted.activation_path,
             "sha256": accepted.activation_sha256,
@@ -261,17 +270,24 @@ def command_validate_project(args: argparse.Namespace) -> dict[str, Any]:
             "live": config.live_language,
             "artifact": config.artifact_language,
         },
-        "roles": [
+        "routes": [
             {
-                "role": role.role,
-                "kind": role.adapter_kind,
-                "model": role.model,
-                "reasoning_effort": role.reasoning_effort,
-                "selected_binding_id": role.selected_binding_id,
+                "profile": route.profile,
+                "harness": route.harness,
+                "model": route.model,
+                "reasoning_effort": route.reasoning_effort,
+            }
+            for route in config.routes
+        ],
+        "authority_templates": [
+            {
+                "name": template.name,
+                "kind": template.adapter_kind,
+                "selected_binding_id": template.selected_binding_id,
                 "required_bindings": sorted(
                     {
                         grant.binding
-                        for grant in role.filesystem
+                        for grant in template.filesystem
                         if grant.binding != "runtime"
                     }
                 ),
@@ -281,30 +297,33 @@ def command_validate_project(args: argparse.Namespace) -> dict[str, Any]:
                         "binding": grant.binding,
                         "access": grant.access,
                     }
-                    for grant in role.filesystem
+                    for grant in template.filesystem
                 ],
             }
-            for role in config.roles
+            for template in config.authority_templates
         ],
     }
 
 
-def _parse_runtime_binding(raw: str) -> tuple[str, str]:
+def _parse_repository_binding(raw: str) -> LaunchRepositoryBinding:
     if "=" not in raw:
-        raise HelperError("runtime binding must use SOURCE=PATH")
-    source, path = raw.split("=", 1)
-    if source not in {
-        "workspace",
-        "git_common",
-        "orchestration",
-        "evidence",
-        "notebook",
-    } or not path:
-        raise HelperError("runtime binding has an unsupported source or empty path")
-    return source, path
+        raise HelperError("repository binding must use WORKSPACE=GIT_COMMON_DIR")
+    workspace, common = raw.split("=", 1)
+    if not workspace or not common:
+        raise HelperError("repository binding contains an empty path")
+    return LaunchRepositoryBinding(workspace, common)
 
 
-def command_bind_role(args: argparse.Namespace) -> dict[str, Any]:
+def _model_selection(raw: str | None) -> ModelSelection | None:
+    if raw is None:
+        return None
+    parts = raw.split("/", 2)
+    if len(parts) != 3 or not all(parts):
+        raise HelperError("model route must use HARNESS/MODEL/REASONING_EFFORT")
+    return ModelSelection(*parts)
+
+
+def command_bind_launch(args: argparse.Namespace) -> dict[str, Any]:
     config_path = _require_file(Path(args.project_config_file), "project config snapshot")
     expected = _require_expected_sha256(
         args.expected_project_config_sha256,
@@ -315,24 +334,28 @@ def command_bind_role(args: argparse.Namespace) -> dict[str, Any]:
         raise HelperError("project config snapshot changed after validation")
     try:
         config = parse_runtime_config(config_data)
-        bindings: dict[str, str] = {}
-        for raw in args.bind:
-            source, path = _parse_runtime_binding(raw)
-            if source in bindings:
-                raise HelperError(f"runtime binding repeats source: {source}")
-            bindings[source] = path
-        launch = bind_role_launch(
+        launch = bind_launch(
             config,
-            args.role,
+            profile=args.profile,
+            disposition=args.disposition,
+            authority=args.authority,
             cwd=args.cwd,
-            bindings=bindings,
+            repositories=tuple(_parse_repository_binding(raw) for raw in args.repository),
+            evidence_root=args.evidence_root,
+            notebook_root=args.notebook_root,
+            control_root=args.control_root,
+            model_override=_model_selection(args.model_override),
+            runtime_route=_model_selection(args.runtime_route),
         )
     except RuntimeConfigError as exc:
         raise HelperError(str(exc)) from exc
     document = {
         "schema": "herdr.runtime-bound-launch",
         "candidate_digest": config.candidate_digest,
-        "role": launch.role,
+        "profile": launch.profile,
+        "disposition": launch.disposition,
+        "authority_template": launch.authority_template,
+        "route_source": launch.route_source,
         "kind": launch.kind,
         "executable": launch.executable,
         "cwd": launch.cwd,
@@ -351,12 +374,55 @@ def command_bind_role(args: argparse.Namespace) -> dict[str, Any]:
     _atomic_write(output, payload)
     return {
         "schema_version": SCHEMA_VERSION,
-        "command": "bind-role",
-        "role": launch.role,
+        "command": "bind-launch",
+        "profile": launch.profile,
+        "disposition": launch.disposition,
         "path": str(output),
         "bytes": len(payload),
         "sha256": _sha256(payload),
         "launch_digest": launch.launch_digest,
+    }
+
+
+def command_create_supervisor(args: argparse.Namespace) -> dict[str, Any]:
+    if AGENT_NAME_RE.fullmatch(args.name) is None:
+        raise HelperError("Supervisor name must be a canonical agent name")
+    destination = Path(args.identity_dir).expanduser().resolve(strict=False)
+    parent = _require_directory(destination.parent, "Supervisor identity parent")
+    if destination.parent != parent or destination.exists() or destination.is_symlink():
+        raise HelperError("Supervisor identity directory must be a new direct child")
+    identity_projection = {
+        "schema": "herdr.supervisor-identity",
+        "name": args.name,
+        "notebook_language": _validate_live_language(args.notebook_language),
+    }
+    identity = {
+        **identity_projection,
+        "identity_digest": hashlib.sha256(
+            b"herdr-supervisor-identity\0" + _json_bytes(identity_projection).rstrip(b"\n")
+        ).hexdigest(),
+    }
+    staging = Path(tempfile.mkdtemp(prefix=".herdr-supervisor-", dir=parent))
+    try:
+        (staging / "notebook").mkdir(mode=0o700)
+        _write_staged(staging / "identity.json", _json_bytes(identity))
+        _fsync_tree_directories(staging)
+        os.replace(staging, destination)
+        _fsync_directory(parent)
+    except Exception:
+        try:
+            (staging / "identity.json").unlink()
+        except FileNotFoundError:
+            pass
+        _remove_created_directories([staging / "notebook", staging])
+        raise
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "command": "create-supervisor",
+        "name": args.name,
+        "identity_dir": str(destination),
+        "notebook_dir": str(destination / "notebook"),
+        "identity_digest": identity["identity_digest"],
     }
 
 
@@ -424,9 +490,24 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
     if accepted.activation_sha256 != expected_activation_sha256:
         raise HelperError("Activation Manifest changed after preflight validation")
     common = _require_directory(Path(args.git_common_dir), "Git common directory")
-    if str(common) != accepted.config.git_common_dir:
-        raise HelperError("Git common directory does not match the accepted setup")
-    repository = Path(accepted.config.repository_root)
+    repository = _require_directory(Path(args.repository_root), "run repository root")
+    try:
+        completed = subprocess.run(
+            ("git", "-C", str(repository), "rev-parse", "--git-common-dir"),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise HelperError("run repository is not a usable Git worktree") from exc
+    observed_common = Path(completed.stdout.strip())
+    if not observed_common.is_absolute():
+        observed_common = repository / observed_common
+    observed_common = observed_common.resolve(strict=True)
+    accepted_commons = {item.git_common_dir for item in accepted.config.repositories}
+    if str(observed_common) != str(common) or str(common) not in accepted_commons:
+        raise HelperError("run repository is outside the accepted Git inventory")
     if RUN_ID_RE.fullmatch(args.run_id) is None:
         raise HelperError(
             f"run ID must match {RUN_ID_RE.pattern!r}: {args.run_id!r}"
@@ -1309,37 +1390,54 @@ def build_parser() -> argparse.ArgumentParser:
         "--git-common-dir",
         help=(
             "canonical absolute Git common directory; when supplied, validate "
-            "that it matches the accepted selected repository"
+            "that it belongs to the accepted repository inventory"
         ),
     )
     validate.set_defaults(handler=command_validate_project)
 
-    bind_role = subparsers.add_parser(
-        "bind-role",
-        help="bind one accepted logical role template to exact runtime paths",
+    bind_launch_parser = subparsers.add_parser(
+        "bind-launch",
+        help="bind one profile and explicit Assignment authority to exact runtime scope",
     )
-    bind_role.add_argument("--project-config-file", required=True)
-    bind_role.add_argument("--expected-project-config-sha256", required=True)
-    bind_role.add_argument(
-        "--role",
-        choices=("lead", "engineer", "reviewer", "supervisor"),
+    bind_launch_parser.add_argument("--project-config-file", required=True)
+    bind_launch_parser.add_argument("--expected-project-config-sha256", required=True)
+    bind_launch_parser.add_argument("--profile", choices=("lead", "peer", "supervisor"), required=True)
+    bind_launch_parser.add_argument("--disposition", required=True)
+    bind_launch_parser.add_argument(
+        "--authority",
+        choices=("project_writable", "project_readonly"),
         required=True,
     )
-    bind_role.add_argument("--cwd", required=True)
-    bind_role.add_argument(
-        "--bind",
+    bind_launch_parser.add_argument("--cwd", required=True)
+    bind_launch_parser.add_argument(
+        "--repository",
         action="append",
         required=True,
-        metavar="SOURCE=PATH",
+        metavar="WORKSPACE=GIT_COMMON_DIR",
     )
-    bind_role.add_argument("--output", required=True)
-    bind_role.set_defaults(handler=command_bind_role)
+    bind_launch_parser.add_argument("--evidence-root")
+    bind_launch_parser.add_argument("--notebook-root")
+    bind_launch_parser.add_argument("--control-root")
+    bind_launch_parser.add_argument("--model-override", metavar="HARNESS/MODEL/EFFORT")
+    bind_launch_parser.add_argument("--runtime-route", metavar="HARNESS/MODEL/EFFORT")
+    bind_launch_parser.add_argument("--output", required=True)
+    bind_launch_parser.set_defaults(handler=command_bind_launch)
+
+    create_supervisor = subparsers.add_parser(
+        "create-supervisor",
+        help="create one durable Supervisor identity and notebook",
+    )
+    create_supervisor.add_argument("--identity-dir", required=True)
+    create_supervisor.add_argument("--name", required=True)
+    create_supervisor.add_argument("--notebook-language", required=True)
+    create_supervisor.set_defaults(handler=command_create_supervisor)
 
     init_run = subparsers.add_parser(
         "init-run",
         help="atomically initialize a run and stage opaque context-card assets",
     )
     init_run.add_argument("--git-common-dir", required=True)
+    init_run.add_argument("--repository-root", required=True)
     init_run.add_argument("--run-id", required=True)
     init_run.add_argument("--project-root", required=True)
     init_run.add_argument("--human-task-file", required=True)

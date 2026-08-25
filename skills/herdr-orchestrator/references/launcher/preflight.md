@@ -23,22 +23,21 @@ Invoke:
 
 ```text
 python3 <helper> validate-project \
-  --project-root <canonical-project-root> \
-  --git-common-dir <canonical-selected-git-common-dir>
+  --project-root <canonical-project-root>
 ```
 
 This command is the only project-configuration reader. It verifies the accepted
 Activation Manifest, immutable generation, publication manifest, Acceptance
-Receipt, every artifact digest, the closed-world role templates, both
-Human-selected languages, and the selected repository/Git-common binding.
+Receipt, every artifact digest, the closed-world authority templates, both
+Human-selected languages, tracked root Workspace Protocol, repository
+inventory, model inventory, and profile routes.
 Direct mutable config or protocol files are not launch authority.
 
 Retain the returned exact:
 
 ```text
 project_root
-repository_root
-git_common_dir
+repositories
 activation.path and sha256
 generation_root
 publication_digest
@@ -46,22 +45,24 @@ acceptance_receipt_digest
 config.path and sha256
 protocol.path and sha256
 languages
-roles and each role's required_bindings
+routes
+authority_templates and each template's required_bindings
 ```
 
-Require `lead`, `engineer`, and `reviewer`; require `supervisor` only for an
-attachment. Every role is Codex-bound, has a Human-selected model
-and reasoning effort, disables native agents and network, and exposes logical
-filesystem bindings rather than proof-time paths. A missing role or incompatible
-authority stops the branch; there is no writable fallback.
+Require the `lead`, `peer_writable`, `peer_readonly`, and `supervisor` authority
+templates and the `lead`, `peer`, `supervisor`, and `fallback` routes. Profiles,
+dispositions, authority, and model routing remain separate. A missing compatible
+template or inventory route stops the branch; fallback routing never grants
+writable authority.
 
 Require the configured Codex executable and model launch surface to remain
 available. Preserve the exact model and reasoning binding.
 
 ## 3. Preserve before-state
 
-Prove create/write/fsync/remove access with one collision-free file under the
-exact returned Git common directory, leaving no residue. Then capture:
+After the Lead selects task topology, prove create/write/fsync/remove access
+with one collision-free file under every selected Git common directory, leaving
+no residue. Then capture:
 
 ```text
 git status --short --branch
@@ -76,7 +77,8 @@ branches, untracked files, and working-tree changes are Human-owned and remain
 unchanged.
 
 Preflight is complete only when the accepted generation and receipts verify,
-the selected repository and Git common directory agree, the required roles and
-languages are present, live control canaries pass, and before-state is saved.
+the Lead-selected repository/worktree scopes resolve to accepted Git common
+inventory, required templates/routes and languages are present, live control
+canaries pass, and before-state is saved.
 Forward the retained paths and digests unchanged; later steps do not recompute
 or substitute them.

@@ -11,8 +11,7 @@ and policy sources used to prepare a setup.
 _Avoid_: Discovery result, environment dump
 
 **Human Decisions**:
-Typed policy, authority, model, and routing choices explicitly owned by the
-Human.
+Typed model, routing, language, and policy choices explicitly owned by the Human.
 _Avoid_: Wizard answers, inferred preferences
 
 **Setup Candidate**:
@@ -70,20 +69,45 @@ result; it contains no decision added by the presenter.
 _Avoid_: Chat response, mutable setup state
 
 **Binding**:
-One adapter-specific implementation of a role's effective authority envelope.
-_Avoid_: Recipe, role
+One adapter-specific implementation of an effective authority envelope.
+_Avoid_: Recipe, disposition
 
 **Accepted Project**:
 One project whose active immutable setup generation and Human acceptance chain
 have been verified as a single runtime authority.
 _Avoid_: Current config, mutable setup
 
-**Runtime Role Template**:
-The accepted logical authority and model binding for one role before any exact
-Assignment paths are supplied.
-_Avoid_: Recipe, proof launch spec
+**Profile**:
+A durable identity contract for Lead, Peer, or Supervisor. A Profile is distinct
+from the work requested in an Assignment.
+_Avoid_: Disposition, recipe
 
-**Bound Role Launch**:
-One Runtime Role Template compiled with the exact paths for one Assignment into
-a single native launch contract and content identity.
+**Disposition**:
+An Assignment label such as Engineer, Reviewer, Architect, or Scout that
+describes the requested work and grants no authority.
+_Avoid_: Role, permission
+
+**Authority Template**:
+A closed-world capability envelope that may be selected for an Assignment and
+later bound to exact runtime scope.
+_Avoid_: Profile, disposition
+
+**Launch Scope**:
+The exact repositories, worktrees, evidence, control, or notebook roots granted
+to one launch.
+_Avoid_: Setup repository, project topology
+
+**Bound Launch**:
+One Profile, explicit Authority Template, model route, and Launch Scope compiled
+into a single native launch contract and content identity.
 _Avoid_: Selected binding, role config
+
+**Supervisor Identity**:
+A durable Human-owned governance observer identity whose observation sessions
+may be scoped to different accepted projects without gaining project authority.
+_Avoid_: Task child, reviewer
+
+**Workspace Protocol**:
+The tracked policy source at the top-level project root; nested repositories
+inherit it and do not own separate protocol files.
+_Avoid_: Generated setup report, nested-repository protocol

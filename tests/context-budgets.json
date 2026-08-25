@@ -16,7 +16,7 @@
         "skills/herdr-orchestrator/references/launcher/setup.md"
       ],
       "hard_limit": 3000,
-      "baseline": 1041
+      "baseline": 1296
     },
     "task_launcher": {
       "render": "concat",
@@ -26,7 +26,7 @@
         "skills/herdr-orchestrator/references/launcher/task-launch.md"
       ],
       "hard_limit": 4000,
-      "baseline": 2209
+      "baseline": 2240
     },
     "supervisor_attachment": {
       "render": "concat",
@@ -36,7 +36,7 @@
         "skills/herdr-orchestrator/references/launcher/supervisor-attachment.md"
       ],
       "hard_limit": 3000,
-      "baseline": 1768
+      "baseline": 1563
     },
     "lead_initial_fixed": {
       "render": "pack",
@@ -100,7 +100,7 @@
         "assignment": []
       },
       "hard_limit": 900,
-      "baseline": 850
+      "baseline": 854
     }
   }
 }

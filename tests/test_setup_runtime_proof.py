@@ -140,14 +140,22 @@ class SetupRuntimeProofTests(unittest.TestCase):
         )
         definitions = {
             "lead": (
-                (RUNTIME_READ, READ_PROJECT, READ_GIT, READ_CONTROL, WRITE_CONTROL),
+                (
+                    RUNTIME_READ,
+                    READ_PROJECT,
+                    WRITE_PROJECT,
+                    READ_GIT,
+                    WRITE_GIT,
+                    READ_CONTROL,
+                    WRITE_CONTROL,
+                ),
                 (
                     ("project:assigned", self.project),
                     ("git-common:assigned", self.project / ".git"),
                     ("control:run", self.control),
                 ),
             ),
-            "engineer": (
+            "peer_writable": (
                 (
                     RUNTIME_READ,
                     READ_PROJECT,
@@ -163,7 +171,7 @@ class SetupRuntimeProofTests(unittest.TestCase):
                     ("evidence:assignment", self.evidence),
                 ),
             ),
-            "reviewer": (
+            "peer_readonly": (
                 (RUNTIME_READ, READ_PROJECT, READ_GIT, READ_EVIDENCE, WRITE_EVIDENCE),
                 (
                     ("project:assigned", self.project),
@@ -238,6 +246,19 @@ class SetupRuntimeProofTests(unittest.TestCase):
                     DecisionValueKind.TEXT,
                     "Vietnamese",
                 ),
+                *tuple(
+                    PolicyAnswer(
+                        f"route.{profile}.{field}",
+                        DecisionValueKind.CHOICE,
+                        value,
+                    )
+                    for profile in ("lead", "peer", "supervisor", "fallback")
+                    for field, value in (
+                        ("harness", "codex"),
+                        ("model", model.identifier),
+                        ("reasoning_effort", effort),
+                    )
+                ),
             ),
         )
         result = compile_setup_candidate(
@@ -280,7 +301,7 @@ class SetupRuntimeProofTests(unittest.TestCase):
         self.assertEqual(receipt.status, RuntimeProofStatus.PROVEN)
         self.assertEqual(
             [role.role for role in receipt.roles],
-            ["engineer", "lead", "reviewer", "supervisor"],
+            ["lead", "peer_readonly", "peer_writable", "supervisor"],
         )
         for role in receipt.roles:
             with self.subTest(role=role.role):
@@ -300,13 +321,13 @@ class SetupRuntimeProofTests(unittest.TestCase):
                     checks["fs.write:project:assigned"].observed,
                     (
                         ObservedEffect.ALLOW
-                        if role.role == "engineer"
+                        if role.role in {"lead", "peer_writable"}
                         else ObservedEffect.DENY
                     ),
                 )
                 self.assertTrue(checks["fs.read:outside"].passed)
                 self.assertTrue(checks["fs.write:outside"].passed)
-        engineer = next(role for role in receipt.roles if role.role == "engineer")
+        engineer = next(role for role in receipt.roles if role.role == "peer_writable")
         engineer_checks = {check.identifier: check for check in engineer.checks}
         self.assertEqual(
             engineer_checks["fs.write:project:assigned"].observed,
@@ -339,12 +360,12 @@ class SetupRuntimeProofTests(unittest.TestCase):
 
         self.assertEqual(receipt.status, RuntimeProofStatus.SMOKE_FAILED)
         statuses = {role.role: role.status for role in receipt.roles}
-        self.assertEqual(statuses["engineer"], RoleProofStatus.PROVEN)
+        self.assertEqual(statuses["peer_writable"], RoleProofStatus.PROVEN)
         self.assertTrue(
             all(
                 status is RoleProofStatus.SMOKE_FAILED
                 for role, status in statuses.items()
-                if role != "engineer"
+                if role not in {"lead", "peer_writable"}
             )
         )
 
@@ -476,6 +497,7 @@ class SetupRuntimeProofTests(unittest.TestCase):
                 for adapter in snapshot.adapters
             ),
             snapshot.policy_sources,
+            snapshot.workspace_protocol,
             snapshot.existing_activation,
         )
         calls = 0
