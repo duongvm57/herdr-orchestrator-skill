@@ -77,39 +77,30 @@ class InstructionArchitectureTests(unittest.TestCase):
 
         self.assertNotIn("references/roles/supervisor.md", launch)
         self.assertNotIn("init-run", supervisor)
-        self.assertIn("stage-assets", supervisor)
+        self.assertIn("scripts/herdr_runtime.py", supervisor)
+        self.assertNotIn("start-lead", supervisor)
+        self.assertIn("invisible to the Lead", supervisor)
 
-    def test_run_context_uses_launch_time_project_snapshots(self) -> None:
+    def test_runtime_context_uses_role_specific_disclosure(self) -> None:
         launch = read("references/launcher/task-launch.md")
         supervisor = read("references/launcher/supervisor-attachment.md")
+        normalized_launch = " ".join(launch.split())
 
-        self.assertIn("--project-config-file", launch)
-        self.assertIn("--workspace-protocol-file", launch)
-        self.assertIn("--expected-project-config-sha256", launch)
-        self.assertIn("--expected-workspace-protocol-sha256", launch)
-        self.assertIn("canonical project paths", launch)
-        self.assertIn("context/project-config.toml", launch)
-        self.assertIn("context/workspace-protocol.md", launch)
-        self.assertIn("├── human-task.md", launch)
-        self.assertIn("returned `human_task.path`", launch)
-        self.assertIn("filtered selection manifest", supervisor)
-        self.assertIn("context/workspace-protocol.md", supervisor)
-        self.assertNotIn("then the full project Workspace Protocol", launch)
+        self.assertIn("accepted project config", launch)
+        self.assertIn("full repository Workspace Protocol", launch)
+        self.assertIn("scripts/herdr_runtime.py", launch)
+        self.assertIn("concise Lead profile", normalized_launch)
+        self.assertIn("verbatim Human task", launch)
+        self.assertIn("only applicable read-only constraints", supervisor)
+        self.assertIn("--constraints full-protocol", supervisor)
 
-    def test_supervisor_attachment_is_collision_and_language_bound(self) -> None:
+    def test_supervisor_attachment_is_explicit_and_backgrounded(self) -> None:
         supervisor = read("references/launcher/supervisor-attachment.md")
-
-        self.assertIn("<attachment-id>", supervisor)
-        self.assertIn("[a-z][a-z0-9_-]{0,31}", supervisor)
-        self.assertIn("--selection-output", supervisor)
-        self.assertIn("attachment-assignment.md", supervisor)
-        self.assertIn("delivery-receipt.json", supervisor)
-        self.assertIn("local-receipt.md", supervisor)
-        self.assertIn("lead-notification-receipt.json", supervisor)
-        self.assertIn("every bound run's `supervisor/`", supervisor)
-        self.assertIn("host project's live language", supervisor)
-        self.assertRegex(supervisor, r"that project's\s+artifact language")
-        self.assertRegex(supervisor, r"that\s+project's live language")
+        self.assertIn("explicitly asks for a Supervisor", supervisor)
+        self.assertIn("Keep the Supervisor in the background", supervisor)
+        self.assertIn("exists only", supervisor)
+        self.assertIn("mandate explicitly requests", supervisor)
+        self.assertIn("does not\nnotify or modify any Lead", supervisor)
 
     def test_readme_stays_user_facing(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -187,17 +178,17 @@ class InstructionArchitectureTests(unittest.TestCase):
             normalized.index("then discover and choose its model"),
         )
 
-    def test_peer_fallback_is_explicit_and_envelope_bound(self) -> None:
+    def test_peer_runtime_requires_exact_profile(self) -> None:
         template = read("assets/config.toml")
         setup = read("references/launcher/setup.md")
-        lifecycle = read("references/lead/peer-lifecycle.md")
+        runtime = read("scripts/herdr_runtime.py")
 
         self.assertIn('fallback_peer_recipe = "<fallback-recipe-name>"', template)
         self.assertIn("naming an exact Peer recipe", setup)
         self.assertIn("Human chooses reuse and one fallback recipe", setup)
-        self.assertIn("If no specialized recipe fits", lifecycle)
-        self.assertIn("record that fallback choice in the Assignment", lifecycle)
-        self.assertIn("outside it", lifecycle)
+        self.assertIn("Peer start requires one exact configured --profile", runtime)
+        self.assertIn('config["peer_recipes"].get(profile)', runtime)
+        self.assertNotIn('config["fallback_peer_recipe"]', runtime)
 
     def test_harness_specific_logic_lives_in_separate_adapter_modules(self) -> None:
         helper = read("scripts/herdr_orchestrator.py")
@@ -240,47 +231,76 @@ class InstructionArchitectureTests(unittest.TestCase):
             normalized_setup,
         )
 
-    def test_lead_asset_names_match_launch_staging_contract(self) -> None:
+    def test_one_runtime_module_replaces_role_wrappers(self) -> None:
         launch = read("references/launcher/task-launch.md")
         lead = read("references/roles/lead.md")
-        expected = {
-            "topology",
-            "peer-lifecycle",
-            "candidate-and-verdict",
-            "anti-pattern-details",
-            "peer-profile",
-        }
+        runtime = read("scripts/herdr_runtime.py")
+        normalized_lead = " ".join(lead.split())
 
-        staged = set(re.findall(r"(?m)^([a-z][a-z-]+)=references/", launch))
-        mapped = set(re.findall(r"(?m)^- `([a-z][a-z-]+)` —", lead))
+        self.assertIn("scripts/herdr_runtime.py", launch)
+        for operation in ('"start"', '"result"', '"prompt"'):
+            self.assertIn(operation, runtime)
+        for wrapper in ("herdr_lead_ops.py", "herdr_peer_ops.py", "herdr_supervisor_ops.py"):
+            self.assertNotIn(wrapper, launch + runtime)
+        self.assertIn("exact runtime operations", normalized_lead)
+        self.assertIn('"agent", "wait"', runtime)
+        self.assertIn('"agent", "read"', runtime)
 
-        self.assertEqual(staged, expected)
-        self.assertEqual(mapped, expected)
-
-    def test_initial_lead_context_excludes_disclosed_bodies(self) -> None:
+    def test_initial_lead_profile_excludes_runtime_mechanics(self) -> None:
         lead = read("references/roles/lead.md")
-        index = read("references/anti-patterns/index.md")
-        combined = lead + index
+        normalized = " ".join(lead.split())
 
-        self.assertNotIn("# PEER REPORT", combined)
-        self.assertNotIn("## Difficult council", combined)
-        self.assertNotIn("## 17. Supervisor overreach", combined)
-        self.assertIn("read that card completely before", lead)
+        for mechanics in (
+            "herdr agent start",
+            "mailbox path",
+            "Git common dir",
+            "atomic rename",
+            "SHA-256",
+            "report schema",
+        ):
+            self.assertNotIn(mechanics, lead)
+        self.assertIn("The runtime owns pane, harness, and Herdr mechanics", normalized)
+        self.assertIn("smallest useful topology", normalized)
 
-    def test_disclosed_cards_have_explicit_trigger_and_completion_bound(self) -> None:
-        cards = {
-            "references/lead/topology.md": ("before choosing a topology", "Selection is complete"),
-            "references/lead/peer-lifecycle.md": ("before drafting", "Collection is complete"),
-            "references/lead/candidate-and-verdict.md": ("before recording", "The run is complete"),
-            "references/anti-patterns/responses.md": (
-                "After a signal triggers",
-                "Response is complete only when the observed signal is recorded as evidence",
-            ),
-        }
-        for path, (trigger, completion) in cards.items():
-            body = read(path)
-            self.assertIn(trigger, body, path)
-            self.assertIn(completion, body, path)
+    def test_runtime_preflight_contains_only_launch_inputs_and_validation(self) -> None:
+        preflight = read("references/launcher/preflight.md")
+
+        self.assertIn("`HERDR_ENV=1`", preflight)
+        self.assertIn("canonical project root", preflight)
+        self.assertIn("launch-specific validation", preflight)
+        for obsolete_command in (
+            "herdr agent list",
+            "pane current",
+            "git status",
+            "git worktree list",
+            "pane list",
+            "validate-project",
+        ):
+            self.assertNotIn(obsolete_command, preflight)
+
+    def test_lead_references_exclude_legacy_runtime_transport(self) -> None:
+        lead_references = "\n".join(
+            read(path)
+            for path in (
+                "references/roles/lead.md",
+                "references/lead/peer-lifecycle.md",
+                "references/lead/candidate-and-verdict.md",
+                "references/lead/topology.md",
+            )
+        )
+
+        for obsolete_term in (
+            "assignments/",
+            "reports/inbox",
+            "result.accepted.json",
+            "events.jsonl",
+            "delivery receipt",
+            "handoff receipt",
+            "prepared/active/collected",
+            "run-created Peer panes",
+            "Terminal output is not the report",
+        ):
+            self.assertNotIn(obsolete_term, lead_references)
 
     def test_repository_instruction_pointers_resolve(self) -> None:
         documents = [

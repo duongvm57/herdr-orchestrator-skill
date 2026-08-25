@@ -22,11 +22,10 @@ The maintenance ownership map is `maintenance/assignments-and-evidence.md`.
 - Legacy: `FT-08`, `FT-09`, `FT-10`
 - Verification: **automated/static**
 
-Repository checks enforce user-only routing, ordered inline role/protocol/assignment
-packs, macro context only for Lead, bounded context for Peer, and digest-triggered byte
-disclosure.
+Repository checks enforce user-only routing, role-specific context disclosure, bounded
+Peer context, and one Herdr-native runtime seam.
 
-Automation: 9 validated selector(s) in the manifest.
+Automation: 10 validated selector(s) in the manifest.
 
 ### Live Launcher opaque-body boundary
 
@@ -34,8 +33,8 @@ Automation: 9 validated selector(s) in the manifest.
 - Verification: **live/manual**
 
 Exercise a real Launcher with instrumented file access and transcript capture; verify
-opaque role and card bodies are passed by path and never enter Launcher attention or
-output.
+one runtime start call receives fixed paths while runtime internals never enter Launcher
+attention or output.
 
 ### Static project contract and catalog projection
 
@@ -94,19 +93,16 @@ verdict, and Human decisions as distinct evidence links.
 - Verification: **live/manual**
 
 Within one run, vary Peer count and disposition independently from recipes, reuse or mix
-specialized recipes, use the configured fallback for an unmatched case without changing
-its harness/model/access, and stop for setup update when the Assignment exceeds that
-envelope.
+specialized recipes by exact profile, and stop for setup update when the Assignment
+exceeds that envelope.
 
 ### Live Peer assignment and lossless round-trip
 
 - Legacy: `FT-18`, `FT-19`
 - Verification: **live/manual**
 
-Dispatch a complete self-contained Assignment with repository authority, exclusive
-return boundary, report schema, exact direct delivery, and digest evidence; then wait
-event-first, promote the atomic report bytes, allow one bounded continuation, and block
-on a second incomplete settle.
+Dispatch a bounded Assignment with applicable authority and exact profile, then wait and
+read through Herdr and continue the same agent when needed.
 
 ### Live Workspace Protocol decisions
 
@@ -164,10 +160,8 @@ authority.
 - Legacy: `FT-67`, `FT-68`
 - Verification: **live/manual**
 
-Require the launch event and ownership marker before one non-waiting Lead delivery, then
-exercise deterministic balanced split initialization, intent-before-mutation, same-cwd
-recovery, orphan adoption, explicit transactional retirement, and rejection of
-unexplained pane disappearance.
+Exercise one background Lead launch, exact configured recipe delivery, caller-focus
+preservation, and direct Herdr pane lifecycle without a runtime state file.
 
 ### Live orchestration and artifact language separation
 

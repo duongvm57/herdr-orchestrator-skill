@@ -1766,6 +1766,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_DELIVERY_TIMEOUT_SECONDS,
     )
     models.set_defaults(handler=command_harness_models)
+
     return parser
 
 

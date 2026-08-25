@@ -18,7 +18,7 @@
         },
         {
           "id": "FT-09",
-          "spec": "The Lead pack includes full config and protocol while a Peer pack includes only selected constraints and its complete inline Assignment."
+          "spec": "The Lead pack contains its concise profile, accepted protocol, Human task, and runtime manifest; a Peer pack contains its concise profile, selected constraints, and complete bounded Assignment."
         },
         {
           "id": "FT-10",
@@ -29,26 +29,23 @@
         "SKILL.md",
         "references/launcher/task-launch.md",
         "references/launcher/supervisor-attachment.md",
-        "references/lead/topology.md",
-        "references/anti-patterns/index.md",
-        "references/anti-patterns/responses.md",
         "references/roles/lead.md",
         "references/roles/peer.md",
-        "references/lead/peer-lifecycle.md",
-        "references/lead/candidate-and-verdict.md",
-        "scripts/herdr_orchestrator.py"
+        "scripts/herdr_orchestrator.py",
+        "scripts/herdr_runtime.py"
       ],
-      "scenario": "Repository checks enforce user-only routing, ordered inline role/protocol/assignment packs, macro context only for Lead, bounded context for Peer, and digest-triggered byte disclosure.",
+      "scenario": "Repository checks enforce user-only routing, role-specific context disclosure, bounded Peer context, and one Herdr-native runtime seam.",
       "test_selectors": [
         "tests.test_instruction_architecture.InstructionArchitectureTests.test_invocation_is_mechanically_user_only",
         "tests.test_instruction_architecture.InstructionArchitectureTests.test_root_routes_each_invocation_without_runtime_role_sources",
         "tests.test_instruction_architecture.InstructionArchitectureTests.test_runtime_docs_never_execute_the_generic_herdr_skill_dump",
-        "tests.test_instruction_architecture.InstructionArchitectureTests.test_lead_asset_names_match_launch_staging_contract",
-        "tests.test_instruction_architecture.InstructionArchitectureTests.test_initial_lead_context_excludes_disclosed_bodies",
-        "tests.test_instruction_architecture.InstructionArchitectureTests.test_disclosed_cards_have_explicit_trigger_and_completion_bound",
+        "tests.test_instruction_architecture.InstructionArchitectureTests.test_one_runtime_module_replaces_role_wrappers",
+        "tests.test_instruction_architecture.InstructionArchitectureTests.test_initial_lead_profile_excludes_runtime_mechanics",
         "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_pack_preserves_source_order_and_enforces_ceiling",
         "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_deliver_uses_one_argument_without_leaking_payload_or_child_output",
-        "tests.test_package_flow.RealPackageFlowTests.test_real_sources_keep_conditional_bodies_out_of_initial_lead"
+        "tests.test_package_flow.RealPackageFlowTests.test_installable_bundle_exposes_one_runtime_interface",
+        "tests.test_runtime.RuntimeTests.test_lead_start_uses_native_herdr_flow_without_focus_or_files",
+        "tests.test_runtime.RuntimeTests.test_result_waits_then_reads_terminal_output"
       ]
     },
     {
@@ -58,7 +55,7 @@
       "invariants": [
         {
           "id": "FT-40",
-          "spec": "A real Launcher run reads only selected routing procedures, passes role/card paths opaquely, and exposes no opaque body in its transcript."
+          "spec": "A real Launcher reads only selected routing procedures and invokes one runtime start primitive without loading runtime internals."
         }
       ],
       "sources": [
@@ -66,7 +63,7 @@
         "references/launcher/task-launch.md",
         "references/launcher/supervisor-attachment.md"
       ],
-      "scenario": "Exercise a real Launcher with instrumented file access and transcript capture; verify opaque role and card bodies are passed by path and never enter Launcher attention or output.",
+      "scenario": "Exercise a real Launcher with instrumented file access and transcript capture; verify one runtime start call receives fixed paths while runtime internals never enter Launcher attention or output.",
       "test_selectors": []
     },
     {
@@ -229,8 +226,8 @@
       ],
       "sources": [
         "references/lead/topology.md",
-        "references/lead/peer-lifecycle.md",
-        "references/lead/candidate-and-verdict.md"
+        "references/roles/lead.md",
+        "scripts/herdr_runtime.py"
       ],
       "scenario": "Reject overlapping writers, isolate concurrent scopes, freeze an exact candidate, invalidate review after mutation, and keep Engineer proof, Reviewer falsification, Lead verdict, and Human decisions as distinct evidence links.",
       "test_selectors": []
@@ -242,15 +239,15 @@
       "invariants": [
         {
           "id": "FT-17",
-          "spec": "One run chooses Peer count and disposition independently, reuses or mixes validated recipes by risk, uses the Human-approved fallback recipe for an unmatched case, and stops when the Assignment exceeds its envelope."
+          "spec": "A task chooses Peer count and disposition independently, reuses or mixes validated recipes by risk, requires an exact configured profile, and stops when the Assignment exceeds its envelope."
         }
       ],
       "sources": [
         "assets/workspace-protocol-template.md",
         "references/roles/lead.md",
-        "references/lead/peer-lifecycle.md"
+        "scripts/herdr_runtime.py"
       ],
-      "scenario": "Within one run, vary Peer count and disposition independently from recipes, reuse or mix specialized recipes, use the configured fallback for an unmatched case without changing its harness/model/access, and stop for setup update when the Assignment exceeds that envelope.",
+      "scenario": "Within one run, vary Peer count and disposition independently from recipes, reuse or mix specialized recipes by exact profile, and stop for setup update when the Assignment exceeds that envelope.",
       "test_selectors": []
     },
     {
@@ -260,19 +257,20 @@
       "invariants": [
         {
           "id": "FT-18",
-          "spec": "Dispatch is rejected without complete ownership, authority, repository constraints, verification, handoff, return boundary, report schema, and exact inline delivery."
+          "spec": "Dispatch supplies one bounded task, applicable constraints, an exact profile, and inline delivery."
         },
         {
           "id": "FT-19",
-          "spec": "The Lead waits event-first, promotes the exact atomic report file, permits one delivered continuation, then blocks a second incomplete settlement."
+          "spec": "The Lead waits through Herdr, reads terminal output, and uses prompt for an explicit continuation."
         }
       ],
       "sources": [
         "references/roles/lead.md",
-        "references/lead/peer-lifecycle.md",
-        "scripts/herdr_orchestrator.py"
+        "references/roles/peer.md",
+        "scripts/herdr_orchestrator.py",
+        "scripts/herdr_runtime.py"
       ],
-      "scenario": "Dispatch a complete self-contained Assignment with repository authority, exclusive return boundary, report schema, exact direct delivery, and digest evidence; then wait event-first, promote the atomic report bytes, allow one bounded continuation, and block on a second incomplete settle.",
+      "scenario": "Dispatch a bounded Assignment with applicable authority and exact profile, then wait and read through Herdr and continue the same agent when needed.",
       "test_selectors": []
     },
     {
@@ -506,8 +504,8 @@
       ],
       "sources": [
         "references/roles/lead.md",
-        "references/lead/peer-lifecycle.md",
-        "references/lead/candidate-and-verdict.md"
+        "references/roles/peer.md",
+        "scripts/herdr_runtime.py"
       ],
       "scenario": "During a run, handle event waits, reopen/dependency/blocked outcomes, proposed expansion, and repeated-failure mechanisms; before verdict require exact candidate, artifact, verification, independent review, findings, residual risk, and owning authority.",
       "test_selectors": []
@@ -519,20 +517,19 @@
       "invariants": [
         {
           "id": "FT-67",
-          "spec": "The launch event and ownership marker precede exactly one non-waiting Lead delivery, and the Launcher never waits for project work."
+          "spec": "The runtime starts one fresh Lead, delivers one prompt, preserves caller focus by default, and does not wait for project work."
         },
         {
           "id": "FT-68",
-          "spec": "Balanced placement initializes missing state, rejects malformed or pre-created empty state, chooses right then down-right then down-left, persists intent before mutation, recovers same-cwd crashes, adopts one orphan, retires transactionally, and rejects unexplained disappearance."
+          "spec": "Placement uses Herdr's current layout and creates one sibling pane with the configured project cwd and no focus by default."
         }
       ],
       "sources": [
         "references/launcher/task-launch.md",
-        "references/lead/peer-lifecycle.md",
         "scripts/herdr_orchestrator.py",
-        "scripts/herdr_balanced_split.py"
+        "scripts/herdr_runtime.py"
       ],
-      "scenario": "Require the launch event and ownership marker before one non-waiting Lead delivery, then exercise deterministic balanced split initialization, intent-before-mutation, same-cwd recovery, orphan adoption, explicit transactional retirement, and rejection of unexplained pane disappearance.",
+      "scenario": "Exercise one background Lead launch, exact configured recipe delivery, caller-focus preservation, and direct Herdr pane lifecycle without a runtime state file.",
       "test_selectors": []
     },
     {
@@ -554,7 +551,7 @@
         "references/roles/lead.md",
         "references/roles/peer.md",
         "references/roles/supervisor.md",
-        "references/lead/peer-lifecycle.md"
+        "scripts/herdr_runtime.py"
       ],
       "scenario": "Use two repositories with different explicit language pairs; verify live envelopes and conversation use each live value, saved Markdown uses each artifact value, authoritative bytes and literals remain exact, unrelated updates preserve valid pairs, and missing values stop launch without a package default.",
       "test_selectors": []

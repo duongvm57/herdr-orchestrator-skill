@@ -39,9 +39,10 @@ Every agent receives only three ordered instruction layers:
 Role Profile → Workspace Protocol → Assignment
 ```
 
-The Lead receives full project config, protocol, task, and only the
-orchestration guidance required by the current branch. A Peer receives its thin
-role, only relevant project constraints, and one assignment. Independent
+The Lead receives its thin role, full protocol, verbatim task, and a runtime
+manifest containing exact repositories, approved Peer profiles, and one
+operations command. A Peer receives its thin role, only relevant project
+constraints, and one assignment. Independent
 judgment uses a fresh session; correction returns to the same Engineer that owns
 the write.
 
@@ -56,7 +57,7 @@ Markdown cannot guarantee model obedience.
 - Herdr supplies agent and pane lifecycle truth.
 - Git and worktrees provide inspectable artifact and workspace identity.
 - Harness-native sandbox, approval, and tool controls constrain capabilities.
-- Saved context, assignments, reports, and receipts make decisions auditable.
+- Herdr terminal output plus explicit task artifacts make decisions auditable.
 - Fresh review and Human gates test claims prompts cannot enforce.
 
 The skill provides no daemon, queue, retry engine, semantic parentage,
@@ -71,9 +72,8 @@ requires explicit Human invocation.
 
 You need Git, Python 3.11+, a running Herdr server, a Launcher session inside a
 Herdr-managed pane, and every configured harness/model installed and
-authenticated. The Launcher's native permission profile must also allow the
-Herdr socket and run-evidence writes in the repository's absolute Git common
-directory. Each configured profile selects its own harness and native argument
+authenticated. The Launcher's native permission profile must allow the Herdr
+socket. Each configured profile selects its own harness and native argument
 vector; its harness adapter validates those flags without translating them into
 a shared sandbox or effort vocabulary. Verify broadened network, filesystem,
 and Git-metadata access with bounded canaries.
@@ -155,64 +155,46 @@ or permission policy. Legacy `routes.toml` and `workers.*.toml` are unsupported.
 $herdr-orchestrator implement issue #42 and preserve my uncommitted changes
 ```
 
-The Launcher validates the project contract and configured live recipes,
-inventories existing agents/panes/worktrees/user changes, stores run evidence
-outside the checkout, starts a fresh Lead, and transfers focus. Missing
-Lead capability stops launch without runtime substitution; existing state is
-preserved.
+The Launcher cheaply validates accepted project inputs and existing state, then
+uses one runtime helper to split a background pane, start the exact configured
+Lead recipe, and deliver the task. Missing capability stops launch without
+runtime substitution. Focus changes only when explicitly requested.
 
-Fresh-agent panes are placed by a deterministic helper using only panes
-registered to that run. Layout code is not injected; the Lead receives only the
-helper and state paths needed to request Peer panes. When the display is full, a
-completed run-created Peer pane may be retired after its evidence is durable so
-a required fresh replacement can use that space; pre-existing panes and an
-Engineer awaiting correction remain protected. Each split or retirement intent
-is persisted before Herdr mutates panes, allowing deterministic crash recovery
-and rejecting unexplained pane disappearance.
+The Lead receives the full Workspace Protocol, the Human task, available Peer
+profiles, and three operations: start an agent, wait for and read its result, or
+send a continuation. These operations use Herdr's native agent lifecycle; they
+do not create a second mailbox or lifecycle state machine.
 
 After handoff, work with the Lead. A tiny task may need zero or one Peer.
 Architecture-sensitive work may use a fresh Architect, one Engineer, and a fresh
 Reviewer. The Lead decides the number and dispositions per task and may reuse or
-mix approved harness/model recipes. If no specialized recipe matches, it uses
-the configured fallback recipe without changing that recipe's model or access
-envelope. Recipes are capabilities, not a fixed list of Peer types.
+mix approved harness/model recipes. A Peer launch names an exact configured
+profile; runtime never falls through to a more permissive recipe. Recipes are
+capabilities, not a fixed list of Peer types.
 
 ## Request a Supervisor
 
 A configured Supervisor is never started automatically:
 
 ```text
-$herdr-orchestrator attach a Supervisor to run <run-id> and Lead <lead-name>
+$herdr-orchestrator attach a Supervisor to this project
 ```
 
 Refocus an installed Launcher session before invoking that command; the fresh
 Lead does not need or invoke the skill.
 
-The Launcher binds a fresh project-read-only Supervisor to exact Lead/project/run
-identities. It observes evidence, asks open questions, and relays exact Human
-decisions. It never creates Peers, edits project code, or issues a project
-verdict.
+The Launcher starts the exact configured Supervisor recipe with a bounded
+observation mandate. It is not exposed to a Lead and never creates Peers, edits
+project code, or issues a project verdict. Full protocol context is supplied
+only when the Human mandate requires protocol audit or update judgment.
 
 ## Evidence and verdicts
 
-Run evidence is stored outside the checkout at:
-
-```text
-<git-common-dir>/herdr-orchestrator/runs/<run-id>/
-```
-
-This evidence is local and untracked: it does not follow a clone and is absent
-from backups that capture only tracked content. Exact tasks and context may be
-sensitive, so protect, retain, export, or remove each run under project policy.
-`launcher-handoff.md` transfers ledger ownership from Launcher to Lead; it is
-not a general filesystem lock.
-
-It records intended context, delivery receipts, assignments, Peer reports,
-stable candidates, verification, review, Human decision requests, Supervisor
-observations, and the Lead verdict. Each Peer returns its full report through an
-exclusive writable file boundary; terminal snapshots are only status/debug
-signals. These records are assertions to compare with Herdr, Git, the
-filesystem, and raw command results—not proof by themselves.
+Herdr provides live agent state and terminal output. Git, verification commands,
+and task artifacts provide technical evidence. The runtime creates no run
+directory, mailbox, delivery receipt, or event ledger. A Peer or Supervisor
+writes a durable report only when its Assignment requires one or terminal output
+cannot carry the result reliably.
 
 ```text
 Engineer proves writes

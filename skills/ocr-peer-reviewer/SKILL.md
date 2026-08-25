@@ -19,10 +19,11 @@ with the surrounding Lead.
 
 ## Bind the candidate and evidence root
 
-Read the repository, accepted base, exact candidate, report-return path, and
-report contract from the Herdr Assignment. Let `<inbox>` be the parent directory
-of that report-return path. For a project-read-only Reviewer, `<inbox>/ocr/` is
-the only writable OCR evidence directory; the candidate remains read-only.
+Read the repository, accepted base, exact candidate, and report contract from the
+Herdr Assignment. An `<evidence-root>` is writable only when the Assignment
+explicitly grants one; otherwise keep OCR output in the normal Reviewer response.
+When granted, `<evidence-root>/ocr/` is the only writable OCR evidence directory;
+the candidate remains read-only.
 
 OCR applies only when both identities resolve to Git commits. Resolve full SHAs
 and verify:
@@ -36,7 +37,8 @@ ocr version
 ```
 
 Observed `HEAD` must equal the full candidate SHA and the workspace must be
-clean. Preserve the candidate: write only evidence under `<inbox>/ocr/`; do not
+clean. Preserve the candidate: write only evidence under `<evidence-root>/ocr/`
+when that root is assigned; do not
 edit, apply fixes, checkout, reset, rebase, commit, push, merge, or deploy.
 
 If either Assignment identity is absent or is not a Git commit, return
@@ -44,14 +46,15 @@ If either Assignment identity is absent or is not a Git commit, return
 unavailable, return `OCR_SKILL_SKIPPED: OCR_UNAVAILABLE`. Both statuses require
 the surrounding Reviewer to continue with direct exact-candidate review.
 
-## Save deterministic preparation
+## Save deterministic preparation when authorized
 
-Create `<inbox>/ocr/`. Capture complete stdout through sibling partial files,
-then atomically rename successful JSON results to these durable paths:
+When an evidence root is assigned, create `<evidence-root>/ocr/`. Capture
+complete stdout through sibling partial files, then atomically rename successful
+JSON results to these durable paths:
 
 ```text
-<inbox>/ocr/preview.json
-<inbox>/ocr/rules.json
+<evidence-root>/ocr/preview.json
+<evidence-root>/ocr/rules.json
 ```
 
 Run preview with the resolved full SHAs:
@@ -78,7 +81,7 @@ ocr delegate rule --format json --repo <repo> -- <selected-paths>
 ```
 
 Require schema version `1` and rule groups that account for every selected
-path. After each final rename, compute SHA-256 over the exact artifact bytes.
+path. When artifacts are written, compute SHA-256 over the exact final bytes.
 An unsuccessful command, invalid JSON, unsupported schema, mismatched range, or
 incomplete path mapping returns `OCR_SKILL_SKIPPED: OCR_OUTPUT_UNSUPPORTED` with
 any available diagnostic artifact path. The surrounding Reviewer then performs
@@ -115,8 +118,8 @@ Each finding includes path, lines, category, severity, concrete evidence,
 impact, and suggested correction. Use `critical`, `high`, `medium`, or `low`;
 report low severity only when clearly useful.
 
-Merge evidence into the surrounding Herdr report schema. For a completed OCR
-review, use this exact procedure receipt under **Findings, assumptions, and
+Return evidence through the normal Reviewer response. For a completed OCR
+review, include this exact procedure receipt under **Findings, assumptions, and
 residual risks**:
 
 ```text
@@ -125,8 +128,8 @@ OCR status: USED
 ```
 
 - Under **Artifacts and exact candidate**, record the accepted base, candidate,
-  observed `HEAD`, merge base, OCR version, both OCR artifact paths, and each
-  artifact SHA-256.
+  observed `HEAD`, merge base, OCR version, and any assigned OCR artifact paths
+  with their SHA-256 values.
 - Under **Verification commands, cwd, and results**, record the OCR commands and
   final clean-workspace check.
 - Under **Findings, assumptions, and residual risks**, record discovered,

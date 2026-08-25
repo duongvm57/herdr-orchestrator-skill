@@ -42,15 +42,11 @@ def frontmatter(text: str) -> dict[str, str]:
 class OCRPeerReviewerContractTests(unittest.TestCase):
     def test_reviewer_discovers_ocr_addon(self) -> None:
         peer = read_orchestrator("references/roles/peer.md")
-        lifecycle = read_orchestrator("references/lead/peer-lifecycle.md")
         normalized_peer = normalized(peer)
-        normalized_lifecycle = normalized(lifecycle)
 
         self.assertIn("use `ocr-peer-reviewer` when available", normalized_peer)
-        self.assertIn("explicitly require the Peer to load it", normalized_lifecycle)
-        self.assertIn("Review procedure: <ocr-delegate | direct>", lifecycle)
-        self.assertIn("OCR status:", lifecycle)
-        self.assertIn("SKILL_NOT_AVAILABLE", lifecycle)
+        self.assertIn("Review procedure: ocr-delegate", read_ocr_skill())
+        self.assertIn("OCR status:", read_ocr_skill())
 
     def test_ocr_skill_requires_exact_candidate(self) -> None:
         skill = read_ocr_skill()
@@ -83,13 +79,11 @@ class OCRPeerReviewerContractTests(unittest.TestCase):
     def test_ocr_failure_falls_back_to_direct_review(self) -> None:
         skill = read_ocr_skill()
         peer = read_orchestrator("references/roles/peer.md")
-        lifecycle = read_orchestrator("references/lead/peer-lifecycle.md")
-        combined = skill + peer + lifecycle
+        combined = skill + peer
         normalized_skill = normalized(skill)
         normalized_peer = normalized(peer)
 
         for status in (
-            "SKILL_NOT_AVAILABLE",
             "OCR_UNAVAILABLE",
             "NON_GIT_CANDIDATE",
             "OCR_OUTPUT_UNSUPPORTED",
@@ -113,15 +107,13 @@ class OCRPeerReviewerContractTests(unittest.TestCase):
 
     def test_raw_evidence_has_deterministic_destination_and_digest(self) -> None:
         skill = read_ocr_skill()
-        lifecycle = read_orchestrator("references/lead/peer-lifecycle.md")
 
-        for artifact in ("<inbox>/ocr/preview.json", "<inbox>/ocr/rules.json"):
+        for artifact in ("<evidence-root>/ocr/preview.json", "<evidence-root>/ocr/rules.json"):
             self.assertIn(artifact, skill)
         self.assertIn("sibling partial files", skill)
         self.assertIn("atomically rename", skill)
-        self.assertIn("compute SHA-256 over the exact artifact bytes", skill)
-        self.assertIn("reports/inbox/<agent-name>/ocr/preview.json", lifecycle)
-        self.assertIn("verify their reported SHA-256 digests", normalized(lifecycle))
+        self.assertIn("compute SHA-256 over the exact final bytes", skill)
+        self.assertIn("<evidence-root>/ocr/", skill)
 
     def test_rule_resolution_is_not_bound_to_candidate_range(self) -> None:
         skill = read_ocr_skill()

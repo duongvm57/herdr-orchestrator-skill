@@ -140,8 +140,8 @@ class CoverageManifestTests(unittest.TestCase):
 
         static = by_slug["static-context-architecture"]
         self.assertIn(
-            "tests.test_package_flow.RealPackageFlowTests."
-            "test_real_sources_keep_conditional_bodies_out_of_initial_lead",
+            "tests.test_runtime.RuntimeTests."
+            "test_lead_start_uses_native_herdr_flow_without_focus_or_files",
             static["test_selectors"],
         )
 

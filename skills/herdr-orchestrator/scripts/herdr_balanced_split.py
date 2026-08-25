@@ -510,6 +510,11 @@ def parse_args() -> argparse.Namespace:
         help="live pane used to resolve the tab",
     )
     parser.add_argument(
+        "--herdr",
+        default="herdr",
+        help="Herdr executable or absolute path",
+    )
+    parser.add_argument(
         "--retire",
         metavar="PANE_ID",
         help="persist retirement intent, then close one run-created pane",
@@ -545,12 +550,15 @@ def main() -> int:
         raise LayoutError("HERDR_ENV=1 is required")
     if not args.anchor:
         raise LayoutError("--anchor or HERDR_PANE_ID is required")
+    herdr = args.herdr
+    if not herdr or any(character in herdr for character in "\r\n\0"):
+        raise LayoutError("--herdr must be one safe nonempty argument")
     cwd = Path(args.cwd).resolve()
     if not args.retire and not cwd.is_dir():
         raise LayoutError(f"new-pane cwd is not a directory: {cwd}")
     if args.dry_run:
         layout = _layout_from(
-            _run_json(["herdr", "pane", "layout", "--pane", args.anchor])
+            _run_json([herdr, "pane", "layout", "--pane", args.anchor])
         )
         state = _load_state(args.state, layout, args.anchor)
         _validate_managed_presence(state, layout)
@@ -572,7 +580,7 @@ def main() -> int:
 
     with _state_lock(args.state):
         layout = _layout_from(
-            _run_json(["herdr", "pane", "layout", "--pane", args.anchor])
+            _run_json([herdr, "pane", "layout", "--pane", args.anchor])
         )
         state = _load_state(args.state, layout, args.anchor)
         _validate_managed_presence(state, layout)
@@ -609,9 +617,9 @@ def main() -> int:
             if retirement_intent is None:
                 state["retirement_intent"] = {"pane_id": args.retire}
                 _write_state(args.state, state)
-            _run_json(["herdr", "pane", "close", args.retire])
+            _run_json([herdr, "pane", "close", args.retire])
             layout_after_close = _layout_from(
-                _run_json(["herdr", "pane", "layout", "--pane", args.anchor])
+                _run_json([herdr, "pane", "layout", "--pane", args.anchor])
             )
             _validate_managed_presence(state, layout_after_close)
             retired = _finalize_retirement(args.state, state, layout_after_close)
@@ -635,7 +643,7 @@ def main() -> int:
         _write_state(args.state, state)
         split = _run_json(
             [
-                "herdr",
+                herdr,
                 "pane",
                 "split",
                 "--pane",
@@ -653,7 +661,7 @@ def main() -> int:
         if new_pane in live_before:
             raise LayoutError(f"Herdr split returned an existing pane ID: {new_pane}")
         layout_after_split = _layout_from(
-            _run_json(["herdr", "pane", "layout", "--pane", args.anchor])
+            _run_json([herdr, "pane", "layout", "--pane", args.anchor])
         )
         _validate_managed_presence(state, layout_after_split)
         completed_split = _recover_split(

@@ -1,95 +1,24 @@
 # Topology selection
 
-This is the disclosed `topology` card. Read it completely after the Lead core's
-manifest check and before choosing a topology.
-
 Choose the smallest topology that can change the decision or supply required
-evidence. Agent count is not confidence. Before dispatch, map each moving scope
-to exactly one writer and each decision/evidence boundary to one owner.
+evidence. Agent count is not confidence. Map each moving scope to exactly one
+writer and each decision or evidence boundary to one owner.
 
-## Tiny task
+- **Tiny task:** Lead-local tightly coupled work when protocol permits and
+  independent judgment adds no meaningful protection.
+- **Bounded implementation:** one Engineer, a stable candidate, and an optional
+  fresh Reviewer when protocol or risk requires independent falsification.
+- **Architecture-sensitive work:** fresh read-only Architect, Lead design
+  decision, one Engineer, fresh Reviewer, same-Engineer correction, new stable
+  candidate, and Lead verdict.
+- **Difficult council:** fresh sealed seats with distinct mandates. The Lead
+  tests only decision-changing propositions and owns the verdict; a council is
+  not a vote.
 
-```text
-Lead → one Engineer or Lead-local tightly coupled work → focused checks → Lead inspect
-```
+Read-only agents may share a checkout. Concurrent writers require non-overlapping
+ownership and isolated workspaces, branches, exclusive resources, artifacts,
+and verification. Pre-existing workspaces remain untouched.
 
-Use Lead-local work only when the protocol permits it and separation of
-judgment adds no meaningful protection. The Lead still identifies an exact
-candidate and evidence.
-
-## Bounded implementation
-
-```text
-Lead → Engineer → stable candidate → optional fresh Reviewer → Lead verdict
-```
-
-Use one Engineer for a known bounded scope. Add a Reviewer only when protocol or
-risk requires independent falsification.
-
-## Architecture-sensitive vertical slice
-
-```text
-Lead
-  → fresh Architect (read-only, neutral problem)
-  → binding Lead design decision
-  → Engineer (one moving scope)
-  → fresh Reviewer (exact candidate)
-  → correction in the same Engineer
-  → new stable candidate and review
-  → Lead verdict
-```
-
-The Architect reports ownership, lifecycle, alternatives, strongest
-counterargument, and reversal conditions. It does not write the implementation.
-
-## Difficult council
-
-```text
-Lead
-  ├── fresh sealed seat A: ownership/lifecycle/alternatives
-  └── fresh sealed seat B: failure/falsification/migration
-sealed reports → material propositions → decision-changing verification → one verdict
-```
-
-Each seat needs a distinct mandate and may not read another seat's conclusion
-before reporting. The Lead extracts three to five material propositions, checks
-only claims that could change the decision, permits at most one scoped
-challenge/response per proposition, then binds one verdict. A council is not a
-vote and provider plurality does not grant authority.
-
-## Multiple projects
-
-```text
-Human
-  ├── explicitly requested Supervisor observing governance
-  ├── Lead A → Peers → evidence A
-  └── Lead B → Peers → evidence B
-```
-
-Every Lead retains authority only for its project. Cross-project observation
-does not let a Supervisor accept either project or reuse one project's evidence
-for another.
-
-## Ownership and workspaces
-
-Read-only agents may share a checkout. One moving write scope has one writer.
-Concurrent writers require non-overlapping ownership and separate Git
-worktrees, branches, exclusive resources, artifact paths, and verification.
-Record the base and integration owner before start. The Lead alone creates,
-hands back, integrates, and removes worktrees it owns; pre-existing worktrees
-remain untouched.
-
-Run-created Peer panes may be retired only after their complete handoff is
-durable and the session cannot receive continuation or correction. Retire a
-settled read-only Reviewer before creating its fresh replacement when display
-capacity is exhausted. Preserve the Launcher, Lead, pre-existing panes, and the
-same Engineer until its correction lifecycle ends.
-
-Review starts only after the writer identifies a stable candidate: an exact
-commit, or a deterministic base/diff/artifact digest when commit authority is
-absent. A changed candidate invalidates its earlier review.
-
-Selection is complete when each moving scope has one writer, every dependency
-and evidence boundary has an owner, each independent seat can change a named
-decision, workspace separation matches concurrency, and the chosen topology is
-the smallest one satisfying protocol and risk.
+Review starts only after the writer identifies an exact stable candidate. A
+changed candidate invalidates earlier review. The Lead owns the project verdict;
+independent judgment and successful verification are inputs, not acceptance.

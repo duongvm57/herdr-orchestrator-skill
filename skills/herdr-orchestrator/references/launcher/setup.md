@@ -6,7 +6,7 @@ task via the task-launch route.
 
 ## 1. Preserve and discover
 
-Resolve repository and absolute Git-common roots. Inventory status, worktrees,
+Resolve repository and Git-common roots. Inventory status, worktrees,
 agents/panes, and destinations. Understand and preserve Human-owned or unrelated
 changes; present an in-place diff.
 
@@ -51,8 +51,7 @@ provider catalog. Pi projects only effective native `enabledModels` scope and
 stops if absent or stale. Missing adapters fail closed;
 prove each choice with a bounded native check or approved smoke. Decide:
 
-- live orchestration and durable artifact languages on first setup, invalid
-  existing values, or an explicit language change;
+- live orchestration and artifact languages on first setup or change;
 - project risk, review triggers, costly reversals, and minimum verdict proof;
 - edit, commit, push, deploy, publish, and other external-effect authority; and
 - scope expansion, reserved architecture, budget, and Human-only boundaries.
@@ -64,11 +63,11 @@ an approved end-to-end smoke; create no placeholder, passthrough, or fallback.
 
 ## 2. Prove each role envelope
 
-Disable native spawning. A Lead needs Herdr reachability, bounded evidence
-writes, and authorized project/Git access. Each Peer gets one lossless report
-boundary and its owned workspace. A read-only Peer uses mailbox cwd; a
-Supervisor is project-read-only and notebook-write-only. Check shared recipes
-separately per role.
+Disable native spawning. A Lead needs Herdr reachability and authorized
+project/Git access. Each Peer gets only the configured workspace authority. A
+read-only Peer does not receive a writable project root; a Supervisor is
+project-read-only unless an explicit observation artifact root is assigned.
+Check shared recipes separately per role.
 
 Validate static controls; use a Human-approved collision-free smoke only when
 inspection is insufficient. It may create, read, fsync, and remove one in-scope
@@ -79,9 +78,9 @@ unenforceable envelope; state limitations precisely.
 Before smoke or serialization, run `validate-project --git-common-dir`; the
 selected Lead adapter checks its static evidence-root rules. Kinds without a
 static rule need the live probe. Show every granted root/network capability and
-grant it to other profiles only when authorized. A read-only Peer uses mailbox
-cwd without writable project/Git roots; a Supervisor receives only its notebook
-root.
+grant it to other profiles only when authorized. A read-only Peer receives its
+project cwd read-only; a Supervisor receives only its assigned observation scope
+and optional artifact root.
 
 Discovery is complete when the Human saw the kind map and compact inventory;
 every selected executable, model, argument, spawn/access boundary is proven;
