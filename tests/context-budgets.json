@@ -7,19 +7,16 @@
         "skills/herdr-orchestrator/SKILL.md"
       ],
       "hard_limit": 500,
-      "baseline": 394
+      "baseline": 364
     },
     "setup_launcher": {
       "render": "concat",
       "files": [
         "skills/herdr-orchestrator/SKILL.md",
-        "skills/herdr-orchestrator/references/launcher/setup.md",
-        "skills/herdr-orchestrator/references/launcher/workspace-protocol-authoring.md",
-        "skills/herdr-orchestrator/assets/config.toml",
-        "skills/herdr-orchestrator/assets/workspace-protocol-template.md"
+        "skills/herdr-orchestrator/references/launcher/setup.md"
       ],
       "hard_limit": 3000,
-      "baseline": 2909
+      "baseline": 1041
     },
     "task_launcher": {
       "render": "concat",
@@ -29,7 +26,7 @@
         "skills/herdr-orchestrator/references/launcher/task-launch.md"
       ],
       "hard_limit": 4000,
-      "baseline": 2856
+      "baseline": 2209
     },
     "supervisor_attachment": {
       "render": "concat",
@@ -39,7 +36,7 @@
         "skills/herdr-orchestrator/references/launcher/supervisor-attachment.md"
       ],
       "hard_limit": 3000,
-      "baseline": 2713
+      "baseline": 1768
     },
     "lead_initial_fixed": {
       "render": "pack",
@@ -63,7 +60,7 @@
         "assignment": []
       },
       "hard_limit": 3000,
-      "baseline": 1579
+      "baseline": 1586
     },
     "peer_fixed": {
       "render": "pack",

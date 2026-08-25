@@ -14,9 +14,7 @@ this skill.
 
 Read the selected procedure completely. Procedures compose only where stated.
 
-- **Setup/update:** read `references/launcher/setup.md`,
-  `references/launcher/workspace-protocol-authoring.md`,
-  `assets/config.toml`, and `assets/workspace-protocol-template.md`.
+- **Setup/update:** read `references/launcher/setup.md`.
 - **Task launch:** read `references/launcher/preflight.md`, then
   `references/launcher/task-launch.md`.
 - **Supervisor attachment:** read `references/launcher/preflight.md`, then

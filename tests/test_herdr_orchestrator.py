@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills/herdr-orchestrator"
 HELPER = SKILL_ROOT / "scripts/herdr_orchestrator.py"
 LAYOUT_HELPER = SKILL_ROOT / "scripts/herdr_balanced_split.py"
-HARNESS_ADAPTERS = SKILL_ROOT / "scripts/herdr_harnesses"
+from tests.accepted_fixture import publish_accepted_setup
 
 
 def sha256(data: bytes) -> str:
@@ -38,17 +38,6 @@ class HerdrOrchestratorTest(unittest.TestCase):
             path.chmod(0o755)
         return path
 
-    def pi_scope_env(self, patterns: list[str]) -> dict[str, str]:
-        agent_dir = self.root / "pi-agent"
-        agent_dir.mkdir(exist_ok=True)
-        (agent_dir / "settings.json").write_text(
-            json.dumps({"enabledModels": patterns}),
-            encoding="utf-8",
-        )
-        environment = os.environ.copy()
-        environment["PI_CODING_AGENT_DIR"] = str(agent_dir)
-        return environment
-
     def run_cli(
         self,
         *arguments: str,
@@ -63,85 +52,47 @@ class HerdrOrchestratorTest(unittest.TestCase):
             env=env,
         )
 
-    def preflight_digest_args(self, config: Path, protocol: Path) -> tuple[str, ...]:
+    def preflight_digest_args(self, project: Path) -> tuple[str, ...]:
+        activation = project / ".orchestration/setup/current.json"
         return (
-            "--expected-project-config-sha256",
-            sha256(config.read_bytes()),
-            "--expected-workspace-protocol-sha256",
-            sha256(protocol.read_bytes()),
+            "--expected-activation-sha256",
+            sha256(activation.read_bytes()),
+        )
+
+    def accepted_paths(self, project: Path) -> tuple[Path, Path, Path]:
+        activation = project / ".orchestration/setup/current.json"
+        current = json.loads(activation.read_bytes())
+        generation = project / ".orchestration/setup" / current["generation"]
+        return (
+            activation,
+            generation / "herdr-orchestrator.toml",
+            generation / "workspace-protocol.md",
         )
 
     def valid_project(self) -> Path:
         project = self.root / "project"
-        orchestration = project / ".orchestration"
-        orchestration.mkdir(parents=True)
-        (orchestration / "herdr-orchestrator.toml").write_text(
-            textwrap.dedent(
-                """\
-                version = 3
-                fallback_peer_recipe = "engineer"
-
-                [roles.lead]
-                kind = "codex"
-                args = ["--model", "gpt-5.6-sol"]
-
-                [roles.supervisor]
-                kind = "codex"
-                args = ["--model", "gpt-5.6-terra"]
-
-                [peer_recipes.engineer]
-                description = "Writable implementation recipe"
-                kind = "codex"
-                args = ["--model", "gpt-5.6-terra"]
-                """
-            ),
-            encoding="utf-8",
-        )
-        protocol_lines = []
-        for line in (SKILL_ROOT / "assets/workspace-protocol-template.md").read_text(encoding="utf-8").splitlines():
-            if line.startswith("- ") and ":" in line:
-                label, value = line.split(":", 1)
-                if not value.strip() or value.strip() == "YYYY-MM-DD":
-                    configured = {
-                        "- Repository root": str(project.resolve()),
-                        "- Live orchestration language": "Vietnamese",
-                        "- Durable Markdown artifact language": "English",
-                        "- Last reviewed": "2026-08-23",
-                    }.get(label, f"configured {label[2:].lower()}")
-                    line = f"{label}: {configured}"
-            protocol_lines.append(line)
-        (orchestration / "workspace-protocol.md").write_text(
-            "\n".join(protocol_lines) + "\n",
-            encoding="utf-8",
-        )
+        project.mkdir()
+        publish_accepted_setup(project)
         return project
 
     def init_run(self, *assets: tuple[str, Path]) -> tuple[Path, dict[str, object]]:
-        common = self.root / "common"
-        common.mkdir(exist_ok=True)
         task = self.write("inputs/task.md", "Implement the exact Human task.\n")
         before = self.write("inputs/before.txt", "## main\n M preserved.txt\n")
         project = self.valid_project()
-        repository = project
-        config = project / ".orchestration/herdr-orchestrator.toml"
-        protocol = project / ".orchestration/workspace-protocol.md"
+        common = project / ".git"
         arguments = [
             "init-run",
             "--git-common-dir",
             str(common),
             "--run-id",
             "20260823T010203Z-ab12",
-            "--repository-root",
-            str(repository),
+            "--project-root",
+            str(project),
             "--human-task-file",
             str(task),
             "--before-state-file",
             str(before),
-            "--project-config-file",
-            str(config),
-            "--workspace-protocol-file",
-            str(protocol),
-            *self.preflight_digest_args(config, protocol),
+            *self.preflight_digest_args(project),
             "--layout-helper",
             str(LAYOUT_HELPER),
         ]
@@ -157,22 +108,13 @@ class HerdrOrchestratorTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         for command in (
             "validate-project",
+            "bind-role",
             "init-run",
             "stage-assets",
             "pack",
             "deliver",
-            "harness-models",
         ):
             self.assertIn(command, completed.stdout)
-
-        self.assertNotIn("codex-models", completed.stdout)
-
-        models_help = self.run_cli("harness-models", "--help")
-        self.assertEqual(models_help.returncode, 0, models_help.stderr)
-        for kind in ("codex", "claude", "grok", "pi", "opencode", "omp"):
-            self.assertIn(kind, models_help.stdout)
-        for kind in ("agy", "amp", "cline", "cursor", "devin", "droid", "gemini"):
-            self.assertNotIn(kind, models_help.stdout)
 
         pack_help = self.run_cli("pack", "--help")
         self.assertEqual(pack_help.returncode, 0, pack_help.stderr)
@@ -183,461 +125,49 @@ class HerdrOrchestratorTest(unittest.TestCase):
         completed = self.run_cli("validate-project", "--project-root", str(project))
         self.assertEqual(completed.returncode, 0, completed.stderr)
         result = json.loads(completed.stdout)
-        self.assertEqual(result["config"]["version"], 3)
         self.assertEqual(result["languages"], {"artifact": "English", "live": "Vietnamese"})
         self.assertEqual(
-            result["recipes"]["lead"],
-            {"args": ["--model", "gpt-5.6-sol"], "kind": "codex"},
+            {role["role"] for role in result["roles"]},
+            {"lead", "engineer", "reviewer", "supervisor"},
         )
-        self.assertEqual(
-            result["recipes"]["fallback_peer"],
-            {
-                "name": "engineer",
-                "description": "Writable implementation recipe",
-                "args": ["--model", "gpt-5.6-terra"],
-                "kind": "codex",
-            },
-        )
-        self.assertEqual(result["recipes"]["peers"][0]["name"], "engineer")
+        self.assertTrue(result["activation"]["path"].endswith("setup/current.json"))
+        self.assertEqual(result["repository_root"], str(project))
 
-    def test_validate_project_binds_fallback_to_an_exact_peer_recipe(self) -> None:
+    def test_bind_role_writes_one_digest_bound_exact_launch_receipt(self) -> None:
         project = self.valid_project()
-        config = project / ".orchestration/herdr-orchestrator.toml"
-        original = config.read_text(encoding="utf-8")
-
-        for fallback, expected in (
-            ("missing", "must name an exact peer_recipes entry"),
-            ("<fallback>", "non-placeholder string"),
-        ):
-            with self.subTest(fallback=fallback):
-                config.write_text(
-                    original.replace(
-                        'fallback_peer_recipe = "engineer"',
-                        f'fallback_peer_recipe = "{fallback}"',
-                    ),
-                    encoding="utf-8",
-                )
-                completed = self.run_cli(
-                    "validate-project",
-                    "--project-root",
-                    str(project),
-                )
-                self.assertEqual(completed.returncode, 2)
-                self.assertIn(expected, completed.stderr)
-
-        config.write_text(
-            original.replace('fallback_peer_recipe = "engineer"\n', ""),
-            encoding="utf-8",
-        )
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("missing keys: fallback_peer_recipe", completed.stderr)
-
-        config.write_text(original.replace("version = 3", "version = 2"), encoding="utf-8")
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("project config version must be 3", completed.stderr)
-
-    def test_validate_project_accepts_provider_scoped_model_ids(self) -> None:
-        project = self.valid_project()
-        config = project / ".orchestration/herdr-orchestrator.toml"
-        scoped = config.read_text(encoding="utf-8").replace(
-            '[peer_recipes.engineer]\n'
-            'description = "Writable implementation recipe"\n'
-            'kind = "codex"\n'
-            'args = ["--model", "gpt-5.6-terra"]\n',
-            '[peer_recipes.engineer]\n'
-            'description = "Writable implementation recipe"\n'
-            'kind = "opencode"\n'
-            'args = ["--model", "opencode-go/ox-alpha-free"]\n',
-        )
-        config.write_text(scoped, encoding="utf-8")
-
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-
-        for unsafe in (
-            "/provider/model",
-            "provider/model/",
-            "provider//model",
-            "provider/../model",
-        ):
-            with self.subTest(model=unsafe):
-                config.write_text(
-                    scoped.replace("opencode-go/ox-alpha-free", unsafe),
-                    encoding="utf-8",
-                )
-                completed = self.run_cli(
-                    "validate-project", "--project-root", str(project)
-                )
-                self.assertEqual(completed.returncode, 2)
-                self.assertIn("unsupported value", completed.stderr)
-
-    def test_validate_project_accepts_independent_mixed_harness_profiles(self) -> None:
-        project = self.valid_project()
-        common = self.root / "git-common"
-        common.mkdir()
-        config = project / ".orchestration/herdr-orchestrator.toml"
-        config.write_text(
-            textwrap.dedent(
-                f"""\
-                version = 3
-                fallback_peer_recipe = "opencode-general"
-
-                [roles.lead]
-                kind = "claude"
-                args = ["--model", "claude-sonnet-5", "--effort", "high", "--permission-mode", "acceptEdits", "--add-dir", "{common}", "--disallowedTools", "Agent,Task"]
-
-                [roles.supervisor]
-                kind = "grok"
-                args = ["--model", "grok-4.6", "--reasoning-effort", "high", "--permission-mode", "plan", "--no-subagents"]
-
-                [peer_recipes.codex-review]
-                description = "Codex review profile"
-                kind = "codex"
-                args = ["--model", "gpt-5.6-sol", "--sandbox", "read-only", "--config", "agents.enabled=false"]
-
-                [peer_recipes.pi-fast]
-                description = "Pi fast profile"
-                kind = "pi"
-                args = ["--provider", "openai-codex", "--model", "gpt-5.6-luna", "--models", "openai-codex/gpt-5.6-*", "--thinking", "low", "--exclude-tools", "agent,task"]
-
-                [peer_recipes.opencode-general]
-                description = "OpenCode general profile"
-                kind = "opencode"
-                args = ["--model", "opencode-go/ox-alpha-free", "--agent", "build"]
-                """
-            ),
-            encoding="utf-8",
-        )
+        validated = self.run_cli("validate-project", "--project-root", str(project))
+        self.assertEqual(validated.returncode, 0, validated.stderr)
+        preflight = json.loads(validated.stdout)
+        inbox = self.root / "review-inbox"
+        inbox.mkdir()
+        output = self.root / "review-launch.json"
 
         completed = self.run_cli(
-            "validate-project",
-            "--project-root",
-            str(project),
-            "--git-common-dir",
-            str(common),
+            "bind-role",
+            "--project-config-file",
+            preflight["config"]["path"],
+            "--expected-project-config-sha256",
+            preflight["config"]["sha256"],
+            "--role",
+            "reviewer",
+            "--cwd",
+            str(inbox),
+            "--bind",
+            f"workspace={project}",
+            "--bind",
+            f"git_common={project / '.git'}",
+            "--bind",
+            f"evidence={inbox}",
+            "--output",
+            str(output),
         )
+
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        recipes = json.loads(completed.stdout)["recipes"]
-        self.assertEqual(recipes["lead"]["kind"], "claude")
-        self.assertEqual(recipes["supervisor"]["kind"], "grok")
-        self.assertEqual(
-            {profile["kind"] for profile in recipes["peers"]},
-            {"codex", "pi", "opencode"},
-        )
-
-        config.write_text(
-            config.read_text(encoding="utf-8").replace(
-                'kind = "pi"\nargs = ["--provider"',
-                'kind = "opencode"\nargs = ["--provider"',
-            ),
-            encoding="utf-8",
-        )
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("peer_recipes.pi-fast.args has an unsupported option", completed.stderr)
-
-    def test_validate_project_uses_selected_lead_adapter_for_evidence_root(self) -> None:
-        project = self.valid_project()
-        common = self.root / "git-common"
-        common.mkdir()
-        config = project / ".orchestration/herdr-orchestrator.toml"
-        original = config.read_text(encoding="utf-8")
-        workspace_write = original.replace(
-            'args = ["--model", "gpt-5.6-sol"]',
-            'args = ["--model", "gpt-5.6-sol", "--sandbox", "workspace-write"]',
-            1,
-        )
-        config.write_text(workspace_write, encoding="utf-8")
-
-        completed = self.run_cli(
-            "validate-project",
-            "--project-root",
-            str(project),
-            "--git-common-dir",
-            str(common),
-        )
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("roles.lead", completed.stderr)
-        self.assertIn("Git common directory", completed.stderr)
-
-        config.write_text(
-            workspace_write.replace(
-                '"--sandbox", "workspace-write"',
-                f'"--sandbox", "workspace-write", "--add-dir", "{common}"',
-            ),
-            encoding="utf-8",
-        )
-        completed = self.run_cli(
-            "validate-project",
-            "--project-root",
-            str(project),
-            "--git-common-dir",
-            str(common),
-        )
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        result = json.loads(completed.stdout)
-        self.assertEqual(result["git_common_dir"], str(common.resolve()))
-
-        claude = original.replace(
-            '[roles.lead]\nkind = "codex"\nargs = ["--model", "gpt-5.6-sol"]',
-            '[roles.lead]\nkind = "claude"\n'
-            'args = ["--model", "claude-sonnet-5", '
-            '"--disallowedTools", "Agent,Task"]',
-        )
-        config.write_text(claude, encoding="utf-8")
-        completed = self.run_cli(
-            "validate-project",
-            "--project-root",
-            str(project),
-            "--git-common-dir",
-            str(common),
-        )
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("roles.lead claude", completed.stderr)
-
-        config.write_text(
-            claude.replace(
-                '"--disallowedTools", "Agent,Task"',
-                f'"--disallowedTools", "Agent,Task", "--add-dir", "{common}"',
-                1,
-            ),
-            encoding="utf-8",
-        )
-        completed = self.run_cli(
-            "validate-project",
-            "--project-root",
-            str(project),
-            "--git-common-dir",
-            str(common),
-        )
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-
-    def test_validate_project_binds_canonical_paths_and_protocol_root(self) -> None:
-        project = self.valid_project()
-        protocol = project / ".orchestration/workspace-protocol.md"
-        other = self.root / "other-project"
-        other.mkdir()
-        protocol.write_text(
-            protocol.read_text(encoding="utf-8").replace(
-                str(project.resolve()),
-                str(other.resolve()),
-            ),
-            encoding="utf-8",
-        )
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 2)
-        self.assertEqual(completed.stdout, "")
-        self.assertIn("does not match the repository root", completed.stderr)
-
-        protocol.write_text(
-            protocol.read_text(encoding="utf-8").replace(
-                str(other.resolve()),
-                str(project.resolve()),
-            ),
-            encoding="utf-8",
-        )
-        copied = self.write(
-            "copied-config.toml",
-            (project / ".orchestration/herdr-orchestrator.toml").read_text(
-                encoding="utf-8"
-            ),
-        )
-        completed = self.run_cli(
-            "validate-project",
-            "--project-root",
-            str(project),
-            "--config",
-            str(copied),
-        )
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("canonical project paths", completed.stderr)
-
-    def test_validate_project_rejects_unknown_schema_and_blank_language(self) -> None:
-        project = self.valid_project()
-        config = project / ".orchestration/herdr-orchestrator.toml"
-        config.write_text(config.read_text(encoding="utf-8") + "\nlegacy = true\n", encoding="utf-8")
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 2)
-        self.assertEqual(completed.stdout, "")
-        self.assertIn("unsupported keys", completed.stderr)
-
-        config.write_text(config.read_text(encoding="utf-8").replace("\nlegacy = true\n", "\n"), encoding="utf-8")
-        protocol = project / ".orchestration/workspace-protocol.md"
-        protocol.write_text(
-            protocol.read_text(encoding="utf-8").replace(
-                "Live orchestration language: Vietnamese",
-                "Live orchestration language:",
-            ),
-            encoding="utf-8",
-        )
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("populated value for Live orchestration language", completed.stderr)
-
-    def test_protocol_requires_every_template_label_populated_in_its_section(self) -> None:
-        project = self.valid_project()
-        protocol = project / ".orchestration/workspace-protocol.md"
-        populated = protocol.read_text(encoding="utf-8")
-
-        protocol.write_bytes((SKILL_ROOT / "assets/workspace-protocol-template.md").read_bytes())
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("requires a populated value", completed.stderr)
-
-        owner_line = "- Owner: configured owner\n"
-        misplaced = populated.replace(owner_line, "").replace(
-            "## 2. Project characteristics and risk classes\n",
-            "## 2. Project characteristics and risk classes\n\n" + owner_line,
-        )
-        protocol.write_text(misplaced, encoding="utf-8")
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("Owner belongs in section 1, not section 2", completed.stderr)
-
-        missing = populated.replace(
-            "- Dominant risks: configured dominant risks\n",
-            "",
-        )
-        protocol.write_text(missing, encoding="utf-8")
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("section 2 is missing required label Dominant risks", completed.stderr)
-
-    def test_protocol_label_contract_matches_packaged_template(self) -> None:
-        spec = importlib.util.spec_from_file_location("herdr_protocol_contract", HELPER)
-        self.assertIsNotNone(spec)
-        self.assertIsNotNone(spec.loader)
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        self.addCleanup(sys.modules.pop, spec.name, None)
-        spec.loader.exec_module(module)
-
-        sections: list[tuple[str, ...]] = []
-        labels: list[str] = []
-        for line in (SKILL_ROOT / "assets/workspace-protocol-template.md").read_text(encoding="utf-8").splitlines():
-            if line.startswith("## "):
-                if labels:
-                    sections.append(tuple(labels))
-                    labels = []
-            elif line.startswith("- ") and ":" in line:
-                labels.append(line[2:].split(":", 1)[0])
-        sections.append(tuple(labels))
-        self.assertEqual(tuple(sections), module.PROTOCOL_LABELS)
-
-    def test_validate_project_rejects_placeholder_and_credential_arguments(self) -> None:
-        project = self.valid_project()
-        config = project / ".orchestration/herdr-orchestrator.toml"
-        original = config.read_text(encoding="utf-8")
-        config.write_text(original.replace("gpt-5.6-sol", "<lead-model>"), encoding="utf-8")
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("non-placeholder", completed.stderr)
-
-        unsafe_vectors = (
-            '["--api-key", "stored-secret"]',
-            '["--token", "stored-secret"]',
-            '["-H", "Authorization: Bearer stored-secret"]',
-            '["-H", "X-Api-Key: highly-sensitive"]',
-            '["@secret.args"]',
-            '["--model", "${MODEL_ID}"]',
-            '["--model", "$MODEL_ID"]',
-            '["--model", "sk-live-HERDRCANARY74af"]',
-            '["--env-file", "/tmp/credentials.env"]',
-            '["--config", "/tmp/profile.toml"]',
-            '["--config", "model_providers.x.http_headers=highly-sensitive"]',
-            '["--add-dir", "/definitely-missing/HERDRCANARY"]',
-        )
-        for vector in unsafe_vectors:
-            with self.subTest(vector=vector):
-                config.write_text(
-                    original.replace(
-                        'args = ["--model", "gpt-5.6-sol"]',
-                        f"args = {vector}",
-                        1,
-                    ),
-                    encoding="utf-8",
-                )
-                completed = self.run_cli("validate-project", "--project-root", str(project))
-                self.assertEqual(completed.returncode, 2)
-                self.assertIn("unsupported", completed.stderr)
-                self.assertNotIn("stored-secret", completed.stderr)
-                self.assertNotIn("highly-sensitive", completed.stderr)
-                self.assertNotIn("credentials.env", completed.stderr)
-                self.assertNotIn("profile.toml", completed.stderr)
-                self.assertNotIn("HERDRCANARY", completed.stderr)
-
-        config.write_text(
-            original.replace(
-                'args = ["--model", "gpt-5.6-sol"]',
-                'args = ["--model", "gpt-5.6-sol", "--sandbox", "workspace-write", '
-                '"--config", "sandbox_workspace_write.network_access=true"]',
-                1,
-            ),
-            encoding="utf-8",
-        )
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-
-        config.write_text(
-            original.replace(
-                'args = ["--model", "gpt-5.6-sol"]',
-                'args = ["--model", "gpt-5.6-sol", '
-                '"--config", "agents.enabled=false", '
-                '"--config", "agents.enabled=false"]',
-                1,
-            ),
-            encoding="utf-8",
-        )
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("repeats", completed.stderr)
-
-        config.write_text(
-            original.replace('kind = "codex"', 'kind = "unregistered"', 1),
-            encoding="utf-8",
-        )
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 2)
-        self.assertEqual(completed.stdout, "")
-        self.assertIn("has no verified orchestrator adapter", completed.stderr)
-
-    def test_validate_project_enforces_omp_model_and_subagent_boundary(self) -> None:
-        project = self.valid_project()
-        config = project / ".orchestration/herdr-orchestrator.toml"
-        original = config.read_text(encoding="utf-8")
-        marker = (
-            '[peer_recipes.engineer]\n'
-            'description = "Writable implementation recipe"\n'
-            'kind = "codex"\n'
-            'args = ["--model", "gpt-5.6-terra"]\n'
-        )
-        omp = (
-            '[peer_recipes.engineer]\n'
-            'description = "Read-only OMP review recipe"\n'
-            'kind = "omp"\n'
-            'args = ["--model", "openai-codex/gpt-5.6-luna", "--thinking", '
-            '"low", "--tools", "read,bash", "--no-prewalk", "--no-extensions", '
-            '"--no-skills", "--no-rules", "--approval-mode", "always-ask"]\n'
-        )
-        config.write_text(original.replace(marker, omp), encoding="utf-8")
-
-        completed = self.run_cli("validate-project", "--project-root", str(project))
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-
-        for configured, expected in (
-            (omp.replace(', "--no-prewalk"', ""), "must include --no-prewalk"),
-            (omp.replace('"read,bash"', '"read,bash,task"'), "native task subagent"),
-            (omp.replace(', "--tools", "read,bash"', ""), "exactly one of --tools"),
-        ):
-            with self.subTest(expected=expected):
-                config.write_text(original.replace(marker, configured), encoding="utf-8")
-                completed = self.run_cli(
-                    "validate-project", "--project-root", str(project)
-                )
-                self.assertEqual(completed.returncode, 2)
-                self.assertIn(expected, completed.stderr)
+        receipt = json.loads(output.read_bytes())
+        self.assertEqual(receipt["role"], "reviewer")
+        self.assertEqual(receipt["kind"], "codex")
+        self.assertIn(str(inbox), "\n".join(receipt["arguments"]))
+        self.assertEqual(json.loads(completed.stdout)["launch_digest"], receipt["launch_digest"])
 
     def test_init_run_publishes_complete_tree_and_digest_only_manifests(self) -> None:
         card = self.write("cards/topology.md", "TOPOLOGY CARD\n")
@@ -651,11 +181,10 @@ class HerdrOrchestratorTest(unittest.TestCase):
         self.assertFalse((run_dir / "tools/layout-state.json").exists())
         self.assertEqual((run_dir / "tools/herdr_balanced_split.py").read_bytes(), LAYOUT_HELPER.read_bytes())
         self.assertEqual((run_dir / "tools/herdr_orchestrator.py").read_bytes(), HELPER.read_bytes())
-        for adapter in HARNESS_ADAPTERS.glob("*.py"):
-            self.assertEqual(
-                (run_dir / "tools/herdr_harnesses" / adapter.name).read_bytes(),
-                adapter.read_bytes(),
-            )
+        self.assertEqual(
+            (run_dir / "tools/herdr_runtime.py").read_bytes(),
+            (SKILL_ROOT / "scripts/herdr_runtime.py").read_bytes(),
+        )
 
         run_local = subprocess.run(
             [sys.executable, str(run_dir / "tools/herdr_orchestrator.py"), "--help"],
@@ -665,7 +194,7 @@ class HerdrOrchestratorTest(unittest.TestCase):
             text=True,
         )
         self.assertEqual(run_local.returncode, 0, run_local.stderr)
-        self.assertIn("harness-models", run_local.stdout)
+        self.assertIn("bind-role", run_local.stdout)
 
         cards = json.loads((run_dir / "context/cards/manifest.json").read_text(encoding="utf-8"))
         entry = cards["assets"][0]
@@ -673,8 +202,13 @@ class HerdrOrchestratorTest(unittest.TestCase):
         self.assertEqual(entry["name"], "topology.md")
         self.assertEqual(entry["sha256"], sha256(card.read_bytes()))
         self.assertNotIn("TOPOLOGY CARD", json.dumps(cards))
-        project_config = self.root / "project/.orchestration/herdr-orchestrator.toml"
-        project_protocol = self.root / "project/.orchestration/workspace-protocol.md"
+        activation, project_config, project_protocol = self.accepted_paths(
+            self.root / "project"
+        )
+        self.assertEqual(
+            (run_dir / "context/setup-activation.json").read_bytes(),
+            activation.read_bytes(),
+        )
         self.assertEqual(
             (run_dir / "context/project-config.toml").read_bytes(), project_config.read_bytes()
         )
@@ -685,17 +219,7 @@ class HerdrOrchestratorTest(unittest.TestCase):
         run_manifest = json.loads(run_manifest_text)
         self.assertNotIn("Implement the exact Human task", run_manifest_text)
         self.assertIn("orchestration_helper", run_manifest["artifacts"])
-        self.assertEqual(
-            {
-                artifact["path"]
-                for name, artifact in run_manifest["artifacts"].items()
-                if name.startswith("harness_adapter_")
-            },
-            {
-                f"tools/herdr_harnesses/{adapter.name}"
-                for adapter in HARNESS_ADAPTERS.glob("*.py")
-            },
-        )
+        self.assertIn("runtime_helper", run_manifest["artifacts"])
         self.assertEqual(
             run_manifest["artifacts"]["project_config"]["sha256"],
             sha256(project_config.read_bytes()),
@@ -707,6 +231,7 @@ class HerdrOrchestratorTest(unittest.TestCase):
         self.assertEqual(
             run_manifest["project_sources"],
             {
+                "activation": str(activation.resolve()),
                 "project_config": str(project_config.resolve()),
                 "workspace_protocol": str(project_protocol.resolve()),
             },
@@ -721,243 +246,39 @@ class HerdrOrchestratorTest(unittest.TestCase):
             },
         )
 
-    def test_init_run_rejects_post_preflight_change_before_mutation(self) -> None:
-        common = self.root / "common"
-        common.mkdir()
+    def test_init_run_rejects_activation_changed_after_preflight(self) -> None:
         project = self.valid_project()
-        config = project / ".orchestration/herdr-orchestrator.toml"
-        protocol = project / ".orchestration/workspace-protocol.md"
-        validated = self.run_cli(
-            "validate-project",
-            "--project-root",
-            str(project),
-        )
-        self.assertEqual(validated.returncode, 0, validated.stderr)
-        preflight = json.loads(validated.stdout)
-        config.write_text(
-            config.read_text(encoding="utf-8").replace(
-                "gpt-5.6-sol",
-                "gpt-5.6-terra",
-                1,
-            ),
-            encoding="utf-8",
-        )
+        common = project / ".git"
         task = self.write("authority/task.md", "task\n")
         before = self.write("authority/before.txt", "state\n")
+        activation = project / ".orchestration/setup/current.json"
+        expected = sha256(activation.read_bytes())
+        activation.write_bytes(activation.read_bytes() + b"\n")
+
         completed = self.run_cli(
             "init-run",
             "--git-common-dir",
             str(common),
             "--run-id",
             "authority-bind",
-            "--repository-root",
-            str(project),
-            "--human-task-file",
-            str(task),
-            "--before-state-file",
-            str(before),
-            "--project-config-file",
-            str(config),
-            "--workspace-protocol-file",
-            str(protocol),
-            "--expected-project-config-sha256",
-            preflight["config"]["sha256"],
-            "--expected-workspace-protocol-sha256",
-            preflight["protocol"]["sha256"],
-        )
-        self.assertEqual(completed.returncode, 2)
-        self.assertEqual(completed.stdout, "")
-        self.assertIn("changed after preflight validation", completed.stderr)
-        self.assertEqual(list(common.iterdir()), [])
-
-        config.write_text(
-            config.read_text(encoding="utf-8").replace(
-                "gpt-5.6-terra",
-                "gpt-5.6-sol",
-                1,
-            ),
-            encoding="utf-8",
-        )
-        validated = self.run_cli(
-            "validate-project",
             "--project-root",
             str(project),
-        )
-        self.assertEqual(validated.returncode, 0, validated.stderr)
-        preflight = json.loads(validated.stdout)
-        protocol.write_text(
-            protocol.read_text(encoding="utf-8").replace(
-                "Live orchestration language: Vietnamese",
-                "Live orchestration language: Thai",
-            ),
-            encoding="utf-8",
-        )
-        common_protocol = self.root / "common-protocol-change"
-        common_protocol.mkdir()
-        completed = self.run_cli(
-            "init-run",
-            "--git-common-dir",
-            str(common_protocol),
-            "--run-id",
-            "protocol-authority-bind",
-            "--repository-root",
-            str(project),
             "--human-task-file",
             str(task),
             "--before-state-file",
             str(before),
-            "--project-config-file",
-            str(config),
-            "--workspace-protocol-file",
-            str(protocol),
-            "--expected-project-config-sha256",
-            preflight["config"]["sha256"],
-            "--expected-workspace-protocol-sha256",
-            preflight["protocol"]["sha256"],
+            "--expected-activation-sha256",
+            expected,
         )
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("workspace protocol changed", completed.stderr)
-        self.assertEqual(list(common_protocol.iterdir()), [])
 
-    def test_init_run_failure_leaves_no_partial_run_tree(self) -> None:
-        common = self.root / "common"
-        common.mkdir()
-        task = self.write("task.md", "task\n")
-        before = self.write("before.txt", "state\n")
-        project = self.valid_project()
-        repository = project
-        config = project / ".orchestration/herdr-orchestrator.toml"
-        protocol = project / ".orchestration/workspace-protocol.md"
-        first = self.write("one.md", "one\n")
-        second = self.write("two.md", "two\n")
-        completed = self.run_cli(
-            "init-run",
-            "--git-common-dir",
-            str(common),
-            "--run-id",
-            "run-1",
-            "--repository-root",
-            str(repository),
-            "--human-task-file",
-            str(task),
-            "--before-state-file",
-            str(before),
-            "--project-config-file",
-            str(config),
-            "--workspace-protocol-file",
-            str(protocol),
-            *self.preflight_digest_args(config, protocol),
-            "--asset",
-            f"same.md={first}",
-            "--asset",
-            f"same.md={second}",
-        )
         self.assertEqual(completed.returncode, 2)
         self.assertEqual(completed.stdout, "")
         self.assertFalse((common / "herdr-orchestrator").exists())
-        self.assertEqual(list(common.iterdir()), [])
-
-    def test_init_run_strictly_validates_snapshots_before_mutation(self) -> None:
-        common = self.root / "common"
-        common.mkdir()
-        project = self.valid_project()
-        repository = project
-        config = project / ".orchestration/herdr-orchestrator.toml"
-        protocol = project / ".orchestration/workspace-protocol.md"
-        protocol.write_text(
-            protocol.read_text(encoding="utf-8").replace(
-                "- Owner: configured owner",
-                "- Owner:",
-            ),
-            encoding="utf-8",
-        )
-        task = self.write("task.md", "task\n")
-        before = self.write("before.txt", "state\n")
-        completed = self.run_cli(
-            "init-run",
-            "--git-common-dir",
-            str(common),
-            "--run-id",
-            "run-1",
-            "--repository-root",
-            str(repository),
-            "--human-task-file",
-            str(task),
-            "--before-state-file",
-            str(before),
-            "--project-config-file",
-            str(config),
-            "--workspace-protocol-file",
-            str(protocol),
-            *self.preflight_digest_args(config, protocol),
-        )
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("populated value for Owner", completed.stderr)
-        self.assertEqual(list(common.iterdir()), [])
-
-    def test_init_run_rejects_symlinked_run_container(self) -> None:
-        common = self.root / "common"
-        outside = self.root / "outside"
-        common.mkdir()
-        outside.mkdir()
-        (common / "herdr-orchestrator").symlink_to(outside, target_is_directory=True)
-        task = self.write("task.md", "task\n")
-        before = self.write("before.txt", "state\n")
-        project = self.valid_project()
-        repository = project
-        config = project / ".orchestration/herdr-orchestrator.toml"
-        protocol = project / ".orchestration/workspace-protocol.md"
-        completed = self.run_cli(
-            "init-run",
-            "--git-common-dir",
-            str(common),
-            "--run-id",
-            "run-1",
-            "--repository-root",
-            str(repository),
-            "--human-task-file",
-            str(task),
-            "--before-state-file",
-            str(before),
-            "--project-config-file",
-            str(config),
-            "--workspace-protocol-file",
-            str(protocol),
-            *self.preflight_digest_args(config, protocol),
-        )
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("must not be a symlink", completed.stderr)
-        self.assertEqual(list(outside.iterdir()), [])
-
-        (common / "herdr-orchestrator").unlink()
-        (common / "herdr-orchestrator").mkdir()
-        (common / "herdr-orchestrator/runs").symlink_to(outside, target_is_directory=True)
-        completed = self.run_cli(
-            "init-run",
-            "--git-common-dir",
-            str(common),
-            "--run-id",
-            "run-1",
-            "--repository-root",
-            str(repository),
-            "--human-task-file",
-            str(task),
-            "--before-state-file",
-            str(before),
-            "--project-config-file",
-            str(config),
-            "--workspace-protocol-file",
-            str(protocol),
-            *self.preflight_digest_args(config, protocol),
-        )
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("runs path must not be a symlink", completed.stderr)
-        self.assertEqual(list(outside.iterdir()), [])
 
     def test_stage_assets_is_additive_idempotent_and_mismatch_safe(self) -> None:
-        topology = self.write("cards/topology.md", "topology-v1\n")
+        topology = self.write("cards/topology.md", "original-topology\n")
         run_dir, _ = self.init_run(("topology.md", topology))
-        same_bytes = self.write("copies/topology.md", "topology-v1\n")
+        same_bytes = self.write("copies/topology.md", "original-topology\n")
 
         completed = self.run_cli(
             "stage-assets",
@@ -1019,7 +340,7 @@ class HerdrOrchestratorTest(unittest.TestCase):
         manifest_before = (run_dir / "context/cards/manifest.json").read_bytes()
         staged_before = (run_dir / "context/cards/assets/topology.md").read_bytes()
 
-        changed = self.write("changed.md", "topology-v2\n")
+        changed = self.write("changed.md", "changed-topology\n")
         completed = self.run_cli(
             "stage-assets",
             "--run-dir",
@@ -1681,337 +1002,6 @@ class HerdrOrchestratorTest(unittest.TestCase):
         prepared = json.loads(receipt.read_text(encoding="utf-8"))
         self.assertEqual(prepared["state"], "prepared")
         self.assertEqual(writes, 2)
-
-    def test_harness_models_projects_each_native_catalog_without_raw_payloads(self) -> None:
-        catalogs = {
-            "codex": (
-                json.dumps(
-                    {
-                        "models": [
-                            {
-                                "slug": "gpt-one",
-                                "default_reasoning_level": "medium",
-                                "supported_reasoning_levels": [
-                                    {"effort": "low", "description": "RAW_LEVEL_DESCRIPTION"},
-                                    {"effort": "medium", "description": "RAW_LEVEL_DESCRIPTION"},
-                                ],
-                                "service_tiers": [
-                                    {"id": "priority", "description": "RAW_TIER"}
-                                ],
-                                "base_instructions": "RAW_CATALOG_SECRET_SENTINEL",
-                            }
-                        ]
-                    }
-                ),
-                [
-                    {
-                        "id": "gpt-one",
-                        "options": {
-                            "reasoning_effort": {
-                                "default": "medium",
-                                "values": ["low", "medium"],
-                            },
-                            "service_tier": {"values": ["priority"]},
-                        },
-                    }
-                ],
-            ),
-            "grok": (
-                "You are not authenticated.\n\nDefault model: grok-4.6\n\n"
-                "Available models:\n  * grok-4.6 (default)\n  * grok-code-fast-1\n",
-                [
-                    {"default": True, "id": "grok-4.6"},
-                    {"id": "grok-code-fast-1"},
-                ],
-            ),
-            "pi": (
-                "provider      model          context  max-out  thinking  images\n"
-                "openai-codex  gpt-5.6-sol    272K     128K     yes       yes\n"
-                "opencode-go   ox-alpha-free  1M       131.1K   yes       no\n",
-                [
-                    {
-                        "capabilities": {"images": True, "thinking": True},
-                        "id": "openai-codex/gpt-5.6-sol",
-                        "limits": {"context": "272K", "output": "128K"},
-                    },
-                    {
-                        "capabilities": {"images": False, "thinking": True},
-                        "id": "opencode-go/ox-alpha-free",
-                        "limits": {"context": "1M", "output": "131.1K"},
-                    },
-                ],
-            ),
-            "opencode": (
-                "opencode/big-pickle\nopencode-go/ox-alpha-free\n",
-                [
-                    {"id": "opencode/big-pickle"},
-                    {"id": "opencode-go/ox-alpha-free"},
-                ],
-            ),
-            "omp": (
-                json.dumps(
-                    {
-                        "models": [
-                            {
-                                "provider": "openai-codex",
-                                "id": "gpt-5.6-luna",
-                                "selector": "openai-codex/gpt-5.6-luna",
-                                "name": "GPT-5.6-Luna",
-                                "contextWindow": 272000,
-                                "maxTokens": 128000,
-                                "reasoning": True,
-                                "thinking": ["low", "medium", "high"],
-                                "input": ["text", "image"],
-                                "cost": {
-                                    "input": 0.2,
-                                    "output": 1.2,
-                                    "cacheRead": 0.02,
-                                    "cacheWrite": 0,
-                                },
-                                "rawOnly": "RAW_OMP_FIELD",
-                            }
-                        ]
-                    }
-                ),
-                [
-                    {
-                        "id": "openai-codex/gpt-5.6-luna",
-                        "capabilities": {"reasoning": True, "images": True},
-                        "cost": {
-                            "input": 0.2,
-                            "output": 1.2,
-                            "cacheRead": 0.02,
-                            "cacheWrite": 0,
-                        },
-                        "options": {
-                            "thinking": {"values": ["low", "medium", "high"]}
-                        },
-                        "limits": {"context": 272000, "output": 128000},
-                    }
-                ],
-            ),
-        }
-
-        for kind, (raw, expected_models) in catalogs.items():
-            with self.subTest(kind=kind):
-                catalog = self.write(f"catalogs/{kind}.txt", raw)
-                output = self.root / f"{kind}-models.json"
-                environment = None
-                if kind == "pi":
-                    environment = self.pi_scope_env(
-                        [
-                            "openai-codex/gpt-5.6-sol",
-                            "opencode-go/ox-alpha-free",
-                        ]
-                    )
-                completed = self.run_cli(
-                    "harness-models",
-                    "--kind",
-                    kind,
-                    "--catalog-file",
-                    str(catalog),
-                    "--output",
-                    str(output),
-                    "--project-root",
-                    str(self.root),
-                    env=environment,
-                )
-                self.assertEqual(completed.returncode, 0, completed.stderr)
-                projection = json.loads(output.read_text(encoding="utf-8"))
-                self.assertEqual(projection["harness"], kind)
-                self.assertEqual(projection["models"], expected_models)
-                metadata = json.loads(completed.stdout)
-                self.assertEqual(metadata["harness"], kind)
-                self.assertEqual(metadata["model_count"], len(expected_models))
-                self.assertEqual(metadata["sha256"], sha256(output.read_bytes()))
-
-        combined = "".join(
-            path.read_text(encoding="utf-8")
-            for path in self.root.glob("*-models.json")
-        )
-        for raw_only in (
-            "RAW_CATALOG_SECRET_SENTINEL",
-            "RAW_LEVEL_DESCRIPTION",
-            "RAW_TIER",
-            "You are not authenticated.",
-            "RAW_OMP_FIELD",
-        ):
-            self.assertNotIn(raw_only, combined)
-
-    def test_omp_harness_models_rejects_malformed_or_duplicate_catalogs(self) -> None:
-        base = {
-            "provider": "openai-codex",
-            "id": "gpt-5.6-luna",
-            "selector": "openai-codex/gpt-5.6-luna",
-            "contextWindow": None,
-            "maxTokens": None,
-            "reasoning": True,
-            "thinking": ["low"],
-            "input": ["text"],
-            "cost": {"input": 0.2, "output": 1.2, "cacheRead": 0, "cacheWrite": 0},
-        }
-        cases = (
-            (b"not-json", "not valid JSON"),
-            (json.dumps({"models": [base, base]}).encode(), "repeats model"),
-            (
-                json.dumps({"models": [{**base, "selector": "other/model"}]}).encode(),
-                "does not match provider and model",
-            ),
-            (json.dumps({"models": []}).encode(), "is empty"),
-        )
-        for index, (raw, expected) in enumerate(cases):
-            with self.subTest(expected=expected):
-                catalog = self.root / f"omp-invalid-{index}.json"
-                catalog.write_bytes(raw)
-                output = self.root / f"omp-invalid-{index}-projection.json"
-                completed = self.run_cli(
-                    "harness-models",
-                    "--kind",
-                    "omp",
-                    "--catalog-file",
-                    str(catalog),
-                    "--output",
-                    str(output),
-                )
-                self.assertEqual(completed.returncode, 2)
-                self.assertIn(expected, completed.stderr)
-                self.assertFalse(output.exists())
-
-    def test_pi_harness_models_projects_only_effective_model_scope(self) -> None:
-        catalog = self.write(
-            "pi-models.txt",
-            "provider model context max-out thinking images\n"
-            "openai-codex gpt-5.6-sol 272K 128K yes yes\n"
-            "opencode-go ox-alpha-free 1M 131.1K yes no\n"
-            "opencode-go qwen3.7-plus 1M 65.5K yes yes\n"
-            "openrouter stealth/ox-alpha 1M 131.1K yes yes\n"
-            "xai grok-4.6 500K 500K yes yes\n",
-        )
-        environment = self.pi_scope_env(["xai/*"])
-        project = self.root / "project"
-        (project / ".pi").mkdir(parents=True)
-        (project / ".pi/settings.json").write_text(
-            json.dumps(
-                {
-                    "enabledModels": [
-                        "opencode-go/*:high",
-                        "openai-codex/gpt-5.6-sol",
-                        "openrouter/**",
-                    ]
-                }
-            ),
-            encoding="utf-8",
-        )
-        output = self.root / "projection.json"
-
-        completed = self.run_cli(
-            "harness-models",
-            "--kind",
-            "pi",
-            "--catalog-file",
-            str(catalog),
-            "--output",
-            str(output),
-            "--project-root",
-            str(project),
-            env=environment,
-        )
-
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        models = json.loads(output.read_text(encoding="utf-8"))["models"]
-        self.assertEqual(
-            [model["id"] for model in models],
-            [
-                "opencode-go/ox-alpha-free",
-                "opencode-go/qwen3.7-plus",
-                "openai-codex/gpt-5.6-sol",
-                "openrouter/stealth/ox-alpha",
-            ],
-        )
-        self.assertEqual(models[0]["scope"], {"thinking": "high"})
-        self.assertEqual(models[1]["scope"], {"thinking": "high"})
-        self.assertNotIn("scope", models[2])
-        self.assertNotIn("xai/grok-4.6", {model["id"] for model in models})
-
-    def test_pi_harness_models_fails_closed_without_a_resolved_scope(self) -> None:
-        catalog = self.write(
-            "pi-models.txt",
-            "provider model context max-out thinking images\n"
-            "openai-codex gpt-5.6-sol 272K 128K yes yes\n",
-        )
-        output = self.root / "projection.json"
-        environment = self.pi_scope_env([])
-
-        missing = self.run_cli(
-            "harness-models",
-            "--kind",
-            "pi",
-            "--catalog-file",
-            str(catalog),
-            "--output",
-            str(output),
-            "--project-root",
-            str(self.root),
-            env=environment,
-        )
-        self.assertEqual(missing.returncode, 2)
-        self.assertIn("model scope is not configured", missing.stderr)
-        self.assertFalse(output.exists())
-
-        sentinel = "missing-provider/MODEL_SCOPE_SENTINEL"
-        environment = self.pi_scope_env([sentinel])
-        unmatched = self.run_cli(
-            "harness-models",
-            "--kind",
-            "pi",
-            "--catalog-file",
-            str(catalog),
-            "--output",
-            str(output),
-            "--project-root",
-            str(self.root),
-            env=environment,
-        )
-        self.assertEqual(unmatched.returncode, 2)
-        self.assertIn("scope entry 0 matches no available model", unmatched.stderr)
-        self.assertNotIn(sentinel, unmatched.stderr)
-        self.assertFalse(output.exists())
-
-    def test_harness_models_rejects_a_kind_without_a_bounded_catalog_adapter(self) -> None:
-        catalog = self.write("claude-models.txt", "claude-sonnet-5\n")
-        completed = self.run_cli(
-            "harness-models",
-            "--kind",
-            "claude",
-            "--catalog-file",
-            str(catalog),
-            "--output",
-            str(self.root / "projection.json"),
-        )
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("no bounded model catalog adapter", completed.stderr)
-
-    def test_harness_models_rejects_unprojectable_native_fields_without_leaking_them(self) -> None:
-        sentinel = "RAW_NATIVE_LIMIT_SECRET"
-        catalog = self.write(
-            "invalid-pi-models.txt",
-            "provider model context max-out thinking images\n"
-            f"openai gpt-safe {sentinel} 128K yes yes\n",
-        )
-        output = self.root / "projection.json"
-        completed = self.run_cli(
-            "harness-models",
-            "--kind",
-            "pi",
-            "--catalog-file",
-            str(catalog),
-            "--output",
-            str(output),
-        )
-        self.assertEqual(completed.returncode, 2)
-        self.assertFalse(output.exists())
-        self.assertNotIn(sentinel, completed.stderr)
-
 
 if __name__ == "__main__":
     unittest.main()

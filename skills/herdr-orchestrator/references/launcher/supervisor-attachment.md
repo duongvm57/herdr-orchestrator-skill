@@ -1,127 +1,81 @@
 # Supervisor attachment
 
-Read `references/launcher/preflight.md` completely and pass its preflight gate
-before this branch. Run it only when the Human explicitly supplies exact project
-root, run ID, and live Lead name bindings. It creates one fresh observer, not a
-run or replacement Lead.
+Read `references/launcher/preflight.md` completely and pass it before this
+branch. The current setup attaches one fresh Supervisor to one exact accepted project
+and run. Cross-project observation requires a later authority slice.
 
-## 1. Bind existing evidence and authority
+## 1. Bind existing evidence
 
-Choose one collision-free attachment ID absent from every bound run. Require it
-to match `[a-z][a-z0-9_-]{0,31}` exactly before any path operation; separators,
-dot segments, and all other forms are invalid. Its host root is
-`<host-run>/supervisor/attachments/<attachment-id>/`; every selection,
-Assignment, context, and delivery receipt for this attachment uses a new file
-under that root. A later attachment uses another ID and never replaces these
-bytes.
+Require the Human's exact project root, run ID, and live Lead name. Resolve the
+run through the preflight Git common directory and verify its run manifest,
+launch event, Lead context digest, `launcher-handoff.md`, saved Activation
+Manifest/config/protocol, and one live unique Lead.
 
-Resolve every run through its project's absolute Git common directory. Require
-the run's launch event, Lead context digest, `launcher-handoff.md`, saved full
-Workspace Protocol snapshot and manifest digest, canonical project-source
-binding, and one live unique Lead to agree with the Human's exact binding. Use
-the saved snapshot for the run, never the project's mutable current protocol.
-Preserve project-local evidence; references may cross projects, bytes may not.
+Choose an attachment ID matching `[a-z][a-z0-9_-]{0,31}` and absent from the
+run. Reserve
+`<run>/supervisor/attachments/<attachment-id>/` exclusively. Prove one
+create/write/fsync/remove canary there with no residue. Existing attachments
+and notebook bytes remain immutable.
 
-For one project, use its unchanged configured `[roles.supervisor]` recipe. For
-multiple projects, require the Human to name one host project whose recipe is
-launch authority. Each bound protocol must permit observation, and the exact
-host recipe must enforce read-only access to every checkout and Git common
-directory plus write access only to each bound run's `supervisor/` notebook.
-Stop when any protocol, binding, recipe, live identity, or access boundary
-disagrees. Recipes are neither merged nor substituted.
+Invoke the run-local helper's `bind-role --role supervisor` against the saved
+config and `run-manifest.json.artifacts.project_config.sha256`. Supply exactly
+its `required_bindings`:
 
-Before starting anything, prove Launcher create/write/fsync/remove access with
-one collision-free probe under every bound run's `supervisor/` directory.
-Require no residue and stop if any host or non-host boundary fails. Then reserve
-the ID by exclusively creating
-`<run>/supervisor/attachments/<attachment-id>/` in every bound run; if any
-reservation fails, remove only still-empty roots created by this attempt and
-stop before packing.
+```text
+python3 <run>/tools/herdr_orchestrator.py bind-role \
+  --project-config-file <run>/context/project-config.toml \
+  --expected-project-config-sha256 <project_config.sha256> \
+  --role supervisor \
+  --cwd <attachment-root> \
+  --bind workspace=<repository_root> \
+  --bind notebook=<attachment-root> \
+  --output <attachment-root>/launch.json
+```
 
-Binding is complete when each project, run, Lead, protocol, notebook root,
-context digest, host authority, and attachment ID has one exact verified
-identity and every access probe and exclusive root reservation passed.
+This receipt must show project read, attachment-notebook write, native agents
+disabled, and network denied. A missing Supervisor role or any binding mismatch
+stops the attachment.
 
 ## 2. Assemble the Supervisor pack opaquely
 
-First invoke the host run helper's `stage-assets` operation with
-`--run-dir <absolute-host-run>` and
-`--asset anti-pattern-details=references/anti-patterns/responses.md`, requesting a new
-filtered selection through `--selection-output` at
-`<host-attachment-root>/card-manifest.json`. Require byte-for-byte staging and
-a digest-only selection containing exactly `anti-pattern-details`; do not
-inline the Lead's five-card manifest. Then invoke
-`tools/herdr_orchestrator.py pack --role supervisor` and pass sources in this
-exact layer order:
+Invoke `stage-assets` with packaged
+`references/anti-patterns/responses.md` as `anti-pattern-details` and
+`--selection-output
+supervisor/attachments/<attachment-id>/card-manifest.json` to create a
+filtered selection manifest. Then atomically save
+`<attachment-root>/attachment-assignment.md` in the configured artifact
+language with the attachment, project/Lead/run/context, notebook, launch
+digest, observation scope, and Human-only boundaries.
 
-Resolve packaged sources relative to the installed skill root and pass absolute
-source, run, manifest, and output paths; project cwd is not a package resolver.
+Invoke `pack --role supervisor` in this exact order:
 
-Before packing, atomically save
-`<host-attachment-root>/attachment-assignment.md` in the host project's artifact
-language. It contains the attachment ID, exact project/Lead/run/context
-bindings, notebook roots, host recipe authority, observation scope, Human-only
-boundaries, and notebook Assignment.
-
-1. `--role-source`: `references/roles/supervisor.md`, then
-   `references/anti-patterns/index.md`, then the filtered selection manifest;
-2. `--protocol-source`: every bound run's full
-   `context/workspace-protocol.md` snapshot under a unique labelled project/run
-   boundary; and
+1. `--role-source`: packaged `references/roles/supervisor.md`, packaged
+   `references/anti-patterns/index.md`, then the filtered card manifest;
+2. `--protocol-source`: the bound run's `context/project-config.toml`, then
+   `context/workspace-protocol.md`;
 3. `--assignment-source`: the saved attachment Assignment.
 
-The Supervisor profile maps `anti-pattern-details` to its signal trigger and
-requires complete, digest-verified reading only when a supplied signal appears.
-
-The Launcher passes source paths without reading role or card bodies. Consume
-only the helper's compact JSON metadata. Save the exact pack and digest inside
-the host attachment root as `context.md`; use
-`delivery-receipt.json` there for the helper's transport receipt. Generated
-shared durable prose uses the host project's artifact language.
-
-Packing is complete when ordered sources appear once, every bound protocol is
-the bound run's full labelled snapshot, the anti-pattern detail card is staged
-and digest-bound by the one-card selection, the exact bindings are inline, no
-project evidence was copied across runs, and the Launcher transcript contains
-no opaque body or delivery payload.
+Pass absolute paths without opening opaque role/card bodies. Save exact bytes
+as `<attachment-root>/context.md` and retain its digest.
 
 ## 3. Start, deliver, and notify
 
-Use the bound host run's layout helper and shared state to create a fresh no-
-focus pane whose cwd is the host `supervisor/` directory. Accept only its
-`new_pane_id`. Choose a unique name absent from the live agent inventory and
-start the exact host Supervisor recipe with no initial prompt. Never resume,
-fork, or replace an existing session.
+Use the run-local layout helper to create a fresh pane whose cwd is the
+attachment root. Choose a unique Supervisor name and start the exact
+`launch.json` kind and argument vector with no prompt. Never resume, fork, or
+replace another agent.
 
-Invoke the run-local orchestration helper's `deliver` operation once with the
-fresh Supervisor name, saved context path, host project's live language,
-`delivery-receipt.json`, and localized one-line opening/closing files that use
-and contain that exact host live-language value. It sends that envelope plus
-the exact saved bytes through a safe argument vector without `--wait`, stores
-context and full-payload digests, and keeps payload bytes out of stdout and
-logs.
+Invoke `deliver` once with the saved context, configured live language,
+`<attachment-root>/delivery-receipt.json`, and localized opening/closing files.
+After accepted delivery, atomically write `local-receipt.md` containing the
+attachment ID, Supervisor identity, context and launch digests, run binding,
+and notebook boundary. Prompt the Lead once with only that receipt path and
+digest; save the immediate result as `lead-notification-receipt.json`. The Lead
+retains ledger and acceptance authority. Focus the Supervisor unless the Human
+specified another target.
 
-After accepted delivery, atomically write a local attachment receipt in every
-bound run at
-`supervisor/attachments/<attachment-id>/local-receipt.md`, using that project's
-artifact language. It contains only the attachment ID, now-confirmed shared
-Supervisor identity, host context identity/digest, local binding, and local
-notebook boundary; never copy another project's evidence. Then prompt each
-bound Lead once with only its local receipt path and digest, using that
-project's live language. Use a safe argument vector without `--wait`; atomically
-save the immediate result, exact target, and message digest as
-`lead-notification-receipt.json` under that project-local attachment root. That
-Lead remains its project's ledger writer and acceptance authority. Focus the
-Supervisor unless the Human requested another focus target.
-
-A start, delivery, or receipt failure preserves the pane and evidence, reports
-the exact error, and stops without unchanged retry. A Supervisor recommendation
-is notebook evidence, never project acceptance or protocol mutation.
-
-Attachment is complete only when preflight, bindings, access boundaries, pack,
-fresh agent, attachment ID/root, notebook roots, context digest, all local
-and Lead-notification receipts agree; host and per-project languages were used
-at their named boundaries; Supervisor and Lead prompt deliveries each occurred
-once without waiting; the selected focus is active; no replacement Lead exists;
-and the Supervisor has observation but no implementation or acceptance
-authority.
+Completion requires the accepted setup, run binding, reserved attachment,
+bound launch, pack, fresh agent, delivery, local receipt, and Lead notification
+to agree. A failure preserves created evidence and reports the exact error. A
+Supervisor recommendation remains notebook evidence, never project acceptance
+or protocol mutation.

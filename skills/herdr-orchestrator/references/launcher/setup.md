@@ -1,123 +1,77 @@
 # Project setup and update
 
-This branch writes only `.orchestration/herdr-orchestrator.toml` and
-`.orchestration/workspace-protocol.md`. Launch an agent only for an included
-task via the task-launch route.
+The Launcher is a thin presenter over the deterministic setup engine. It calls
+only `resume`, `answer`, and `accept`; it does not discover facts, construct
+questions, rank models, compile authority, write configuration, run its own
+smoke, or claim completion.
 
-## 1. Preserve and discover
-
-Resolve repository and absolute Git-common roots. Inventory status, worktrees,
-agents/panes, and destinations. Understand and preserve Human-owned or unrelated
-changes; present an in-place diff.
-
-Require `HERDR_ENV=1` and Python 3.11+; prove the Launcher control boundary:
+Resolve the canonical project root, then invoke the sibling helper with Python
+3.11+:
 
 ```text
-herdr agent list
-herdr pane current --current
+python3 scripts/herdr_setup_cli.py resume --project-root <absolute-project-root>
 ```
 
-Stop on error. Choose configuration mode with one card:
+The helper returns one canonical `SetupView` JSON document. Treat every field
+as engine-owned state.
 
-- **Guided setup** (recommended): discover candidates, then ask each profile row.
-- **Configure TOML yourself:** accept version-3 TOML from chat or
-  `.orchestration/herdr-orchestrator.toml`; otherwise show that path, starter
-  from `assets/config.toml`, and role/recipe fields so the Human can create or
-  edit it. Strictly parse and validate live tuples, then ask only missing
-  protocol decisions.
+## Present unresolved questions
 
-Use structured user-input when available: one question per card; 2–3 exclusive
-choices with explicit labels/impacts; evidence-backed recommendation first;
-free-form answer. Otherwise show every valid answer as a numbered choice and
-request its number or free-form. Ask one question and wait; preserve answers.
+When status is `NEEDS_HUMAN_INPUT`, present only `questions` from the current
+view. Preserve each question `id`, `kind`, option value, and fact. The wording
+may be made easier to read, but add no option, recommendation, model ranking,
+cost/quality claim, policy, or trade-off absent from the view.
 
-In Guided setup, read verified kinds from the helper's `harness-models --help`;
-intersect kinds with `herdr agent start --help` and runnable executables, and
-omit the rest. Mark Herdr-only kinds unavailable and annotate retained rows using
-`herdr integration status`. Build a profile matrix: Lead, optional Supervisor,
-and `fast/general/reasoning/coding/architecture/reviewer` Peer capability routes,
-plus custom or omit. Each row independently selects its harness; then discover
-and choose its model, reasoning/cost, access, and native arguments. Rows may
-differ; the Human chooses reuse and one fallback recipe. Routes describe
-capability/model fit; the assignment binds the Peer disposition.
+Use structured user input when it can represent every engine option exactly.
+If a question has more options than the UI permits, show the complete numbered
+engine list and ask for one exact value. Questions may be batched, but submit
+only answers to questions open in the same revision.
 
-Deep-probe configured candidates for auth, native choices, access, and spawn
-control. Targeted Herdr and helper `--help` remain command authority.
+Return typed answers unchanged:
 
-Run `scripts/herdr_orchestrator.py harness-models --kind <kind> --project-root
-<repository-root> --output <file>` per selected kind in a temporary directory;
-consume its compact projection, then remove it. OMP projects its authenticated-
-provider catalog. Pi projects only effective native `enabledModels` scope and
-stops if absent or stale. Missing adapters fail closed;
-prove each choice with a bounded native check or approved smoke. Decide:
+```text
+python3 scripts/herdr_setup_cli.py answer \
+  --session-id <session_id> \
+  --revision <revision> \
+  --answers-json '[{"id":"<question-id>","kind":"CHOICE","value":"<exact-value>"}]'
+```
 
-- live orchestration and durable artifact languages on first setup, invalid
-  existing values, or an explicit language change;
-- project risk, review triggers, costly reversals, and minimum verdict proof;
-- edit, commit, push, deploy, publish, and other external-effect authority; and
-- scope expansion, reserved architecture, budget, and Human-only boundaries.
+Use JSON booleans for `BOOLEAN` answers. Consume the new `SetupView`; its
+revision replaces the prior revision. A revision conflict returns the current
+view and performs no answer write. For `TEXT`, return the Human's nonempty
+canonical string exactly; the engine supplies no options or default.
 
-Pass choices as unchanged native argument vectors. Store no credential, secret
-path/value, or inferred shared effort vocabulary. Every option needs a strict
-rule in its exact harness adapter. A new harness requires native inspection and
-an approved end-to-end smoke; create no placeholder, passthrough, or fallback.
+`STALE`, `CAPABILITY_INVALID`, and `SMOKE_FAILED` views may contain one typed
+engine recovery question. Present that question exactly. Never retry, reset
+Human decisions, weaken authority, or substitute a model without its answer.
 
-## 2. Prove each role envelope
+## Present the candidate
 
-Disable native spawning. A Lead needs Herdr reachability, bounded evidence
-writes, and authorized project/Git access. Each Peer gets one lossless report
-boundary and its owned workspace. A read-only Peer uses mailbox cwd; a
-Supervisor is project-read-only and notebook-write-only. Check shared recipes
-separately per role.
+When status is `AWAITING_ACCEPTANCE`, show:
 
-Validate static controls; use a Human-approved collision-free smoke only when
-inspection is insufficient. It may create, read, fsync, and remove one in-scope
-probe, must reject out-of-scope writes without residue, and for control roles
-runs `herdr agent list` inside the exact native boundary. Do not configure an
-unenforceable envelope; state limitations precisely.
+- the exact Candidate Digest, Discovery Digest, Runtime Proof Digest, and
+  Publication Digest;
+- every `role_binding`, including harness, model, reasoning effort, cwd,
+  selected binding, and complete effective authority; and
+- all engine issues, if any.
 
-Before smoke or serialization, run `validate-project --git-common-dir`; the
-selected Lead adapter checks its static evidence-root rules. Kinds without a
-static rule need the live probe. Show every granted root/network capability and
-grant it to other profiles only when authorized. A read-only Peer uses mailbox
-cwd without writable project/Git roots; a Supervisor receives only its notebook
-root.
+Ask the Human to accept the exact Candidate Digest. A generic “yes” is not a
+digest confirmation. On exact confirmation, call:
 
-Discovery is complete when the Human saw the kind map and compact inventory;
-every selected executable, model, argument, spawn/access boundary is proven;
-and every non-discoverable choice was supplied.
+```text
+python3 scripts/herdr_setup_cli.py accept \
+  --session-id <session_id> \
+  --candidate-digest <candidate_digest>
+```
 
-## 3. Write schema version 3 and the protocol
+Setup is accepted only when this command returns a canonical Acceptance Receipt
+with status `ACCEPTED`. Report its Candidate, Publication, and Acceptance
+Receipt digests. Any other result is not completion.
 
-Copy `assets/config.toml` and replace every placeholder. Require exactly:
+## Current boundary
 
-- `version = 3`;
-- one `fallback_peer_recipe` naming an exact Peer recipe;
-- one `[roles.lead]` and optional `[roles.supervisor]`, each containing only
-  `kind` and `args`; and
-- one or more uniquely named `[peer_recipes.<name>]`, each containing exactly
-  nonempty `description`, `kind`, and `args`.
-
-Peer recipe names identify reusable capabilities, not dispositions. Choose one
-general recipe as the fallback for unmatched Assignments; its validated
-harness, model, arguments, and authority remain unchanged. `kind` resolves
-exactly one adapter without inheritance, translation, or legacy migration.
-
-Read `references/launcher/workspace-protocol-authoring.md`, copy
-`assets/workspace-protocol-template.md`, and fill all twelve sections with
-project facts.
-Keep native model/flags in TOML. Make recipe selection, ownership, candidates,
-review, evidence, Human decisions, and both languages decidable. Keep the
-protocol free of task paths, secrets, and global role manuals.
-
-## 4. Validate and review
-
-Run `scripts/herdr_orchestrator.py validate-project` with the repository and
-resolved `--git-common-dir`; consume its compact JSON. Recheck every recipe
-live. Confirm only the two intended files changed, placeholders and
-credential-like values are absent, and unrelated state remains. Present the
-scoped diff and unresolved assumptions for Human review.
-
-Setup is complete when version 3 and all protocol sections parse; discovery and
-every recipe/envelope pass live validation; role boundaries hold; the Human
-reviewed a credential-free diff; no agent launched; and no probe residue remains.
+The current setup supports Codex and binds one exact discovered Git repository for Lead,
+Engineer, Reviewer, and optional Supervisor proof. Acceptance publishes the
+only runtime authority through `.orchestration/setup/current.json`. Task
+launch resolves that immutable generation and binds its logical role templates
+to exact run/Assignment paths; no mutable compatibility config is generated.

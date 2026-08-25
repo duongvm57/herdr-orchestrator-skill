@@ -70,13 +70,11 @@ requires explicit Human invocation.
 ## Install
 
 You need Git, Python 3.11+, a running Herdr server, a Launcher session inside a
-Herdr-managed pane, and every configured harness/model installed and
-authenticated. The Launcher's native permission profile must also allow the
-Herdr socket and run-evidence writes in the repository's absolute Git common
-directory. Each configured profile selects its own harness and native argument
-vector; its harness adapter validates those flags without translating them into
-a shared sandbox or effort vocabulary. Verify broadened network, filesystem,
-and Git-metadata access with bounded canaries.
+Herdr-managed pane, and Codex installed and authenticated. The Launcher's native
+permission profile must also allow the Herdr socket and run-evidence writes in
+the selected repository's absolute Git common directory. The current setup
+supports Codex first; later harnesses require their own normalized authority adapter and
+runtime proof.
 
 Use the standard multi-skill installer:
 
@@ -117,37 +115,23 @@ From the repository, invoke:
 $herdr-orchestrator set up orchestration for this repository
 ```
 
-Setup first intersects the orchestrator's verified adapter registry with
-Herdr-supported, installed local harnesses. Herdr kinds without a verified
-adapter are shown as unavailable rather than accepted through a generic
-fallback. Setup then performs deeper model, effort, access, and native-spawn
-discovery only for the harnesses you select. It shows exact native choices before asking which recipes are
-permitted, then asks about cost, authority, review gates, expensive reversals,
-and Human-only decisions and creates two tracked files:
+The deterministic setup engine discovers Git repositories and the Codex runtime,
+normalizes native controls, solves each role's closed-world authority, and asks
+only unresolved Human decisions: role profile, commit/architecture authority,
+Lead write authority, both communication languages, and exact model/reasoning
+bindings. Model options are native inventory facts, not quality or price
+rankings.
 
-Bounded native catalog discovery uses the common `harness-models --kind ...`
-interface; Codex, Grok CLI, Pi, OpenCode, and OMP each implement their parser in
-a separate adapter module. OMP exposes models from its current authenticated
-providers. A harness without a verified adapter cannot be configured. Pi exposes only the effective
-`enabledModels` scope; an absent or stale scope stops discovery instead of
-falling back to its full authenticated-provider catalog.
+After static validation and deterministic native allow/deny probes, setup shows
+one immutable candidate and its digests. Exact Human acceptance publishes a
+complete generation under `.orchestration/setup/generations/` and atomically
+activates it through `.orchestration/setup/current.json`. That Activation
+Manifest is the only runtime configuration authority. A partial, stale,
+tampered, or unaccepted generation cannot launch.
 
-- `.orchestration/herdr-orchestrator.toml` — complete native launch recipes for
-  the Lead, a project-defined catalog of reusable Peer recipes, and an optional
-  Supervisor;
-- `.orchestration/workspace-protocol.md` — repository-specific authority,
-  routing, ownership, topology, evidence, escalation, and evolution policy.
-
-The protocol also separates live orchestration language from durable artifact
-language. First setup asks the Human to confirm two nonempty values for that
-repository; unrelated updates preserve a valid pair unless the Human requests a
-change. The package has no language default. Authoritative embedded skill text
-and technical literals remain unchanged. Selected Lead and Supervisor recipes
-must prove local Herdr control access, and each recipe must prove only its
-assigned evidence/commit boundary, before setup writes config.
-
-Review the generated diff. Re-run setup after changing machine, harness, model,
-or permission policy. Legacy `routes.toml` and `workers.*.toml` are unsupported.
+Re-run setup after changing the machine, Codex installation, model, authority,
+or policy. Setup is resumable through project-local typed state and never relies
+on conversation memory.
 
 ## Run a task
 
@@ -155,11 +139,11 @@ or permission policy. Legacy `routes.toml` and `workers.*.toml` are unsupported.
 $herdr-orchestrator implement issue #42 and preserve my uncommitted changes
 ```
 
-The Launcher validates the project contract and configured live recipes,
+The Launcher verifies the accepted generation and receipts,
 inventories existing agents/panes/worktrees/user changes, stores run evidence
-outside the checkout, starts a fresh Lead, and transfers focus. Missing
-Lead capability stops launch without runtime substitution; existing state is
-preserved.
+outside the checkout, binds the logical Lead template to exact run paths,
+starts a fresh Lead, and transfers focus. Missing capability stops launch
+without runtime substitution; existing state is preserved.
 
 Fresh-agent panes are placed by a deterministic helper using only panes
 registered to that run. Layout code is not injected; the Lead receives only the
@@ -172,10 +156,11 @@ and rejecting unexplained pane disappearance.
 
 After handoff, work with the Lead. A tiny task may need zero or one Peer.
 Architecture-sensitive work may use a fresh Architect, one Engineer, and a fresh
-Reviewer. The Lead decides the number and dispositions per task and may reuse or
-mix approved harness/model recipes. If no specialized recipe matches, it uses
-the configured fallback recipe without changing that recipe's model or access
-envelope. Recipes are capabilities, not a fixed list of Peer types.
+Reviewer. The Lead decides the number and dispositions per task, then selects a
+compatible accepted role envelope: `engineer` for bounded project mutation or
+`reviewer` for project-read/evidence-write work. Runtime binding compiles exact
+workspace, Git-common, evidence, and notebook paths per Assignment. No match
+fails closed and returns to Human-approved setup.
 
 ## Request a Supervisor
 

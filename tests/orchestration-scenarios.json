@@ -71,41 +71,31 @@
     },
     {
       "slug": "static-project-contract",
-      "title": "Static project contract and catalog projection",
+      "title": "Accepted project contract and runtime binding",
       "verification": "automated/static",
       "invariants": [
         {
           "id": "FT-16",
-          "spec": "Two projects strictly parse schema-v3 native Lead, optional Supervisor, exact fallback Peer recipe, and arbitrary described mixed-harness Peer recipes without legacy lookup."
+          "spec": "Runtime verifies the accepted immutable generation and binds Lead, Engineer, Reviewer, and optional Supervisor templates to exact paths without a writable fallback."
         }
       ],
       "sources": [
-        "assets/config.toml",
-        "assets/workspace-protocol-template.md",
         "references/launcher/setup.md",
         "scripts/herdr_orchestrator.py",
-        "scripts/herdr_harnesses/__init__.py",
-        "scripts/herdr_harnesses/base.py",
-        "scripts/herdr_harnesses/claude.py",
-        "scripts/herdr_harnesses/codex.py",
-        "scripts/herdr_harnesses/grok.py",
-        "scripts/herdr_harnesses/omp.py",
-        "scripts/herdr_harnesses/opencode.py",
-        "scripts/herdr_harnesses/pi.py"
+        "scripts/herdr_runtime.py",
+        "scripts/herdr_setup/acceptance.py",
+        "scripts/herdr_setup/engine.py"
       ],
-      "scenario": "Deterministic checks parse schema version 3, bind the fallback to an exact Peer recipe, reject unknown, placeholder, legacy, credential-bearing, and unverified-harness configuration, require explicit protocol languages, retain arbitrary described Peer recipes, and project raw model catalogs into bounded local metadata, with Pi restricted to its effective model scope and OMP restricted to its authenticated-provider catalog.",
+      "scenario": "Deterministic checks verify the Activation Manifest, generation, publication and Acceptance Receipts, artifact digests, role templates, explicit languages, and exact Assignment bindings; tampering, stale identities, missing paths, and extra authority fail closed.",
       "test_selectors": [
         "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_returns_compact_metadata",
-        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_binds_fallback_to_an_exact_peer_recipe",
-        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_accepts_independent_mixed_harness_profiles",
-        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_rejects_unknown_schema_and_blank_language",
-        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_rejects_placeholder_and_credential_arguments",
-        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_validate_project_enforces_omp_model_and_subagent_boundary",
-        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_harness_models_projects_each_native_catalog_without_raw_payloads",
-        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_omp_harness_models_rejects_malformed_or_duplicate_catalogs",
-        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_pi_harness_models_projects_only_effective_model_scope",
-        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_pi_harness_models_fails_closed_without_a_resolved_scope",
-        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_harness_models_rejects_unprojectable_native_fields_without_leaking_them"
+        "tests.test_herdr_orchestrator.HerdrOrchestratorTest.test_bind_role_writes_one_digest_bound_exact_launch_receipt",
+        "tests.test_runtime_config.RuntimeConfigTests.test_load_verifies_the_active_generation_and_projects_runtime_templates",
+        "tests.test_runtime_config.RuntimeConfigTests.test_bind_role_replaces_proof_paths_with_exact_assignment_paths",
+        "tests.test_runtime_config.RuntimeConfigTests.test_tampered_generation_is_never_loaded",
+        "tests.test_runtime_config.RuntimeConfigTests.test_self_consistent_but_failed_runtime_proof_is_not_accepted",
+        "tests.test_runtime_config.RuntimeConfigTests.test_self_consistent_but_incomplete_setup_plan_is_not_accepted",
+        "tests.test_runtime_config.RuntimeConfigTests.test_unknown_or_extra_binding_fails_closed"
       ]
     },
     {
@@ -142,7 +132,7 @@
         },
         {
           "id": "FT-05",
-          "spec": "Discovery maps every live kind, deeply verifies only selected recipes and exact role boundaries, leaves no probe residue, and never falls back."
+          "spec": "Discovery normalizes Codex facts, proves exact role boundaries, leaves no probe residue, and never falls back."
         },
         {
           "id": "FT-63",
@@ -158,7 +148,7 @@
         "references/launcher/preflight.md",
         "references/launcher/task-launch.md"
       ],
-      "scenario": "In a dirty repository with existing panes, agents, and worktrees, exercise red Herdr and Git canaries, exact live-kind discovery, selected recipe/model/access validation, no-fallback stops, collision-free probes, and preservation of all pre-existing state while only run-owned topology may change.",
+      "scenario": "In a dirty repository with existing panes, agents, and worktrees, exercise red Herdr and Git canaries, accepted-generation verification, exact model/access binding, no-fallback stops, collision-free probes, and preservation of all pre-existing state while only run-owned topology may change.",
       "test_selectors": []
     },
     {
@@ -201,7 +191,7 @@
       ],
       "sources": [
         "SKILL.md",
-        "references/launcher/workspace-protocol-authoring.md",
+        "references/launcher/setup.md",
         "references/roles/lead.md",
         "references/roles/peer.md",
         "references/roles/supervisor.md"
@@ -236,21 +226,20 @@
       "test_selectors": []
     },
     {
-      "slug": "live-recipe-routing",
-      "title": "Live Assignment-level recipe routing",
+      "slug": "live-role-routing",
+      "title": "Live Assignment-level role routing",
       "verification": "live/manual",
       "invariants": [
         {
           "id": "FT-17",
-          "spec": "One run chooses Peer count and disposition independently, reuses or mixes validated recipes by risk, uses the Human-approved fallback recipe for an unmatched case, and stops when the Assignment exceeds its envelope."
+          "spec": "One run chooses Peer count and disposition independently, selects one compatible accepted role envelope, and stops for Human input when no role satisfies the Assignment."
         }
       ],
       "sources": [
-        "assets/workspace-protocol-template.md",
         "references/roles/lead.md",
         "references/lead/peer-lifecycle.md"
       ],
-      "scenario": "Within one run, vary Peer count and disposition independently from recipes, reuse or mix specialized recipes, use the configured fallback for an unmatched case without changing its harness/model/access, and stop for setup update when the Assignment exceeds that envelope.",
+      "scenario": "Within one run, vary Peer count and disposition independently from authority, bind Engineer and Reviewer templates to exact Assignment paths, reject an unknown or out-of-envelope Assignment, and stop for a setup update.",
       "test_selectors": []
     },
     {
@@ -298,7 +287,7 @@
         },
         {
           "id": "FT-25",
-          "spec": "Peer recipes have Assignment-level risk, independence, cost, and access criteria while count and disposition remain topology decisions."
+          "spec": "Peer role selection is compatible with Assignment risk, independence, and access while count and disposition remain topology decisions."
         },
         {
           "id": "FT-26",
@@ -330,16 +319,15 @@
         },
         {
           "id": "FT-33",
-          "spec": "A Peer receives extracted applicable constraints and never the full Workspace Protocol or recipe catalog."
+          "spec": "A Peer receives extracted applicable constraints and never the full Workspace Protocol or role catalog."
         }
       ],
       "sources": [
-        "assets/workspace-protocol-template.md",
-        "references/launcher/workspace-protocol-authoring.md",
+        "references/launcher/setup.md",
         "references/lead/peer-lifecycle.md",
         "references/lead/candidate-and-verdict.md"
       ],
-      "scenario": "Exercise all twelve populated protocol sections: scope and readers, risk, authority, task topology, recipe policy, fresh review/council/correction, writer isolation, candidate identity, verification evidence, reopen/dependency/blocked handling, supervision hypotheses, and Human-approved evolution; confirm a Peer receives only extracted constraints.",
+      "scenario": "Exercise the generated protocol's provenance, authority, role binding, candidate identity, verification evidence, reopen/dependency/blocked handling, supervision, and Human-approved policy; confirm a Peer receives only extracted constraints.",
       "test_selectors": []
     },
     {
@@ -368,7 +356,7 @@
         "references/roles/lead.md",
         "references/roles/peer.md",
         "references/roles/supervisor.md",
-        "references/launcher/workspace-protocol-authoring.md"
+        "references/launcher/setup.md"
       ],
       "scenario": "Give a neutral provisional premise that may be challenged or reopened with evidence, observe without polling when no event occurs, and keep repeated Supervisor evidence provisional until a later explicit Human-approved protocol update.",
       "test_selectors": []

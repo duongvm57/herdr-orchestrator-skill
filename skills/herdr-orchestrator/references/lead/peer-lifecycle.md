@@ -37,7 +37,7 @@ Choose a disposition and enforce its boundary:
 - **Reviewer:** fresh, read-only, and bound to an exact candidate; attempt to
   falsify assigned behavior, scope, and proof; return severity findings and
   `APPROVE` or `FINDINGS` without unrelated redesign. When
-  `ocr-peer-reviewer` is installed for the selected Peer recipe, explicitly
+  `ocr-peer-reviewer` is installed for the selected Peer harness, explicitly
   require the Peer to load it. Supply the Git base through the Assignment's
   accepted-base field and the reviewed commit through its exact-candidate
   field. Every Reviewer Assignment requires the procedure/status receipt in the
@@ -46,13 +46,17 @@ Choose a disposition and enforce its boundary:
   evidence, exclusions, and the decision informed. The title grants no extra
   authority.
 
-Choose one configured Peer recipe whose description satisfies the Assignment's
-risk, independence, access, and cost needs. Recipe selection and disposition
-are independent; reuse or mix recipes as needed. Pass the selected `kind` and
-native `args` unchanged. If no specialized recipe fits, use the configured
-`fallback_peer_recipe` and record that fallback choice in the Assignment. Its
-existing access boundary remains binding; request a Human-approved setup update
-when the Assignment requires capability outside it.
+Select one compatible accepted role template from Assignment authority:
+
+- project mutation required → `engineer`;
+- project read plus evidence write → `reviewer`.
+
+Architect, Reviewer, Scout, proof-auditor, and read-only feature-owner
+dispositions use `reviewer` only when that envelope satisfies the complete
+Assignment. The disposition grants no authority. Zero compatible roles is a
+setup-policy conflict and requires a Human-approved setup update. Multiple
+future compatible roles require one explicit selector before launch. An
+unknown Assignment never routes to a writable role.
 
 Reserve a collision-free return path before start. A project-read-only Peer
 uses `reports/inbox/<agent-name>/report.md`; its exclusive inbox directory is
@@ -106,9 +110,8 @@ candidate, verification, risk, scope, or decision fields make it incomplete.
 Terminal output is not the report.
 
 Assignment preparation is complete when every Assignment field, disposition
-boundary, recipe, exclusive return path, full report schema, and completion
-evidence is explicit and mutually consistent with the constraints selected for
-layer 2.
+boundary, selected compatible role, exclusive return path, full report schema,
+and completion evidence is explicit and mutually consistent with layer 2.
 
 ## 2. Build and deliver the Peer pack
 
@@ -128,32 +131,39 @@ absolute source/output paths to the helper.
 
 Pass the opaque Peer profile directly to the helper without opening it. Save
 the exact output under `context/` and record its SHA-256, byte count, ordered
-sources, recipe, repository, checkout, and agent name. The Peer receives no full
+sources, selected role, repository, checkout, and agent name. The Peer receives no full
 protocol, topology, anti-pattern, Lead, or Supervisor manual.
 
 Project every repository instruction that governs assigned paths into the
 constraints while preserving its scope. A mailbox cwd does not bypass
 repository authority discovery.
 
+Invoke the run-local helper's `bind-role` with the selected role, snapshotted
+config and digest, and only its exact `required_bindings`. Bind `workspace` to
+the assigned checkout/worktree, `git_common` to that repository's exact Git
+common directory, `evidence` to the reserved inbox, and `orchestration` only
+when required. Use the owned workspace as Engineer cwd and the exclusive inbox
+as Reviewer cwd. Save the result as
+`assignments/<agent-name>-launch.json`; it is the native recipe and authority
+receipt for this Assignment.
+
 Read only targeted current Herdr help needed for the operation. Invoke the
 layout helper with shared state, correct cwd, and Lead pane anchor. Use only
-`new_pane_id`; reconcile a same-cwd recovery before a permitted retry. A
-writable Peer starts in its owned checkout/worktree. A project-read-only Peer
-starts in its exclusive inbox and must prove project and broader common-
-directory paths remain unwritable.
+`new_pane_id`; reconcile a same-cwd recovery before a permitted retry.
 
-Choose a unique fresh name and start the exact configured recipe with no
-prompt. Invoke the orchestration helper's `deliver` operation once with the
+Choose a unique fresh name and start the exact receipt `kind` and argument
+vector with no prompt. Invoke the orchestration helper's `deliver` operation once with the
 saved context, assigned live language, receipt path, and localized one-line
 opening/closing files that use and contain the exact live-language value. It
 sends that envelope and exact pack bytes via a safe argument vector without
 `--wait`, records both context and payload digests, and keeps payload bytes out
 of stdout and logs. Record the grounded `assignment` event only after exact
-identities and delivery receipt exist.
+identities, bound launch digest, and delivery receipt exist.
 
-Dispatch is complete when the saved Assignment and pack are byte/digest-bound,
-the fresh agent and pane have exact identities, access matches disposition, the
-single delivery is accepted, and the ledger references the durable evidence.
+Dispatch is complete when the saved Assignment, bound launch receipt, and pack
+are byte/digest-bound; the fresh agent and pane have exact identities; access
+matches disposition; the single delivery is accepted; and the ledger
+references durable evidence.
 
 ## 3. Wait, collect, and continue once
 

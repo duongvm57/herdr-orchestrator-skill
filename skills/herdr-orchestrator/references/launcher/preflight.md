@@ -1,74 +1,67 @@
 # Shared Launcher preflight
 
-Read this procedure completely before either a task launch or Supervisor
-attachment. It prepares facts only; the selected branch owns all durable work
-and its completion gate.
+Read this procedure completely before task launch or Supervisor attachment. It
+prepares facts only; the selected branch owns durable mutation and completion.
 
-## 1. Prove the control and evidence boundaries
+## 1. Prove control and evidence access
 
-Require `HERDR_ENV=1` and Python 3.11+. Run these canaries first:
+Require `HERDR_ENV=1` and Python 3.11+. Run:
 
 ```text
 herdr agent list
 herdr pane current --current
 ```
 
-Stop on either exact error before reading project configuration or probing a
-harness. A managed pane whose native boundary blocks the Herdr socket is not
-launch-ready.
+Stop on either error. Resolve packaged `scripts/herdr_orchestrator.py` and
+`scripts/herdr_balanced_split.py` relative to this skill, and require both
+helpers' `--help` operations to pass. Read only targeted current Herdr and Codex
+help needed by the selected branch.
 
-Resolve the repository root and absolute Git common directory. Prove common-
-directory write access with one exclusive collision-free file created,
-written, fsynced, and removed in a single bounded operation. Stop on any exact
-failure and require no leftover. Permission bits alone are not evidence.
+## 2. Load the accepted setup
 
-Resolve packaged `scripts/herdr_orchestrator.py` and
-`scripts/herdr_balanced_split.py` relative to this skill. Require each helper's
-`--help` to pass. Read only the relevant targeted Herdr `--help` pages and each
-configured harness's native help; bulk runtime instruction dumps are not
-command authority.
+Invoke:
 
-## 2. Validate the project and recipes
+```text
+python3 <helper> validate-project \
+  --project-root <canonical-project-root> \
+  --git-common-dir <canonical-selected-git-common-dir>
+```
 
-Invoke the orchestration helper's `validate-project` operation with the
-repository and resolved `--git-common-dir`. Consume only its compact JSON
-result and retain its exact canonical project root, Git common directory,
-config path/digest, and protocol path/digest as the preflight binding; do not
-recompute or substitute them. Require:
+This command is the only project-configuration reader. It verifies the accepted
+Activation Manifest, immutable generation, publication manifest, Acceptance
+Receipt, every artifact digest, the closed-world role templates, both
+Human-selected languages, and the selected repository/Git-common binding.
+Direct mutable config or protocol files are not launch authority.
 
-- `.orchestration/herdr-orchestrator.toml` at schema `version = 3` with one
-  `fallback_peer_recipe` naming an exact recipe, one `[roles.lead]`, optional
-  `[roles.supervisor]`, and uniquely named `[peer_recipes.<name>]` entries;
-- only `kind` and `args` in fixed roles, and nonempty `description`, `kind`, and
-  `args` in each Peer recipe;
-- only options registered in the helper's strict per-kind argument schema, with
-  no placeholders, credentials, indirection, unknown keys, or legacy schema;
-- all twelve Workspace Protocol sections and explicit non-placeholder live and
-  durable languages, with its canonical absolute Repository root equal to the
-  validated project root.
+Retain the returned exact:
 
-Validate the recipes the selected branch can start against live local
-capabilities: Lead and all Peer recipes for task launch; only the exact host
-Supervisor recipe for Supervisor attachment. The helper's verified adapter
-registry is the configuration allowlist; a Herdr-advertised kind outside it is
-unavailable. Require an installed executable, supported Herdr kind, accepted native arguments, selectable configured model,
-disabled native spawning, Herdr reachability for control roles, and the exact
-read/write envelope for the role. Use the helper's compact catalog operation
-advertised by its current `--help`; keep raw model catalogs out of the Launcher
-context and logs. A Lead needs run-evidence writes. Each task-launch Peer recipe
-needs a lossless exclusive report-return boundary; project-read-only Peers keep
-checkout and Git metadata read-only. A Supervisor is project-read-only and
-notebook-write-only. Once selected, including the configured Peer fallback, a
-failing recipe is reported exactly and never substituted at runtime.
+```text
+project_root
+repository_root
+git_common_dir
+activation.path and sha256
+generation_root
+publication_digest
+acceptance_receipt_digest
+config.path and sha256
+protocol.path and sha256
+languages
+roles and each role's required_bindings
+```
 
-Read both communication languages before generating prose or delivering a
-pack. Durable evidence uses the artifact language. Live status and transport
-envelopes use the orchestration language. Source bytes, identifiers, schemas,
-commands, output, and quoted Human wording remain exact.
+Require `lead`, `engineer`, and `reviewer`; require `supervisor` only for an
+attachment. Every role is Codex-bound, has a Human-selected model
+and reasoning effort, disables native agents and network, and exposes logical
+filesystem bindings rather than proof-time paths. A missing role or incompatible
+authority stops the branch; there is no writable fallback.
+
+Require the configured Codex executable and model launch surface to remain
+available. Preserve the exact model and reasoning binding.
 
 ## 3. Preserve before-state
 
-Capture:
+Prove create/write/fsync/remove access with one collision-free file under the
+exact returned Git common directory, leaving no residue. Then capture:
 
 ```text
 git status --short --branch
@@ -77,13 +70,13 @@ herdr agent list
 herdr pane list
 ```
 
-Inspect repository authority needed to bind the Human request, including
-applicable `AGENTS.md`, domain documents, issue, or specification pointers.
-Existing agents, panes, worktrees, branches, untracked files, and working-tree
-changes are Human-owned. Keep them in place and unchanged.
+Inspect repository authority applicable to the Human request, including scoped
+`AGENTS.md` or equivalent policy sources. Existing agents, panes, worktrees,
+branches, untracked files, and working-tree changes are Human-owned and remain
+unchanged.
 
-Preflight is complete only when the repository, Git common directory, project
-files, live recipes, selected branch input, applicable authority, and preserved
-before-state are unambiguous; both helpers pass their own checks; and all access
-canaries pass without runtime substitution. The retained project root, paths,
-and digests remain the sole authority for any task-run initialization.
+Preflight is complete only when the accepted generation and receipts verify,
+the selected repository and Git common directory agree, the required roles and
+languages are present, live control canaries pass, and before-state is saved.
+Forward the retained paths and digests unchanged; later steps do not recompute
+or substitute them.

@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.accepted_fixture import publish_accepted_setup
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills/herdr-orchestrator"
@@ -28,57 +30,24 @@ class RealPackageFlowTests(unittest.TestCase):
             root = Path(temporary)
             common = root / "common"
             project = root / "project"
-            common.mkdir()
             project.mkdir()
-            orchestration = project / ".orchestration"
-            orchestration.mkdir()
+            accepted = publish_accepted_setup(project)
+            common = accepted["common"]
             task = root / "task.md"
             before = root / "before.txt"
-            config = orchestration / "herdr-orchestrator.toml"
-            protocol = orchestration / "workspace-protocol.md"
+            config = accepted["config"]
+            protocol = accepted["protocol"]
             binding = root / "binding.md"
             constraints = root / "constraints.md"
             peer_assignment = root / "peer-assignment.md"
             for path, body in (
                 (task, "Implement a tiny bounded task.\n"),
                 (before, "## main\n"),
-                (
-                    config,
-                    """version = 3
-fallback_peer_recipe = "review"
-
-[roles.lead]
-kind = "codex"
-args = ["--model", "gpt-test"]
-
-[peer_recipes.review]
-description = "Read-only independent review"
-kind = "codex"
-args = ["--model", "gpt-test"]
-""",
-                ),
                 (binding, "# Run binding\n\nRun: integration-test\n"),
                 (constraints, "# Relevant constraints\n\nRead-only review.\n"),
                 (peer_assignment, "# Assignment\n\nReturn the required report.\n"),
             ):
                 path.write_text(body, encoding="utf-8")
-            protocol_lines: list[str] = []
-            for line in (SKILL_ROOT / "assets/workspace-protocol-template.md").read_text(
-                encoding="utf-8"
-            ).splitlines():
-                if line.endswith("YYYY-MM-DD"):
-                    line = line.replace("YYYY-MM-DD", "2026-08-23")
-                elif line.endswith("Live orchestration language:"):
-                    line += " Vietnamese"
-                elif line.endswith("Durable Markdown artifact language:"):
-                    line += " English"
-                elif line.endswith("Repository root:"):
-                    line += f" {project.resolve()}"
-                elif line.lstrip().startswith("- ") and line.endswith(":"):
-                    line += " populated"
-                protocol_lines.append(line)
-            protocol.write_text("\n".join(protocol_lines) + "\n", encoding="utf-8")
-
             validated = self.run_helper(
                 "validate-project",
                 "--project-root",
@@ -93,20 +62,14 @@ args = ["--model", "gpt-test"]
                 str(common),
                 "--run-id",
                 "integration-test",
-                "--repository-root",
+                "--project-root",
                 str(project),
                 "--human-task-file",
                 str(task),
                 "--before-state-file",
                 str(before),
-                "--project-config-file",
-                str(config),
-                "--workspace-protocol-file",
-                str(protocol),
-                "--expected-project-config-sha256",
-                preflight["config"]["sha256"],
-                "--expected-workspace-protocol-sha256",
-                preflight["protocol"]["sha256"],
+                "--expected-activation-sha256",
+                preflight["activation"]["sha256"],
                 "--layout-helper",
                 str(LAYOUT),
             ]

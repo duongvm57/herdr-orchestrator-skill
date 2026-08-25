@@ -83,18 +83,16 @@ class InstructionArchitectureTests(unittest.TestCase):
         launch = read("references/launcher/task-launch.md")
         supervisor = read("references/launcher/supervisor-attachment.md")
 
-        self.assertIn("--project-config-file", launch)
-        self.assertIn("--workspace-protocol-file", launch)
-        self.assertIn("--expected-project-config-sha256", launch)
-        self.assertIn("--expected-workspace-protocol-sha256", launch)
-        self.assertIn("canonical project paths", launch)
+        self.assertIn("--expected-activation-sha256", launch)
+        self.assertIn("setup-activation.json", launch)
+        self.assertIn("bind-role --role lead", launch)
+        self.assertIn("context/lead-launch.json", launch)
         self.assertIn("context/project-config.toml", launch)
         self.assertIn("context/workspace-protocol.md", launch)
         self.assertIn("├── human-task.md", launch)
-        self.assertIn("returned `human_task.path`", launch)
         self.assertIn("filtered selection manifest", supervisor)
         self.assertIn("context/workspace-protocol.md", supervisor)
-        self.assertNotIn("then the full project Workspace Protocol", launch)
+        self.assertNotIn(".orchestration/herdr-orchestrator.toml", launch)
 
     def test_supervisor_attachment_is_collision_and_language_bound(self) -> None:
         supervisor = read("references/launcher/supervisor-attachment.md")
@@ -106,10 +104,10 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("delivery-receipt.json", supervisor)
         self.assertIn("local-receipt.md", supervisor)
         self.assertIn("lead-notification-receipt.json", supervisor)
-        self.assertIn("every bound run's `supervisor/`", supervisor)
-        self.assertIn("host project's live language", supervisor)
-        self.assertRegex(supervisor, r"that project's\s+artifact language")
-        self.assertRegex(supervisor, r"that\s+project's live language")
+        self.assertIn("bind-role --role supervisor", supervisor)
+        self.assertIn("configured artifact", supervisor)
+        self.assertIn("configured live language", supervisor)
+        self.assertIn("Cross-project observation requires a later authority slice", supervisor)
 
     def test_readme_stays_user_facing(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -133,112 +131,65 @@ class InstructionArchitectureTests(unittest.TestCase):
             r"(?m)^\s+cache-dependency-path: requirements-dev\.txt$",
         )
 
-    def test_setup_prefers_harness_choice_cards(self) -> None:
+    def test_setup_presents_only_engine_owned_typed_questions(self) -> None:
         setup = read("references/launcher/setup.md")
         normalized = " ".join(setup.split())
 
-        for contract in (
-            r"structured user-input",
-            r"one question per card",
-            r"2–3\s+exclusive choices",
-            r"explicit labels",
-            r"recommendation first",
-            r"free-form answer",
-        ):
-            self.assertRegex(normalized, contract)
-        self.assertIn("every valid answer as a numbered choice", normalized)
-        self.assertIn("request its number", normalized)
-        self.assertIn("one question and wait", normalized)
+        self.assertIn("present only `questions`", normalized)
+        self.assertIn("Preserve each question `id`, `kind`, option value, and fact", normalized)
+        self.assertIn("show the complete numbered engine list", normalized)
+        self.assertIn("submit only answers to questions open in the same revision", normalized)
+        self.assertIn("Use JSON booleans for `BOOLEAN` answers", normalized)
+        self.assertIn("For `TEXT`, return the Human's nonempty canonical string exactly", normalized)
+        self.assertNotIn("recommendation first", normalized)
+        self.assertNotIn("free-form answer", normalized)
 
-    def test_setup_offers_guided_or_human_configured_toml(self) -> None:
+    def test_setup_is_a_thin_resume_answer_accept_presenter(self) -> None:
         setup = read("references/launcher/setup.md")
         normalized = " ".join(setup.split())
 
-        self.assertIn("Choose configuration mode", setup)
-        self.assertIn("Guided setup", setup)
-        self.assertIn("Configure TOML yourself", setup)
-        self.assertIn("version-3 TOML", normalized)
-        self.assertIn("so the Human can create or edit it", normalized)
-        self.assertIn("assets/config.toml", setup)
-        self.assertIn("from chat or", normalized)
-        self.assertIn("role/recipe fields", normalized)
-        self.assertIn("only missing protocol decisions", normalized)
-        self.assertLess(
-            setup.index("Choose configuration mode"),
-            setup.index("profile matrix"),
-        )
+        self.assertIn("calls only `resume`, `answer`, and `accept`", normalized)
+        self.assertIn("herdr_setup_cli.py resume", setup)
+        self.assertIn("herdr_setup_cli.py answer", setup)
+        self.assertIn("herdr_setup_cli.py accept", setup)
+        self.assertIn("A generic “yes” is not a digest confirmation", normalized)
+        self.assertIn("only runtime authority", normalized)
+        self.assertNotIn("Configure TOML yourself", setup)
 
-    def test_setup_selects_harness_before_recipe_details(self) -> None:
+    def test_setup_defers_harness_model_and_authority_to_engine_view(self) -> None:
         setup = read("references/launcher/setup.md")
-        template = read("assets/config.toml")
         normalized = " ".join(setup.split())
 
-        self.assertIn("herdr agent start --help", setup)
-        self.assertIn("herdr integration status", setup)
-        self.assertIn("intersect kinds", setup)
-        self.assertIn("omit the rest", setup)
-        self.assertIn("profile matrix", setup)
-        self.assertIn("Each row independently selects its harness", setup)
-        self.assertIn("fast/general/reasoning/coding/architecture/reviewer", setup)
-        self.assertRegex(setup, r"assignment\s+binds the Peer disposition")
-        self.assertIn("kinds may differ", template)
-        self.assertLess(
-            normalized.index("Each row independently selects its harness"),
-            normalized.index("then discover and choose its model"),
-        )
+        self.assertIn("every `role_binding`", setup)
+        self.assertIn("complete effective authority", normalized)
+        self.assertIn("add no option, recommendation, model ranking", normalized)
+        self.assertIn("Never retry, reset Human decisions, weaken authority", normalized)
+        self.assertNotIn("herdr agent start --help", setup)
+        self.assertNotIn("profile matrix", setup)
 
-    def test_peer_fallback_is_explicit_and_envelope_bound(self) -> None:
-        template = read("assets/config.toml")
+    def test_peer_role_selection_is_authority_bound_and_fail_closed(self) -> None:
         setup = read("references/launcher/setup.md")
         lifecycle = read("references/lead/peer-lifecycle.md")
-
-        self.assertIn('fallback_peer_recipe = "<fallback-recipe-name>"', template)
-        self.assertIn("naming an exact Peer recipe", setup)
-        self.assertIn("Human chooses reuse and one fallback recipe", setup)
-        self.assertIn("If no specialized recipe fits", lifecycle)
-        self.assertIn("record that fallback choice in the Assignment", lifecycle)
-        self.assertIn("outside it", lifecycle)
-
-    def test_harness_specific_logic_lives_in_separate_adapter_modules(self) -> None:
-        helper = read("scripts/herdr_orchestrator.py")
-        adapter_root = SKILL_ROOT / "scripts/herdr_harnesses"
-        registry = (adapter_root / "__init__.py").read_text(encoding="utf-8")
-        registered = set(re.findall(r'(?m)^    "([a-z][a-z0-9]*)",$', registry))
-        module_names = {
-            path.stem
-            for path in adapter_root.glob("*.py")
-            if path.name not in {"__init__.py", "base.py"}
-        }
-
-        self.assertEqual(module_names, registered)
-        self.assertEqual(
-            registered,
-            {"codex", "claude", "grok", "pi", "opencode", "omp"},
-        )
-        self.assertNotIn(
-            "model_only_adapter",
-            (adapter_root / "base.py").read_text(encoding="utf-8"),
-        )
-
-        for kind in ("codex", "claude", "grok", "pi", "opencode", "omp"):
-            module = (adapter_root / f"{kind}.py").read_text(encoding="utf-8")
-            self.assertIn(f'kind="{kind}"', module)
-            self.assertIn("HarnessAdapter(", module)
-            self.assertNotRegex(helper, rf"[\"']{kind}[\"']")
-
-        for kind in ("codex", "grok", "pi", "opencode", "omp"):
-            module = (adapter_root / f"{kind}.py").read_text(encoding="utf-8")
-            self.assertIn("def project_catalog", module)
-
-        setup = read("references/launcher/setup.md")
         normalized_setup = " ".join(setup.split())
-        self.assertIn("harness-models --kind <kind>", setup)
-        self.assertIn("--project-root", setup)
-        self.assertIn("exact harness adapter", setup)
-        self.assertIn(
-            "Pi projects only effective native `enabledModels` scope",
-            normalized_setup,
-        )
+
+        self.assertIn("no mutable compatibility config", normalized_setup)
+        self.assertIn("project mutation required → `engineer`", lifecycle)
+        self.assertIn("project read plus evidence write → `reviewer`", lifecycle)
+        self.assertIn("unknown Assignment never routes to a writable role", lifecycle)
+
+    def test_codex_authority_and_runtime_binding_have_separate_modules(self) -> None:
+        helper = read("scripts/herdr_orchestrator.py")
+        engine = read("scripts/herdr_setup/engine.py")
+        codex_authority = read("scripts/herdr_setup/codex_authority.py")
+        runtime = read("scripts/herdr_runtime.py")
+        self.assertIn("probe_codex", engine)
+        self.assertIn("compile_codex", engine)
+        self.assertIn("def probe_codex", codex_authority)
+        self.assertIn("def compile_codex", codex_authority)
+        self.assertIn("def load_accepted_project", runtime)
+        self.assertIn("def bind_role_launch", runtime)
+        self.assertIn("bind_role_launch", helper)
+        self.assertNotIn("--permission-profile", engine)
 
     def test_lead_asset_names_match_launch_staging_contract(self) -> None:
         launch = read("references/launcher/task-launch.md")
@@ -251,7 +202,9 @@ class InstructionArchitectureTests(unittest.TestCase):
             "peer-profile",
         }
 
-        staged = set(re.findall(r"(?m)^([a-z][a-z-]+)=references/", launch))
+        staged = set(
+            re.findall(r"(?m)^\s*--asset ([a-z][a-z-]+)=references/", launch)
+        )
         mapped = set(re.findall(r"(?m)^- `([a-z][a-z-]+)` —", lead))
 
         self.assertEqual(staged, expected)

@@ -26,7 +26,6 @@ import shutil
 import stat
 import subprocess
 import tempfile
-import tomllib
 import unicodedata
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -38,23 +37,19 @@ SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 if str(SCRIPT_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIRECTORY))
 
-from herdr_harnesses import (  # noqa: E402 - standalone sibling package
-    ADAPTERS as HARNESS_ADAPTERS,
-    PACKAGED_FILES as HARNESS_ADAPTER_FILES,
-    VERIFIED_HARNESS_KINDS,
-    HarnessError,
-    get_adapter,
+from herdr_runtime import (  # noqa: E402 - standalone sibling module
+    RuntimeConfigError,
+    bind_role_launch,
+    load_accepted_project,
+    parse_runtime_config,
 )
 
 
 SCHEMA_VERSION = 1
-PROJECT_CONFIG_VERSION = 3
 SAFE_PROMPT_MAX_BYTES = 96 * 1024
 DEFAULT_PROMPT_MAX_BYTES = SAFE_PROMPT_MAX_BYTES
 DEFAULT_DELIVERY_TIMEOUT_SECONDS = 30.0
 MAX_ENVELOPE_LINE_BYTES = 512
-MAX_RECIPE_ARGUMENTS = 64
-MAX_RECIPE_ARGUMENT_BYTES = 1024
 DELIVERY_ENVELOPE_RESERVE_BYTES = (
     2 * MAX_ENVELOPE_LINE_BYTES
     + len("\n--- BEGIN SAVED CONTEXT sha256=".encode("utf-8"))
@@ -67,103 +62,7 @@ DELIVERY_ENVELOPE_RESERVE_BYTES = (
 RUN_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 ASSET_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 AGENT_NAME_RE = re.compile(r"[a-z][a-z0-9_-]{0,31}\Z")
-PLACEHOLDER_RE = re.compile(r"^\s*(?:todo|tbd|unknown|n/?a|yyyy-mm-dd)\s*$", re.I)
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-SENSITIVE_LITERAL_RE = re.compile(
-    r"(?i)(?:"
-    r"\bsk-[a-z0-9][a-z0-9_-]{8,}\b"
-    r"|\b(?:api[-_]?key|access[-_]?token|auth[-_]?token|password|secret|credential)\b"
-    r"|\bbearer\s+"
-    r"|(?:\$|%)[{A-Za-z_][^}\r\n]*"
-    r"|@[A-Za-z0-9_./~-]+"
-    r")"
-)
-LANGUAGE_FIELDS = (
-    "Live orchestration language",
-    "Durable Markdown artifact language",
-)
-PROTOCOL_LABELS: tuple[tuple[str, ...], ...] = (
-    (
-        "Owner",
-        "Version",
-        "Last reviewed",
-        "Repository root",
-        "Readers",
-        "Live orchestration language",
-        "Durable Markdown artifact language",
-    ),
-    (
-        "Criticality",
-        "Dominant risks",
-        "Expensive-to-reverse decisions",
-        "External side effects",
-        "Model/cost budget",
-    ),
-    (
-        "Lead may decide",
-        "Human must decide",
-        "Edit/commit/push/deploy/publish authority",
-        "Scope-expansion boundary",
-        "Architecture contracts reserved for Human review",
-        "Prohibited without explicit Human authority",
-    ),
-    (
-        "Tiny",
-        "Bounded implementation",
-        "Cross-module or lifecycle-sensitive",
-        "Architecture lock-in",
-        "Subjective/product evidence",
-    ),
-    (
-        "Configured recipe capabilities and access constraints",
-        "Selection by Assignment risk, independence, cost, and required access",
-        "Recipe reuse or mixing across dynamically created Peers",
-        (
-            "Specialized miss, configured fallback recipe, and "
-            "out-of-envelope escalation"
-        ),
-    ),
-    (
-        "Fresh Architect required when",
-        "Fresh Reviewer required when",
-        "Sealed council allowed when",
-        "Same-Engineer correction rule",
-    ),
-    (
-        "One writer per moving scope",
-        "Worktree rules for concurrent writers",
-        "Exclusive resources",
-        "Handback and integration owner",
-    ),
-    (
-        "Allowed identity forms (commit or deterministic base/diff/artifact digest)",
-        "Candidate freeze and replacement rules",
-    ),
-    (
-        "Checks by task class",
-        "Independent falsification expectations",
-        "Subjective/Human evidence",
-        "Minimum evidence required for Lead verdict",
-        "Residual risk reporting",
-    ),
-    (
-        "`REOPEN_REQUEST` for failed foundations or premises",
-        "`DEPENDENCY_REQUEST` for another owner, API, scope, or prerequisite",
-        "`BLOCKED` for missing authority, external state, or Human decision",
-    ),
-    (
-        "Signal, evidence, suspected mechanism, open question, allowed response",
-        "Supervisor observation retention/export policy",
-        "Supervisor project-read/notebook-write boundary",
-        "Repeated-failure prerequisite check",
-    ),
-    (
-        "Review trigger and date",
-        "Human approval required for material authority changes",
-        "Version-history practice",
-        "Repeated evidence required before promoting a protocol candidate",
-    ),
-)
 
 
 class HelperError(Exception):
@@ -315,210 +214,6 @@ def _fsync_tree_directories(root: Path) -> None:
     _fsync_directory(root)
 
 
-def _is_populated(value: str) -> bool:
-    return (
-        bool(value.strip())
-        and PLACEHOLDER_RE.fullmatch(value) is None
-        and re.search(r"<[^>\r\n]+>", value) is None
-    )
-
-
-def _validate_recipe_arguments(kind: str, args: list[str], location: str) -> None:
-    try:
-        adapter = get_adapter(kind)
-    except HarnessError as exc:
-        raise HelperError(f"{location}.kind {exc}") from exc
-    try:
-        adapter.validate_arguments(args, location)
-    except HarnessError as exc:
-        raise HelperError(str(exc)) from exc
-
-
-def _validate_lead_evidence_boundary(config: dict[str, Any], common: Path) -> None:
-    lead = config["roles"]["lead"]
-    adapter = get_adapter(lead["kind"])
-    try:
-        adapter.validate_lead_evidence_root(
-            lead["args"],
-            common,
-            "roles.lead",
-        )
-    except HarnessError as exc:
-        raise HelperError(str(exc)) from exc
-
-
-def _validate_recipe(
-    value: Any,
-    *,
-    location: str,
-    require_description: bool,
-) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        raise HelperError(f"{location} must be a TOML table")
-    allowed = {"kind", "args"}
-    if require_description:
-        allowed.add("description")
-    unknown = set(value) - allowed
-    missing = allowed - set(value)
-    if unknown:
-        raise HelperError(f"{location} has unsupported keys: {', '.join(sorted(unknown))}")
-    if missing:
-        raise HelperError(f"{location} is missing keys: {', '.join(sorted(missing))}")
-    kind = value["kind"]
-    args = value["args"]
-    if not isinstance(kind, str) or not _is_populated(kind):
-        raise HelperError(f"{location}.kind must be a non-placeholder string")
-    if (
-        not isinstance(args, list)
-        or not args
-        or len(args) > MAX_RECIPE_ARGUMENTS
-        or any(not isinstance(arg, str) or not _is_populated(arg) for arg in args)
-        or any(len(arg.encode("utf-8")) > MAX_RECIPE_ARGUMENT_BYTES for arg in args)
-    ):
-        raise HelperError(
-            f"{location}.args must be a bounded nonempty array of non-placeholder strings"
-        )
-    if any(SENSITIVE_LITERAL_RE.search(arg) for arg in args):
-        raise HelperError(f"{location}.args contains an unsupported sensitive literal")
-    _validate_recipe_arguments(kind, args, location)
-    result: dict[str, Any] = {"kind": kind, "args": args}
-    if require_description:
-        description = value["description"]
-        if not isinstance(description, str) or not _is_populated(description):
-            raise HelperError(f"{location}.description must be a non-placeholder string")
-        result["description"] = description
-    return result
-
-
-def _parse_project_config(data: bytes, label: str) -> dict[str, Any]:
-    text = _decode_safe_text(data, label)
-    try:
-        config = tomllib.loads(text)
-    except tomllib.TOMLDecodeError as exc:
-        raise HelperError(f"invalid project config TOML: {exc}") from exc
-    required_keys = {"version", "fallback_peer_recipe", "roles", "peer_recipes"}
-    if set(config) != required_keys:
-        unknown = set(config) - required_keys
-        missing = required_keys - set(config)
-        details: list[str] = []
-        if unknown:
-            details.append(f"unsupported keys: {', '.join(sorted(unknown))}")
-        if missing:
-            details.append(f"missing keys: {', '.join(sorted(missing))}")
-        raise HelperError("invalid project config top level (" + "; ".join(details) + ")")
-    if config["version"] != PROJECT_CONFIG_VERSION:
-        raise HelperError(
-            f"project config version must be {PROJECT_CONFIG_VERSION}, got {config['version']!r}"
-        )
-    roles = config["roles"]
-    if not isinstance(roles, dict):
-        raise HelperError("roles must be a TOML table")
-    unknown_roles = set(roles) - {"lead", "supervisor"}
-    if unknown_roles:
-        raise HelperError(f"roles has unsupported keys: {', '.join(sorted(unknown_roles))}")
-    if "lead" not in roles:
-        raise HelperError("roles.lead is required")
-    validated_roles = {
-        "lead": _validate_recipe(roles["lead"], location="roles.lead", require_description=False)
-    }
-    if "supervisor" in roles:
-        validated_roles["supervisor"] = _validate_recipe(
-            roles["supervisor"],
-            location="roles.supervisor",
-            require_description=False,
-        )
-    peer_recipes = config["peer_recipes"]
-    if not isinstance(peer_recipes, dict) or not peer_recipes:
-        raise HelperError("peer_recipes must be a nonempty TOML table")
-    validated_peers: dict[str, Any] = {}
-    for name, recipe in peer_recipes.items():
-        if not isinstance(name, str) or not _is_populated(name):
-            raise HelperError("every peer_recipes key must be a non-placeholder string")
-        validated_peers[name] = _validate_recipe(
-            recipe,
-            location=f"peer_recipes.{name}",
-            require_description=True,
-        )
-    fallback_name = config["fallback_peer_recipe"]
-    if not isinstance(fallback_name, str) or not _is_populated(fallback_name):
-        raise HelperError("fallback_peer_recipe must be a non-placeholder string")
-    if fallback_name not in validated_peers:
-        raise HelperError("fallback_peer_recipe must name an exact peer_recipes entry")
-    return {
-        "version": PROJECT_CONFIG_VERSION,
-        "fallback_peer_recipe": fallback_name,
-        "roles": validated_roles,
-        "peer_recipes": validated_peers,
-    }
-
-
-def _parse_protocol(data: bytes, label: str) -> dict[str, str]:
-    text = _decode_safe_text(data, label)
-    headings = list(re.finditer(r"(?m)^##\s+(\d+)\.[^\r\n]*$", text))
-    sections = [int(match.group(1)) for match in headings]
-    expected = list(range(1, 13))
-    if sections != expected:
-        raise HelperError(
-            "workspace protocol numbered sections must appear exactly once in order 1 through 12"
-        )
-    expected_sections = {
-        field: section_number
-        for section_number, fields in enumerate(PROTOCOL_LABELS, 1)
-        for field in fields
-    }
-    occurrences: dict[str, list[tuple[int, str]]] = {
-        field: [] for field in expected_sections
-    }
-    for index, heading in enumerate(headings):
-        section_number = int(heading.group(1))
-        end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
-        body = text[heading.end():end]
-        for line in body.splitlines():
-            match = re.match(r"^[ \t]*-[ \t]+(.+?):[ \t]*(.*?)[ \t]*$", line)
-            if match and match.group(1) in occurrences:
-                occurrences[match.group(1)].append((section_number, match.group(2).strip()))
-
-    values: dict[str, str] = {}
-    for field, expected_section in expected_sections.items():
-        found = occurrences[field]
-        if not found:
-            raise HelperError(
-                f"workspace protocol section {expected_section} is missing required label {field}"
-            )
-        if len(found) != 1:
-            raise HelperError(f"workspace protocol repeats required label {field}")
-        actual_section, value = found[0]
-        if actual_section != expected_section:
-            raise HelperError(
-                f"workspace protocol label {field} belongs in section {expected_section}, "
-                f"not section {actual_section}"
-            )
-        if not _is_populated(value):
-            raise HelperError(
-                f"workspace protocol section {expected_section} requires a populated value for {field}"
-            )
-        values[field] = value
-    return {
-        field: values[field]
-        for field in ("Repository root", *LANGUAGE_FIELDS)
-    }
-
-
-def _require_protocol_repository(
-    protocol_values: dict[str, str],
-    repository: Path,
-) -> None:
-    configured = protocol_values["Repository root"]
-    configured_path = Path(configured)
-    if not configured_path.is_absolute():
-        raise HelperError("workspace protocol Repository root must be an absolute directory")
-    resolved = _require_directory(configured_path, "workspace protocol Repository root")
-    if configured != str(resolved):
-        raise HelperError("workspace protocol Repository root must be canonical")
-    if resolved != repository:
-        raise HelperError("workspace protocol Repository root does not match the repository root")
-
-
 def _require_expected_sha256(value: str, label: str) -> str:
     if SHA256_RE.fullmatch(value) is None:
         raise HelperError(f"{label} must be a lowercase SHA-256 digest")
@@ -526,60 +221,142 @@ def _require_expected_sha256(value: str, label: str) -> str:
 
 
 def command_validate_project(args: argparse.Namespace) -> dict[str, Any]:
-    root = _require_directory(Path(args.project_root), "project root")
-    canonical_config = root / ".orchestration/herdr-orchestrator.toml"
-    canonical_protocol = root / ".orchestration/workspace-protocol.md"
-    config_path = Path(args.config) if args.config else canonical_config
-    protocol_path = Path(args.protocol) if args.protocol else canonical_protocol
-    if not config_path.is_absolute():
-        config_path = root / config_path
-    if not protocol_path.is_absolute():
-        protocol_path = root / protocol_path
-    config_path = _require_file(config_path, "project config")
-    protocol_path = _require_file(protocol_path, "workspace protocol")
-    if config_path != canonical_config or protocol_path != canonical_protocol:
-        raise HelperError("project config and workspace protocol must use their canonical project paths")
-    config_data = _read(config_path, "project config")
-    protocol_data = _read(protocol_path, "workspace protocol")
-    config = _parse_project_config(config_data, str(config_path))
-    protocol_values = _parse_protocol(protocol_data, str(protocol_path))
-    _require_protocol_repository(protocol_values, root)
-    common = None
+    try:
+        root = Path(args.project_root).expanduser().resolve(strict=True)
+        accepted = load_accepted_project(str(root))
+    except (OSError, RuntimeConfigError) as exc:
+        raise HelperError(str(exc)) from exc
+    config = accepted.config
     if args.git_common_dir:
-        common = _require_directory(Path(args.git_common_dir), "Git common directory")
-        _validate_lead_evidence_boundary(config, common)
+        supplied = _require_directory(Path(args.git_common_dir), "Git common directory")
+        if str(supplied) != config.git_common_dir:
+            raise HelperError("Git common directory does not match the accepted setup")
+    artifacts = accepted.artifact_map
+    project_config = artifacts["herdr-orchestrator.toml"]
+    protocol = artifacts["workspace-protocol.md"]
     return {
         "schema_version": SCHEMA_VERSION,
         "command": "validate-project",
-        "project_root": str(root),
-        "git_common_dir": str(common) if common is not None else None,
+        "project_root": accepted.project_root,
+        "repository_root": config.repository_root,
+        "git_common_dir": config.git_common_dir,
+        "activation": {
+            "path": accepted.activation_path,
+            "sha256": accepted.activation_sha256,
+        },
+        "generation_root": accepted.generation_root,
+        "publication_digest": accepted.publication_digest,
+        "acceptance_receipt_digest": accepted.acceptance_receipt_digest,
         "config": {
-            "path": str(config_path),
-            "bytes": len(config_data),
-            "sha256": _sha256(config_data),
-            "version": config["version"],
+            "path": project_config.absolute_path,
+            "bytes": project_config.size,
+            "sha256": project_config.sha256,
         },
         "protocol": {
-            "path": str(protocol_path),
-            "bytes": len(protocol_data),
-            "sha256": _sha256(protocol_data),
+            "path": protocol.absolute_path,
+            "bytes": protocol.size,
+            "sha256": protocol.sha256,
         },
         "languages": {
-            "live": protocol_values[LANGUAGE_FIELDS[0]],
-            "artifact": protocol_values[LANGUAGE_FIELDS[1]],
+            "live": config.live_language,
+            "artifact": config.artifact_language,
         },
-        "recipes": {
-            "lead": config["roles"]["lead"],
-            "supervisor": config["roles"].get("supervisor"),
-            "fallback_peer": {
-                "name": config["fallback_peer_recipe"],
-                **config["peer_recipes"][config["fallback_peer_recipe"]],
-            },
-            "peers": [
-                {"name": name, **recipe}
-                for name, recipe in config["peer_recipes"].items()
-            ],
-        },
+        "roles": [
+            {
+                "role": role.role,
+                "kind": role.adapter_kind,
+                "model": role.model,
+                "reasoning_effort": role.reasoning_effort,
+                "selected_binding_id": role.selected_binding_id,
+                "required_bindings": sorted(
+                    {
+                        grant.binding
+                        for grant in role.filesystem
+                        if grant.binding != "runtime"
+                    }
+                ),
+                "filesystem": [
+                    {
+                        "resource": grant.resource,
+                        "binding": grant.binding,
+                        "access": grant.access,
+                    }
+                    for grant in role.filesystem
+                ],
+            }
+            for role in config.roles
+        ],
+    }
+
+
+def _parse_runtime_binding(raw: str) -> tuple[str, str]:
+    if "=" not in raw:
+        raise HelperError("runtime binding must use SOURCE=PATH")
+    source, path = raw.split("=", 1)
+    if source not in {
+        "workspace",
+        "git_common",
+        "orchestration",
+        "evidence",
+        "notebook",
+    } or not path:
+        raise HelperError("runtime binding has an unsupported source or empty path")
+    return source, path
+
+
+def command_bind_role(args: argparse.Namespace) -> dict[str, Any]:
+    config_path = _require_file(Path(args.project_config_file), "project config snapshot")
+    expected = _require_expected_sha256(
+        args.expected_project_config_sha256,
+        "expected project config SHA-256",
+    )
+    config_data = _read(config_path, "project config snapshot")
+    if _sha256(config_data) != expected:
+        raise HelperError("project config snapshot changed after validation")
+    try:
+        config = parse_runtime_config(config_data)
+        bindings: dict[str, str] = {}
+        for raw in args.bind:
+            source, path = _parse_runtime_binding(raw)
+            if source in bindings:
+                raise HelperError(f"runtime binding repeats source: {source}")
+            bindings[source] = path
+        launch = bind_role_launch(
+            config,
+            args.role,
+            cwd=args.cwd,
+            bindings=bindings,
+        )
+    except RuntimeConfigError as exc:
+        raise HelperError(str(exc)) from exc
+    document = {
+        "schema": "herdr.runtime-bound-launch",
+        "candidate_digest": config.candidate_digest,
+        "role": launch.role,
+        "kind": launch.kind,
+        "executable": launch.executable,
+        "cwd": launch.cwd,
+        "model": launch.model,
+        "reasoning_effort": launch.reasoning_effort,
+        "selected_binding_id": launch.selected_binding_id,
+        "arguments": list(launch.arguments),
+        "filesystem": [
+            {"resource": resource, "path": path, "access": access}
+            for resource, path, access in launch.filesystem
+        ],
+        "launch_digest": launch.launch_digest,
+    }
+    output = _check_output_path(Path(args.output), replace=False)
+    payload = _json_bytes(document)
+    _atomic_write(output, payload)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "command": "bind-role",
+        "role": launch.role,
+        "path": str(output),
+        "bytes": len(payload),
+        "sha256": _sha256(payload),
+        "launch_digest": launch.launch_digest,
     }
 
 
@@ -603,17 +380,6 @@ def _asset_entry(name: str, data: bytes) -> dict[str, Any]:
         "bytes": len(data),
         "sha256": _sha256(data),
     }
-
-
-def _harness_adapter_artifact_paths() -> dict[str, str]:
-    artifacts: dict[str, str] = {}
-    for relative in HARNESS_ADAPTER_FILES:
-        stem = Path(relative).stem.strip("_") or "package"
-        name = f"harness_adapter_{stem}"
-        if name in artifacts:  # pragma: no cover - package-owned file list error
-            raise HelperError(f"duplicate packaged harness adapter artifact: {name}")
-        artifacts[name] = (Path("tools/herdr_harnesses") / relative).as_posix()
-    return artifacts
 
 
 def _remove_created_directories(paths: list[Path]) -> None:
@@ -647,55 +413,41 @@ def _validate_run_container(common: Path, base: Path, runs: Path, destination: P
 
 
 def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
+    try:
+        accepted = load_accepted_project(str(Path(args.project_root).resolve(strict=True)))
+    except (OSError, RuntimeConfigError) as exc:
+        raise HelperError(str(exc)) from exc
+    expected_activation_sha256 = _require_expected_sha256(
+        args.expected_activation_sha256,
+        "expected Activation Manifest SHA-256",
+    )
+    if accepted.activation_sha256 != expected_activation_sha256:
+        raise HelperError("Activation Manifest changed after preflight validation")
     common = _require_directory(Path(args.git_common_dir), "Git common directory")
-    repository = _require_directory(Path(args.repository_root), "repository root")
-    expected_config_sha256 = _require_expected_sha256(
-        args.expected_project_config_sha256,
-        "expected project config SHA-256",
-    )
-    expected_protocol_sha256 = _require_expected_sha256(
-        args.expected_workspace_protocol_sha256,
-        "expected workspace protocol SHA-256",
-    )
+    if str(common) != accepted.config.git_common_dir:
+        raise HelperError("Git common directory does not match the accepted setup")
+    repository = Path(accepted.config.repository_root)
     if RUN_ID_RE.fullmatch(args.run_id) is None:
         raise HelperError(
             f"run ID must match {RUN_ID_RE.pattern!r}: {args.run_id!r}"
         )
     task_path = _require_file(Path(args.human_task_file), "Human task file")
     before_path = _require_file(Path(args.before_state_file), "before-state file")
-    project_config_path = _require_file(
-        Path(args.project_config_file), "project config snapshot source"
-    )
-    workspace_protocol_path = _require_file(
-        Path(args.workspace_protocol_file), "workspace protocol snapshot source"
-    )
-    canonical_config_path = repository / ".orchestration/herdr-orchestrator.toml"
-    canonical_protocol_path = repository / ".orchestration/workspace-protocol.md"
-    if (
-        project_config_path != canonical_config_path
-        or workspace_protocol_path != canonical_protocol_path
-    ):
-        raise HelperError(
-            "project config and workspace protocol snapshot sources must use their canonical repository paths"
-        )
+    project_config_artifact = accepted.artifact_map["herdr-orchestrator.toml"]
+    protocol_artifact = accepted.artifact_map["workspace-protocol.md"]
+    project_config_path = Path(project_config_artifact.absolute_path)
+    workspace_protocol_path = Path(protocol_artifact.absolute_path)
+    activation_path = Path(accepted.activation_path)
     packaged_helper = Path(__file__).resolve().with_name("herdr_balanced_split.py")
     helper_path = _require_file(
         Path(args.layout_helper) if args.layout_helper else packaged_helper,
         "layout helper",
     )
     orchestration_helper_path = _require_file(Path(__file__), "orchestration helper")
-    harness_adapter_root = orchestration_helper_path.with_name("herdr_harnesses")
-    harness_adapter_artifacts = _harness_adapter_artifact_paths()
-    harness_adapter_sources: dict[str, tuple[str, bytes]] = {}
-    for name, relative in harness_adapter_artifacts.items():
-        source = _require_file(
-            harness_adapter_root / Path(relative).name,
-            f"harness adapter {name}",
-        )
-        harness_adapter_sources[name] = (
-            relative,
-            _read(source, f"harness adapter {name}"),
-        )
+    runtime_helper_path = _require_file(
+        orchestration_helper_path.with_name("herdr_runtime.py"),
+        "runtime config helper",
+    )
     task_data = _read(task_path, "Human task file")
     if not task_data:
         raise HelperError("Human task file must not be empty")
@@ -706,19 +458,16 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
     workspace_protocol_data = _read(
         workspace_protocol_path, "workspace protocol snapshot source"
     )
-    if _sha256(project_config_data) != expected_config_sha256:
-        raise HelperError("project config changed after preflight validation")
-    if _sha256(workspace_protocol_data) != expected_protocol_sha256:
-        raise HelperError("workspace protocol changed after preflight validation")
-    config = _parse_project_config(project_config_data, str(project_config_path))
-    _validate_lead_evidence_boundary(config, common)
-    protocol_values = _parse_protocol(
-        workspace_protocol_data,
-        str(workspace_protocol_path),
-    )
-    _require_protocol_repository(protocol_values, repository)
+    activation_data = _read(activation_path, "Activation Manifest")
+    if _sha256(project_config_data) != project_config_artifact.sha256:
+        raise HelperError("accepted project config changed after preflight validation")
+    if _sha256(workspace_protocol_data) != protocol_artifact.sha256:
+        raise HelperError("accepted workspace protocol changed after preflight validation")
+    if _sha256(activation_data) != expected_activation_sha256:
+        raise HelperError("Activation Manifest changed after preflight validation")
     helper_data = _read(helper_path, "layout helper")
     orchestration_helper_data = _read(orchestration_helper_path, "orchestration helper")
+    runtime_helper_data = _read(runtime_helper_path, "runtime config helper")
 
     asset_sources: list[tuple[str, Path, bytes]] = []
     asset_names: set[str] = set()
@@ -750,6 +499,7 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
         _write_staged(staged / "human-task.md", task_data)
         _write_staged(staged / "before-state.txt", before_data)
         _write_staged(staged / "events.jsonl", b"")
+        _write_staged(staged / "context/setup-activation.json", activation_data)
         _write_staged(staged / "context/project-config.toml", project_config_data)
         _write_staged(
             staged / "context/workspace-protocol.md", workspace_protocol_data
@@ -761,8 +511,7 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
             orchestration_helper_data,
             mode=0o755,
         )
-        for _name, (relative, data) in harness_adapter_sources.items():
-            _write_staged(staged / relative, data)
+        _write_staged(staged / "tools/herdr_runtime.py", runtime_helper_data)
 
         asset_entries: list[dict[str, Any]] = []
         for name, source_path, data in asset_sources:
@@ -779,6 +528,7 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
         core_files = {
             "human_task": ("human-task.md", task_data),
             "before_state": ("before-state.txt", before_data),
+            "setup_activation": ("context/setup-activation.json", activation_data),
             "project_config": ("context/project-config.toml", project_config_data),
             "workspace_protocol": (
                 "context/workspace-protocol.md",
@@ -790,13 +540,18 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
                 "tools/herdr_orchestrator.py",
                 orchestration_helper_data,
             ),
-            **harness_adapter_sources,
+            "runtime_helper": ("tools/herdr_runtime.py", runtime_helper_data),
         }
         run_manifest = {
             "schema_version": SCHEMA_VERSION,
             "run_id": args.run_id,
+            "project_root": accepted.project_root,
             "repository_root": str(repository),
+            "generation_root": accepted.generation_root,
+            "candidate_digest": accepted.config.candidate_digest,
+            "publication_digest": accepted.publication_digest,
             "project_sources": {
+                "activation": str(activation_path),
                 "project_config": str(project_config_path),
                 "workspace_protocol": str(workspace_protocol_path),
             },
@@ -906,7 +661,11 @@ def _load_run_manifest(path: Path) -> dict[str, Any]:
         or set(manifest) != {
             "schema_version",
             "run_id",
+            "project_root",
             "repository_root",
+            "generation_root",
+            "candidate_digest",
+            "publication_digest",
             "project_sources",
             "artifacts",
         }
@@ -914,28 +673,46 @@ def _load_run_manifest(path: Path) -> dict[str, Any]:
         or manifest.get("schema_version") != SCHEMA_VERSION
         or not isinstance(manifest.get("run_id"), str)
         or RUN_ID_RE.fullmatch(manifest.get("run_id", "")) is None
+        or not isinstance(manifest.get("project_root"), str)
         or not isinstance(manifest.get("repository_root"), str)
-        or not manifest.get("repository_root")
+        or not isinstance(manifest.get("generation_root"), str)
+        or SHA256_RE.fullmatch(str(manifest.get("candidate_digest", ""))) is None
+        or SHA256_RE.fullmatch(str(manifest.get("publication_digest", ""))) is None
         or not isinstance(manifest.get("project_sources"), dict)
         or not isinstance(manifest.get("artifacts"), dict)
     ):
         raise HelperError("run manifest has an unsupported schema")
+    project = Path(manifest["project_root"])
     repository = Path(manifest["repository_root"])
+    generation = Path(manifest["generation_root"])
+    if (
+        not project.is_absolute()
+        or not repository.is_absolute()
+        or not generation.is_absolute()
+        or not repository.is_relative_to(project)
+        or generation
+        != project
+        / ".orchestration/setup/generations"
+        / manifest["publication_digest"]
+    ):
+        raise HelperError("run manifest project or generation binding is invalid")
     expected_sources = {
-        "project_config": str(repository / ".orchestration/herdr-orchestrator.toml"),
-        "workspace_protocol": str(repository / ".orchestration/workspace-protocol.md"),
+        "activation": str(project / ".orchestration/setup/current.json"),
+        "project_config": str(generation / "herdr-orchestrator.toml"),
+        "workspace_protocol": str(generation / "workspace-protocol.md"),
     }
     if manifest["project_sources"] != expected_sources:
         raise HelperError("run manifest project sources do not match its repository root")
     expected_artifacts = {
         "human_task": "human-task.md",
         "before_state": "before-state.txt",
+        "setup_activation": "context/setup-activation.json",
         "project_config": "context/project-config.toml",
         "workspace_protocol": "context/workspace-protocol.md",
         "stage_assets_lock": "context/cards/.stage-assets.lock",
         "layout_helper": "tools/herdr_balanced_split.py",
         "orchestration_helper": "tools/herdr_orchestrator.py",
-        **_harness_adapter_artifact_paths(),
+        "runtime_helper": "tools/herdr_runtime.py",
     }
     if set(manifest["artifacts"]) != set(expected_artifacts):
         raise HelperError("run manifest has an unsupported artifact set")
@@ -973,12 +750,18 @@ def _require_staged_asset(path: Path, assets_dir: Path, label: str) -> Path:
 
 
 def _verify_run_artifacts(run_dir: Path, manifest: dict[str, Any]) -> None:
+    project_path = Path(manifest["project_root"])
     repository_path = Path(manifest["repository_root"])
-    if not repository_path.is_absolute():
-        raise HelperError("run manifest repository_root must be absolute")
+    if not project_path.is_absolute() or not repository_path.is_absolute():
+        raise HelperError("run manifest project roots must be absolute")
+    project = _require_directory(project_path, "run manifest project root")
     repository = _require_directory(repository_path, "run manifest repository root")
-    if str(repository) != manifest["repository_root"]:
-        raise HelperError("run manifest repository_root must be canonical")
+    if (
+        str(project) != manifest["project_root"]
+        or str(repository) != manifest["repository_root"]
+        or not repository.is_relative_to(project)
+    ):
+        raise HelperError("run manifest project roots must be canonical")
     for name, artifact in manifest["artifacts"].items():
         path = run_dir / artifact["path"]
         if path.is_symlink():
@@ -1304,9 +1087,7 @@ def command_pack(args: argparse.Namespace) -> dict[str, Any]:
 
 def _validate_live_language(value: str) -> str:
     language = value.strip()
-    if not _is_populated(language):
-        raise HelperError("live language must be an explicit non-placeholder value")
-    if len(language.encode("utf-8")) > 200 or any(
+    if not language or len(language.encode("utf-8")) > 200 or any(
         unicodedata.category(character) == "Cc" for character in language
     ):
         raise HelperError("live language must be one safe line of at most 200 UTF-8 bytes")
@@ -1510,83 +1291,6 @@ def command_deliver(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
-def command_harness_models(args: argparse.Namespace) -> dict[str, Any]:
-    adapter = HARNESS_ADAPTERS[args.kind]
-    project_root = _require_directory(Path(args.project_root), "project root")
-    try:
-        native_catalog_command = adapter.catalog_command(args.catalog_mode)
-    except HarnessError as exc:
-        raise HelperError(str(exc)) from exc
-    output = _check_output_path(Path(args.output), replace=args.replace)
-    if not math.isfinite(args.timeout_seconds) or args.timeout_seconds <= 0:
-        raise HelperError("timeout seconds must be finite and greater than zero")
-    if args.catalog_file:
-        if args.catalog_mode != "live":
-            raise HelperError("a captured catalog file requires --catalog-mode live")
-        catalog_path = _require_file(Path(args.catalog_file), f"{adapter.kind} model catalog file")
-        if catalog_path == output:
-            raise HelperError("model projection output must not overwrite its raw catalog source")
-        raw = _read(catalog_path, f"{adapter.kind} model catalog file")
-        source = {"kind": "file", "path": str(catalog_path), "sha256": _sha256(raw)}
-    else:
-        program = _validate_program(args.program or adapter.kind, f"{adapter.kind} executable")
-        command = [program, *native_catalog_command]
-        try:
-            completed = subprocess.run(
-                command,
-                shell=False,
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=args.timeout_seconds,
-            )
-        except FileNotFoundError as exc:
-            raise HelperError(f"{adapter.kind} executable not found: {program}") from exc
-        except subprocess.TimeoutExpired as exc:
-            raise HelperError(f"{adapter.kind} model catalog command timed out") from exc
-        except OSError as exc:
-            raise HelperError(
-                f"could not execute {adapter.kind} model catalog command: {exc}"
-            ) from exc
-        stderr = completed.stderr or b""
-        if completed.returncode != 0:
-            raise HelperError(
-                f"{adapter.kind} model catalog command failed with exit status "
-                f"{completed.returncode} (stderr_sha256={_sha256(stderr)})"
-            )
-        raw = completed.stdout or b""
-        source = {
-            "kind": "command",
-            "program": program,
-            "mode": args.catalog_mode,
-            "raw_bytes": len(raw),
-            "raw_sha256": _sha256(raw),
-            "stderr_bytes": len(stderr),
-            "stderr_sha256": _sha256(stderr),
-        }
-    try:
-        projection = adapter.project_catalog(
-            raw,
-            f"{adapter.kind} model catalog",
-            SCHEMA_VERSION,
-            project_root,
-        )
-    except HarnessError as exc:
-        raise HelperError(str(exc)) from exc
-    projection_data = _json_bytes(projection)
-    _atomic_write(output, projection_data, replace=args.replace)
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "command": "harness-models",
-        "harness": adapter.kind,
-        "path": str(output),
-        "bytes": len(projection_data),
-        "sha256": _sha256(projection_data),
-        "model_count": len(projection["models"]),
-        "source": source,
-    }
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -1598,25 +1302,38 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate = subparsers.add_parser(
         "validate-project",
-        help="strictly validate version-3 project config and the 12-section protocol",
+        help="verify the accepted Activation Manifest and immutable generation",
     )
     validate.add_argument("--project-root", required=True)
     validate.add_argument(
         "--git-common-dir",
         help=(
             "canonical absolute Git common directory; when supplied, validate "
-            "the Lead evidence-write recipe against it"
+            "that it matches the accepted selected repository"
         ),
     )
-    validate.add_argument(
-        "--config",
-        help="config path; relative paths are resolved from project root",
-    )
-    validate.add_argument(
-        "--protocol",
-        help="protocol path; relative paths are resolved from project root",
-    )
     validate.set_defaults(handler=command_validate_project)
+
+    bind_role = subparsers.add_parser(
+        "bind-role",
+        help="bind one accepted logical role template to exact runtime paths",
+    )
+    bind_role.add_argument("--project-config-file", required=True)
+    bind_role.add_argument("--expected-project-config-sha256", required=True)
+    bind_role.add_argument(
+        "--role",
+        choices=("lead", "engineer", "reviewer", "supervisor"),
+        required=True,
+    )
+    bind_role.add_argument("--cwd", required=True)
+    bind_role.add_argument(
+        "--bind",
+        action="append",
+        required=True,
+        metavar="SOURCE=PATH",
+    )
+    bind_role.add_argument("--output", required=True)
+    bind_role.set_defaults(handler=command_bind_role)
 
     init_run = subparsers.add_parser(
         "init-run",
@@ -1624,20 +1341,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init_run.add_argument("--git-common-dir", required=True)
     init_run.add_argument("--run-id", required=True)
-    init_run.add_argument("--repository-root", required=True)
+    init_run.add_argument("--project-root", required=True)
     init_run.add_argument("--human-task-file", required=True)
     init_run.add_argument("--before-state-file", required=True)
-    init_run.add_argument("--project-config-file", required=True)
-    init_run.add_argument("--workspace-protocol-file", required=True)
     init_run.add_argument(
-        "--expected-project-config-sha256",
+        "--expected-activation-sha256",
         required=True,
-        help="preflight validate-project digest for the canonical project config",
-    )
-    init_run.add_argument(
-        "--expected-workspace-protocol-sha256",
-        required=True,
-        help="preflight validate-project digest for the canonical workspace protocol",
+        help="preflight validate-project digest for the accepted Activation Manifest",
     )
     init_run.add_argument(
         "--layout-helper",
@@ -1734,38 +1444,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     deliver.set_defaults(handler=command_deliver)
 
-    models = subparsers.add_parser(
-        "harness-models",
-        help="write a compact harness-native model projection without printing raw output",
-    )
-    models.add_argument("--kind", required=True, choices=VERIFIED_HARNESS_KINDS)
-    models.add_argument("--output", required=True)
-    models.add_argument(
-        "--project-root",
-        default=".",
-        help="project root used for harness-native catalog scope resolution",
-    )
-    catalog_source = models.add_mutually_exclusive_group()
-    catalog_source.add_argument(
-        "--program",
-        help="harness executable or absolute path; defaults to the canonical kind name",
-    )
-    catalog_source.add_argument(
-        "--catalog-file",
-        help="parse a captured native catalog instead of executing the harness",
-    )
-    models.add_argument(
-        "--catalog-mode",
-        default="live",
-        help="adapter-defined catalog mode; unsupported kind/mode pairs fail closed",
-    )
-    models.add_argument("--replace", action="store_true", help="atomically replace output")
-    models.add_argument(
-        "--timeout-seconds",
-        type=float,
-        default=DEFAULT_DELIVERY_TIMEOUT_SECONDS,
-    )
-    models.set_defaults(handler=command_harness_models)
     return parser
 
 
@@ -1774,7 +1452,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
     try:
         result = args.handler(args)
-    except (HelperError, HarnessError) as exc:
+    except (HelperError, RuntimeConfigError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     _emit(result)

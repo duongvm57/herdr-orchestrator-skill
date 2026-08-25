@@ -37,18 +37,17 @@ Exercise a real Launcher with instrumented file access and transcript capture; v
 opaque role and card bodies are passed by path and never enter Launcher attention or
 output.
 
-### Static project contract and catalog projection
+### Accepted project contract and runtime binding
 
 - Legacy: `FT-16`
 - Verification: **automated/static**
 
-Deterministic checks parse schema version 3, bind the fallback to an exact Peer recipe,
-reject unknown, placeholder, legacy, credential-bearing, and unverified-harness
-configuration, require explicit protocol languages, retain arbitrary described Peer
-recipes, and project raw model catalogs into bounded local metadata, with Pi restricted
-to its effective model scope and OMP restricted to its authenticated-provider catalog.
+Deterministic checks verify the Activation Manifest, generation, publication and
+Acceptance Receipts, artifact digests, role templates, explicit languages, and exact
+Assignment bindings; tampering, stale identities, missing paths, and extra authority
+fail closed.
 
-Automation: 11 validated selector(s) in the manifest.
+Automation: 8 validated selector(s) in the manifest.
 
 ### Live control-plane and semantic boundaries
 
@@ -65,9 +64,9 @@ parentage, queueing, enforcement, authorization, or acceptance.
 - Verification: **live/manual**
 
 In a dirty repository with existing panes, agents, and worktrees, exercise red Herdr and
-Git canaries, exact live-kind discovery, selected recipe/model/access validation,
-no-fallback stops, collision-free probes, and preservation of all pre-existing state
-while only run-owned topology may change.
+Git canaries, accepted-generation verification, exact model/access binding, no-fallback
+stops, collision-free probes, and preservation of all pre-existing state while only
+run-owned topology may change.
 
 ### Live role independence and authority
 
@@ -88,15 +87,14 @@ Reject overlapping writers, isolate concurrent scopes, freeze an exact candidate
 invalidate review after mutation, and keep Engineer proof, Reviewer falsification, Lead
 verdict, and Human decisions as distinct evidence links.
 
-### Live Assignment-level recipe routing
+### Live Assignment-level role routing
 
 - Legacy: `FT-17`
 - Verification: **live/manual**
 
-Within one run, vary Peer count and disposition independently from recipes, reuse or mix
-specialized recipes, use the configured fallback for an unmatched case without changing
-its harness/model/access, and stop for setup update when the Assignment exceeds that
-envelope.
+Within one run, vary Peer count and disposition independently from authority, bind
+Engineer and Reviewer templates to exact Assignment paths, reject an unknown or
+out-of-envelope Assignment, and stop for a setup update.
 
 ### Live Peer assignment and lossless round-trip
 
@@ -114,11 +112,9 @@ on a second incomplete settle.
   `FT-29`, `FT-30`, `FT-31`, `FT-32`, `FT-33`
 - Verification: **live/manual**
 
-Exercise all twelve populated protocol sections: scope and readers, risk, authority,
-task topology, recipe policy, fresh review/council/correction, writer isolation,
-candidate identity, verification evidence, reopen/dependency/blocked handling,
-supervision hypotheses, and Human-approved evolution; confirm a Peer receives only
-extracted constraints.
+Exercise the generated protocol's provenance, authority, role binding, candidate
+identity, verification evidence, reopen/dependency/blocked handling, supervision, and
+Human-approved policy; confirm a Peer receives only extracted constraints.
 
 ### Live challenge, recovery, and sparse supervision
 

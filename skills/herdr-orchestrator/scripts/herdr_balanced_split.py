@@ -134,8 +134,8 @@ def _new_state(layout: dict[str, Any], anchor: str) -> dict[str, Any]:
     }
 
 
-def _upgrade_v1_state(state: dict[str, Any], path: Path) -> dict[str, Any]:
-    """Upgrade only v1 states that never relied on implicit pane retirement."""
+def _upgrade_legacy_state(state: dict[str, Any], path: Path) -> dict[str, Any]:
+    """Upgrade only legacy states that never relied on implicit pane retirement."""
     required = {"schema_version", "workspace_id", "tab_id", "managed_panes", "splits"}
     if set(state) != required:
         raise LayoutError(f"layout state has an unsupported shape: {path}")
@@ -153,7 +153,7 @@ def _upgrade_v1_state(state: dict[str, Any], path: Path) -> dict[str, Any]:
     absent_from_managed = created.difference(managed)
     if absent_from_managed:
         raise LayoutError(
-            "schema v1 state contains implicitly retired panes and cannot be upgraded "
+            "legacy schema state contains implicitly retired panes and cannot be upgraded "
             "safely: "
             + ", ".join(sorted(absent_from_managed))
         )
@@ -186,7 +186,7 @@ def _load_state(path: Path, layout: dict[str, Any], anchor: str) -> dict[str, An
     except (OSError, json.JSONDecodeError) as error:
         raise LayoutError(f"layout state is unreadable: {path}") from error
     if isinstance(state, dict) and state.get("schema_version") == 1:
-        state = _upgrade_v1_state(state, path)
+        state = _upgrade_legacy_state(state, path)
     required = {
         "schema_version",
         "workspace_id",
