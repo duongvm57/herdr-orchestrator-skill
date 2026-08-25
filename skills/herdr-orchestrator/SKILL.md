@@ -44,7 +44,7 @@ Herdr supplies lifecycle truth. Git and the filesystem supply workspace and
 artifact truth. Independent judgment uses a fresh session; corrections return
 to the same owning Engineer.
 
-At runtime, the Launcher binds infrastructure truth once. Lead and Peer invoke
-the run-local operations command supplied in their context; deterministic
-helpers own agent commands, panes, context packing, mailboxes, reports, digests,
-and receipts.
+At runtime, invoke packaged `scripts/herdr_runtime.py`. It is the single seam for
+pane creation, configured agent start, prompt, wait, and read. Herdr agent names
+and pane IDs are the runtime handles. Durable files are task artifacts, not an
+agent transport.

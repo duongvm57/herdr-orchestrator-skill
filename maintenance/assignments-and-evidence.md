@@ -6,14 +6,11 @@ authoritative home and is disclosed at the action that consumes it:
 | Contract | Authoritative source | Runtime trigger |
 | --- | --- | --- |
 | Three-layer pack and language ordering | `skills/herdr-orchestrator/SKILL.md` | Every delivery |
-| Run initialization, initial `launch`, and handoff | `skills/herdr-orchestrator/references/launcher/task-launch.md` | Task launch |
-| Peer request, routing, pack, delivery, typed result, candidate verification, report promotion, and events | `skills/herdr-orchestrator/scripts/herdr_runtime_ops.py` | Lead/Peer operation wrapper call |
+| Lead launch and handoff | `skills/herdr-orchestrator/references/launcher/task-launch.md` | Task launch |
+| Agent start, prompt, wait, and read | `skills/herdr-orchestrator/scripts/herdr_runtime.py` | Runtime operation call |
 | Lead topology, independent review, correction, Human boundaries, and verdict judgment | `skills/herdr-orchestrator/references/roles/lead.md` | Lead project judgment |
-| Supervisor binding and notebook authority | `skills/herdr-orchestrator/references/launcher/supervisor-attachment.md` | Explicit Supervisor attachment |
-| Supervisor observation/Human-attention/handoff records | `skills/herdr-orchestrator/scripts/herdr_runtime_ops.py` | Supervisor operation wrapper call |
+| Supervisor mandate and protocol disclosure | `skills/herdr-orchestrator/references/launcher/supervisor-attachment.md` | Explicit Supervisor attachment |
 
-The orchestration helper stages concise role profiles and stable operation
-wrappers under the run, assembles sources in role/protocol/assignment order, and
-delivers exact saved context. The Launcher consumes compact metadata rather
-than runtime role bodies. Lead, Peer, and Supervisor provide judgment payloads;
-the wrappers perform deterministic lifecycle, evidence, and notebook mechanics.
+The runtime assembles role/protocol/assignment layers in memory and delivers
+them through Herdr. Lead, Peer, and Supervisor return ordinary agent responses;
+durable evidence remains an explicit task artifact.

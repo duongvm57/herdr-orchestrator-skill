@@ -684,29 +684,6 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
         "layout helper",
     )
     orchestration_helper_path = _require_file(Path(__file__), "orchestration helper")
-    runtime_ops_path = _require_file(
-        orchestration_helper_path.with_name("herdr_runtime_ops.py"),
-        "runtime operations module",
-    )
-    lead_ops_path = _require_file(
-        orchestration_helper_path.with_name("herdr_lead_ops.py"),
-        "Lead operations wrapper",
-    )
-    peer_ops_path = _require_file(
-        orchestration_helper_path.with_name("herdr_peer_ops.py"),
-        "Peer operations wrapper",
-    )
-    supervisor_ops_path = _require_file(
-        orchestration_helper_path.with_name("herdr_supervisor_ops.py"),
-        "Supervisor operations wrapper",
-    )
-    role_root = orchestration_helper_path.parent.parent / "references/roles"
-    lead_profile_path = _require_file(role_root / "lead.md", "Lead role profile")
-    peer_profile_path = _require_file(role_root / "peer.md", "Peer role profile")
-    supervisor_profile_path = _require_file(
-        role_root / "supervisor.md",
-        "Supervisor role profile",
-    )
     harness_adapter_root = orchestration_helper_path.with_name("herdr_harnesses")
     harness_adapter_artifacts = _harness_adapter_artifact_paths()
     harness_adapter_sources: dict[str, tuple[str, bytes]] = {}
@@ -742,13 +719,6 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
     _require_protocol_repository(protocol_values, repository)
     helper_data = _read(helper_path, "layout helper")
     orchestration_helper_data = _read(orchestration_helper_path, "orchestration helper")
-    runtime_ops_data = _read(runtime_ops_path, "runtime operations module")
-    lead_ops_data = _read(lead_ops_path, "Lead operations wrapper")
-    peer_ops_data = _read(peer_ops_path, "Peer operations wrapper")
-    supervisor_ops_data = _read(supervisor_ops_path, "Supervisor operations wrapper")
-    lead_profile_data = _read(lead_profile_path, "Lead role profile")
-    peer_profile_data = _read(peer_profile_path, "Peer role profile")
-    supervisor_profile_data = _read(supervisor_profile_path, "Supervisor role profile")
 
     asset_sources: list[tuple[str, Path, bytes]] = []
     asset_names: set[str] = set()
@@ -772,7 +742,6 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
         for relative in (
             "context/cards/assets",
             "assignments",
-            "peers",
             "reports/inbox",
             "supervisor",
             "tools",
@@ -785,37 +754,11 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
         _write_staged(
             staged / "context/workspace-protocol.md", workspace_protocol_data
         )
-        _write_staged(staged / "context/lead-profile.md", lead_profile_data)
-        _write_staged(staged / "context/peer-profile.md", peer_profile_data)
-        _write_staged(
-            staged / "context/supervisor-profile.md",
-            supervisor_profile_data,
-        )
         _write_staged(staged / "context/cards/.stage-assets.lock", b"")
         _write_staged(staged / "tools/herdr_balanced_split.py", helper_data, mode=0o755)
         _write_staged(
             staged / "tools/herdr_orchestrator.py",
             orchestration_helper_data,
-            mode=0o755,
-        )
-        _write_staged(
-            staged / "tools/herdr_runtime_ops.py",
-            runtime_ops_data,
-            mode=0o600,
-        )
-        _write_staged(
-            staged / "tools/herdr_lead_ops.py",
-            lead_ops_data,
-            mode=0o755,
-        )
-        _write_staged(
-            staged / "tools/herdr_peer_ops.py",
-            peer_ops_data,
-            mode=0o755,
-        )
-        _write_staged(
-            staged / "tools/herdr_supervisor_ops.py",
-            supervisor_ops_data,
             mode=0o755,
         )
         for _name, (relative, data) in harness_adapter_sources.items():
@@ -841,24 +784,11 @@ def command_init_run(args: argparse.Namespace) -> dict[str, Any]:
                 "context/workspace-protocol.md",
                 workspace_protocol_data,
             ),
-            "lead_profile": ("context/lead-profile.md", lead_profile_data),
-            "peer_profile": ("context/peer-profile.md", peer_profile_data),
-            "supervisor_profile": (
-                "context/supervisor-profile.md",
-                supervisor_profile_data,
-            ),
             "stage_assets_lock": ("context/cards/.stage-assets.lock", b""),
             "layout_helper": ("tools/herdr_balanced_split.py", helper_data),
             "orchestration_helper": (
                 "tools/herdr_orchestrator.py",
                 orchestration_helper_data,
-            ),
-            "runtime_operations": ("tools/herdr_runtime_ops.py", runtime_ops_data),
-            "lead_operations": ("tools/herdr_lead_ops.py", lead_ops_data),
-            "peer_operations": ("tools/herdr_peer_ops.py", peer_ops_data),
-            "supervisor_operations": (
-                "tools/herdr_supervisor_ops.py",
-                supervisor_ops_data,
             ),
             **harness_adapter_sources,
         }
@@ -1002,16 +932,9 @@ def _load_run_manifest(path: Path) -> dict[str, Any]:
         "before_state": "before-state.txt",
         "project_config": "context/project-config.toml",
         "workspace_protocol": "context/workspace-protocol.md",
-        "lead_profile": "context/lead-profile.md",
-        "peer_profile": "context/peer-profile.md",
-        "supervisor_profile": "context/supervisor-profile.md",
         "stage_assets_lock": "context/cards/.stage-assets.lock",
         "layout_helper": "tools/herdr_balanced_split.py",
         "orchestration_helper": "tools/herdr_orchestrator.py",
-        "runtime_operations": "tools/herdr_runtime_ops.py",
-        "lead_operations": "tools/herdr_lead_ops.py",
-        "peer_operations": "tools/herdr_peer_ops.py",
-        "supervisor_operations": "tools/herdr_supervisor_ops.py",
         **_harness_adapter_artifact_paths(),
     }
     if set(manifest["artifacts"]) != set(expected_artifacts):
@@ -1844,12 +1767,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     models.set_defaults(handler=command_harness_models)
 
-    # Runtime lifecycle mechanics live in a harness-neutral sibling module.
-    # Registration is deferred until parser construction so the run-local
-    # wrapper scripts can import this module without a circular import.
-    import herdr_runtime_ops
-
-    herdr_runtime_ops.register_commands(subparsers, sys.modules[__name__])
     return parser
 
 

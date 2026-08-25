@@ -10,14 +10,13 @@ Require `HERDR_ENV=1`, Python 3.11+, and a Git repository. Resolve:
 
 ```text
 canonical project root
-absolute Git common directory
 absolute Herdr executable
 current Launcher pane ID
-packaged orchestration and layout helpers
+packaged runtime helper
 ```
 
 Run one bounded Herdr canary each for `agent list` and `pane current --current`.
-Require both helper `--help` commands to pass. Stop on an exact failure.
+Require the runtime helper's `--help` command to pass. Stop on an exact failure.
 
 ## 2. Check accepted inputs cheaply
 
@@ -37,16 +36,15 @@ Codex `workspace-write` therefore requires its explicit native network-access
 setting; `danger-full-access` also satisfies reachability. Treat this as control-
 plane access, not permission for the Lead to perform arbitrary network work.
 
-## 3. Preserve before-state
+## 3. Preserve existing state
 
-Capture `git status --short --branch`, `git worktree list --porcelain`, `herdr
+Inspect `git status --short --branch`, `git worktree list --porcelain`, `herdr
 agent list`, and `herdr pane list`. Existing agents, panes, worktrees, branches,
 untracked files, and working-tree changes are Human-owned and remain unchanged.
 
 Inspect only repository authority needed to bind the Human task, such as an
-applicable `AGENTS.md` or an explicitly referenced specification. Save that
-projection for the Lead; do not make the Lead rediscover infrastructure facts.
+applicable `AGENTS.md` or an explicitly referenced specification. Include the
+applicable constraints in the task; do not create a runtime evidence directory.
 
-Preflight is complete when the retained accepted-input metadata, fixed paths,
-Herdr reachability, applicable repository authority, and before-state are exact
-and no project or runtime state has been mutated.
+Preflight is complete when accepted inputs, fixed paths, Herdr reachability,
+applicable repository authority, and existing state are known and unchanged.

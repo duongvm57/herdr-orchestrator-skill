@@ -140,8 +140,8 @@ class CoverageManifestTests(unittest.TestCase):
 
         static = by_slug["static-context-architecture"]
         self.assertIn(
-            "tests.test_runtime_ops.RuntimeOperationsTests."
-            "test_start_lead_builds_short_manifest_bound_context",
+            "tests.test_runtime.RuntimeTests."
+            "test_lead_start_uses_native_herdr_flow_without_focus_or_files",
             static["test_selectors"],
         )
 
