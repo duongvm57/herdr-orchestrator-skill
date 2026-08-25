@@ -112,6 +112,32 @@ def project_catalog(raw: bytes, label: str) -> list[dict[str, Any]]:
     return projected
 
 
+def validate_control_plane(args: list[str], location: str) -> None:
+    sandbox = None
+    configs: set[str] = set()
+    index = 0
+    while index < len(args):
+        option = args[index]
+        index += 1
+        if option in {"--no-alt-screen", "--strict-config"}:
+            continue
+        if index >= len(args):
+            break
+        value = args[index]
+        index += 1
+        if option == "--sandbox":
+            sandbox = value
+        elif option == "--config":
+            configs.add(value)
+    if sandbox == "danger-full-access":
+        return
+    if "sandbox_workspace_write.network_access=true" not in configs:
+        raise HarnessError(
+            f"{location} Codex cannot reach the Herdr control socket unless its "
+            "native sandbox grants network access"
+        )
+
+
 ADAPTER = HarnessAdapter(
     kind="codex",
     arguments={
@@ -139,4 +165,5 @@ ADAPTER = HarnessAdapter(
         mode_option="--sandbox",
         restricted_modes=frozenset({"workspace-write"}),
     ),
+    control_plane_validator=validate_control_plane,
 )

@@ -77,39 +77,36 @@ class InstructionArchitectureTests(unittest.TestCase):
 
         self.assertNotIn("references/roles/supervisor.md", launch)
         self.assertNotIn("init-run", supervisor)
-        self.assertIn("stage-assets", supervisor)
+        self.assertIn("runtime-binding.json", supervisor)
+        self.assertNotIn("start-lead", supervisor)
 
     def test_run_context_uses_launch_time_project_snapshots(self) -> None:
         launch = read("references/launcher/task-launch.md")
         supervisor = read("references/launcher/supervisor-attachment.md")
+        normalized_launch = " ".join(launch.split())
 
-        self.assertIn("--project-config-file", launch)
-        self.assertIn("--workspace-protocol-file", launch)
-        self.assertIn("--expected-project-config-sha256", launch)
-        self.assertIn("--expected-workspace-protocol-sha256", launch)
-        self.assertIn("canonical project paths", launch)
-        self.assertIn("context/project-config.toml", launch)
-        self.assertIn("context/workspace-protocol.md", launch)
-        self.assertIn("├── human-task.md", launch)
-        self.assertIn("returned `human_task.path`", launch)
-        self.assertIn("filtered selection manifest", supervisor)
+        self.assertIn("config/protocol paths and digests", launch)
+        self.assertIn("accepted config and protocol", launch)
+        self.assertIn("runtime-manifest.json", launch)
+        self.assertIn("start-lead", launch)
+        self.assertIn("concise Lead and Peer profiles", normalized_launch)
+        self.assertIn("verbatim Human task", launch)
         self.assertIn("context/workspace-protocol.md", supervisor)
-        self.assertNotIn("then the full project Workspace Protocol", launch)
+        self.assertNotIn("peer-lifecycle=references/", launch)
 
     def test_supervisor_attachment_is_collision_and_language_bound(self) -> None:
         supervisor = read("references/launcher/supervisor-attachment.md")
+        normalized = " ".join(supervisor.split())
 
         self.assertIn("<attachment-id>", supervisor)
         self.assertIn("[a-z][a-z0-9_-]{0,31}", supervisor)
-        self.assertIn("--selection-output", supervisor)
         self.assertIn("attachment-assignment.md", supervisor)
+        self.assertIn("runtime-binding.json", supervisor)
+        self.assertIn("herdr_supervisor_ops.py", supervisor)
         self.assertIn("delivery-receipt.json", supervisor)
-        self.assertIn("local-receipt.md", supervisor)
-        self.assertIn("lead-notification-receipt.json", supervisor)
-        self.assertIn("every bound run's `supervisor/`", supervisor)
-        self.assertIn("host project's live language", supervisor)
-        self.assertRegex(supervisor, r"that project's\s+artifact language")
-        self.assertRegex(supervisor, r"that\s+project's live language")
+        self.assertIn("host live language", normalized)
+        self.assertIn("Do not prompt, notify, or modify any Lead", supervisor)
+        self.assertIn("artifact_language", supervisor)
 
     def test_readme_stays_user_facing(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -190,14 +187,14 @@ class InstructionArchitectureTests(unittest.TestCase):
     def test_peer_fallback_is_explicit_and_envelope_bound(self) -> None:
         template = read("assets/config.toml")
         setup = read("references/launcher/setup.md")
-        lifecycle = read("references/lead/peer-lifecycle.md")
+        runtime = read("scripts/herdr_runtime_ops.py")
 
         self.assertIn('fallback_peer_recipe = "<fallback-recipe-name>"', template)
         self.assertIn("naming an exact Peer recipe", setup)
         self.assertIn("Human chooses reuse and one fallback recipe", setup)
-        self.assertIn("If no specialized recipe fits", lifecycle)
-        self.assertIn("record that fallback choice in the Assignment", lifecycle)
-        self.assertIn("outside it", lifecycle)
+        self.assertIn('runtime["fallback_peer_profile"]', runtime)
+        self.assertIn('config["peer_recipes"].get(name)', runtime)
+        self.assertIn('"fallback": request["profile"] is None', runtime)
 
     def test_harness_specific_logic_lives_in_separate_adapter_modules(self) -> None:
         helper = read("scripts/herdr_orchestrator.py")
@@ -240,47 +237,37 @@ class InstructionArchitectureTests(unittest.TestCase):
             normalized_setup,
         )
 
-    def test_lead_asset_names_match_launch_staging_contract(self) -> None:
+    def test_runtime_ops_replace_lead_lifecycle_cards(self) -> None:
         launch = read("references/launcher/task-launch.md")
         lead = read("references/roles/lead.md")
-        expected = {
-            "topology",
-            "peer-lifecycle",
-            "candidate-and-verdict",
-            "anti-pattern-details",
-            "peer-profile",
-        }
+        helper = read("scripts/herdr_orchestrator.py")
+        normalized_lead = " ".join(lead.split())
 
-        staged = set(re.findall(r"(?m)^([a-z][a-z-]+)=references/", launch))
-        mapped = set(re.findall(r"(?m)^- `([a-z][a-z-]+)` —", lead))
+        for wrapper in ("herdr_lead_ops.py", "herdr_peer_ops.py"):
+            self.assertIn(wrapper, launch)
+            self.assertIn(wrapper, helper)
+        self.assertIn("runtime-manifest.json", launch)
+        self.assertIn("copy the exact `request_example`", normalized_lead)
+        self.assertIn("invoke that contract's `argv`", normalized_lead)
+        self.assertIn("Do not invent request keys or inspect CLI help", normalized_lead)
+        self.assertNotIn("peer-lifecycle=references/", launch)
+        self.assertNotIn("digest-bound disclosure", lead.casefold())
 
-        self.assertEqual(staged, expected)
-        self.assertEqual(mapped, expected)
-
-    def test_initial_lead_context_excludes_disclosed_bodies(self) -> None:
+    def test_initial_lead_profile_excludes_runtime_mechanics(self) -> None:
         lead = read("references/roles/lead.md")
-        index = read("references/anti-patterns/index.md")
-        combined = lead + index
+        normalized = " ".join(lead.split())
 
-        self.assertNotIn("# PEER REPORT", combined)
-        self.assertNotIn("## Difficult council", combined)
-        self.assertNotIn("## 17. Supervisor overreach", combined)
-        self.assertIn("read that card completely before", lead)
-
-    def test_disclosed_cards_have_explicit_trigger_and_completion_bound(self) -> None:
-        cards = {
-            "references/lead/topology.md": ("before choosing a topology", "Selection is complete"),
-            "references/lead/peer-lifecycle.md": ("before drafting", "Collection is complete"),
-            "references/lead/candidate-and-verdict.md": ("before recording", "The run is complete"),
-            "references/anti-patterns/responses.md": (
-                "After a signal triggers",
-                "Response is complete only when the observed signal is recorded as evidence",
-            ),
-        }
-        for path, (trigger, completion) in cards.items():
-            body = read(path)
-            self.assertIn(trigger, body, path)
-            self.assertIn(completion, body, path)
+        for mechanics in (
+            "herdr agent start",
+            "mailbox path",
+            "Git common dir",
+            "atomic rename",
+            "SHA-256",
+            "report schema",
+        ):
+            self.assertNotIn(mechanics, lead)
+        self.assertIn("The helper owns routing", normalized)
+        self.assertIn("smallest useful topology", normalized)
 
     def test_repository_instruction_pointers_resolve(self) -> None:
         documents = [

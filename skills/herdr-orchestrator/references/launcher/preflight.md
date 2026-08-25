@@ -1,89 +1,52 @@
-# Shared Launcher preflight
+# Runtime preflight
 
-Read this procedure completely before either a task launch or Supervisor
-attachment. It prepares facts only; the selected branch owns all durable work
-and its completion gate.
+Runtime consumes the setup-accepted project configuration. It performs a cheap
+freshness and reachability check; harness discovery and model-catalog probing
+belong to setup and are repeated only when accepted inputs are stale.
 
-## 1. Prove the control and evidence boundaries
+## 1. Resolve the fixed boundary
 
-Require `HERDR_ENV=1` and Python 3.11+. Run these canaries first:
+Require `HERDR_ENV=1`, Python 3.11+, and a Git repository. Resolve:
 
 ```text
-herdr agent list
-herdr pane current --current
+canonical project root
+absolute Git common directory
+absolute Herdr executable
+current Launcher pane ID
+packaged orchestration and layout helpers
 ```
 
-Stop on either exact error before reading project configuration or probing a
-harness. A managed pane whose native boundary blocks the Herdr socket is not
-launch-ready.
+Run one bounded Herdr canary each for `agent list` and `pane current --current`.
+Require both helper `--help` commands to pass. Stop on an exact failure.
 
-Resolve the repository root and absolute Git common directory. Prove common-
-directory write access with one exclusive collision-free file created,
-written, fsynced, and removed in a single bounded operation. Stop on any exact
-failure and require no leftover. Permission bits alone are not evidence.
+## 2. Check accepted inputs cheaply
 
-Resolve packaged `scripts/herdr_orchestrator.py` and
-`scripts/herdr_balanced_split.py` relative to this skill. Require each helper's
-`--help` to pass. Read only the relevant targeted Herdr `--help` pages and each
-configured harness's native help; bulk runtime instruction dumps are not
-command authority.
+Invoke packaged `scripts/herdr_orchestrator.py validate-project` with the
+canonical project root and Git common directory. Retain its compact result:
+project/config/protocol paths and digests, languages, Lead recipe, Peer profile
+inventory, fallback profile, and optional Supervisor recipe.
 
-## 2. Validate the project and recipes
+Do not probe model catalogs, re-run setup discovery, compare model quality, or
+reconstruct harness flags during task launch. A missing executable, changed or
+invalid accepted file, unknown adapter, or unsatisfied configured access check
+is `STALE`; stop and ask the Human to run setup/update. Runtime never substitutes
+another harness, model, profile, or authority envelope.
 
-Invoke the orchestration helper's `validate-project` operation with the
-repository and resolved `--git-common-dir`. Consume only its compact JSON
-result and retain its exact canonical project root, Git common directory,
-config path/digest, and protocol path/digest as the preflight binding; do not
-recompute or substitute them. Require:
-
-- `.orchestration/herdr-orchestrator.toml` at schema `version = 3` with one
-  `fallback_peer_recipe` naming an exact recipe, one `[roles.lead]`, optional
-  `[roles.supervisor]`, and uniquely named `[peer_recipes.<name>]` entries;
-- only `kind` and `args` in fixed roles, and nonempty `description`, `kind`, and
-  `args` in each Peer recipe;
-- only options registered in the helper's strict per-kind argument schema, with
-  no placeholders, credentials, indirection, unknown keys, or legacy schema;
-- all twelve Workspace Protocol sections and explicit non-placeholder live and
-  durable languages, with its canonical absolute Repository root equal to the
-  validated project root.
-
-Validate the recipes the selected branch can start against live local
-capabilities: Lead and all Peer recipes for task launch; only the exact host
-Supervisor recipe for Supervisor attachment. The helper's verified adapter
-registry is the configuration allowlist; a Herdr-advertised kind outside it is
-unavailable. Require an installed executable, supported Herdr kind, accepted native arguments, selectable configured model,
-disabled native spawning, Herdr reachability for control roles, and the exact
-read/write envelope for the role. Use the helper's compact catalog operation
-advertised by its current `--help`; keep raw model catalogs out of the Launcher
-context and logs. A Lead needs run-evidence writes. Each task-launch Peer recipe
-needs a lossless exclusive report-return boundary; project-read-only Peers keep
-checkout and Git metadata read-only. A Supervisor is project-read-only and
-notebook-write-only. Once selected, including the configured Peer fallback, a
-failing recipe is reported exactly and never substituted at runtime.
-
-Read both communication languages before generating prose or delivering a
-pack. Durable evidence uses the artifact language. Live status and transport
-envelopes use the orchestration language. Source bytes, identifiers, schemas,
-commands, output, and quoted Human wording remain exact.
+For a control role, the native envelope must reach the Herdr control socket.
+Codex `workspace-write` therefore requires its explicit native network-access
+setting; `danger-full-access` also satisfies reachability. Treat this as control-
+plane access, not permission for the Lead to perform arbitrary network work.
 
 ## 3. Preserve before-state
 
-Capture:
+Capture `git status --short --branch`, `git worktree list --porcelain`, `herdr
+agent list`, and `herdr pane list`. Existing agents, panes, worktrees, branches,
+untracked files, and working-tree changes are Human-owned and remain unchanged.
 
-```text
-git status --short --branch
-git worktree list --porcelain
-herdr agent list
-herdr pane list
-```
+Inspect only repository authority needed to bind the Human task, such as an
+applicable `AGENTS.md` or an explicitly referenced specification. Save that
+projection for the Lead; do not make the Lead rediscover infrastructure facts.
 
-Inspect repository authority needed to bind the Human request, including
-applicable `AGENTS.md`, domain documents, issue, or specification pointers.
-Existing agents, panes, worktrees, branches, untracked files, and working-tree
-changes are Human-owned. Keep them in place and unchanged.
-
-Preflight is complete only when the repository, Git common directory, project
-files, live recipes, selected branch input, applicable authority, and preserved
-before-state are unambiguous; both helpers pass their own checks; and all access
-canaries pass without runtime substitution. The retained project root, paths,
-and digests remain the sole authority for any task-run initialization.
+Preflight is complete when the retained accepted-input metadata, fixed paths,
+Herdr reachability, applicable repository authority, and before-state are exact
+and no project or runtime state has been mutated.

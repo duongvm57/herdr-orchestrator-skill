@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import json
 import subprocess
@@ -174,44 +173,18 @@ class ContextBudgetTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(rendered, output.read_text(encoding="utf-8"))
 
-    def test_repository_supervisor_fixture_has_only_signal_card(self) -> None:
+    def test_repository_supervisor_context_has_only_role_profile(self) -> None:
         manifest = context_budget.load_manifest(ROOT / "tests" / "context-budgets.json")
         route = manifest["routes"]["supervisor_initial_fixed"]
-        fixture_path = next(
-            source["file"]
-            for source in route["layers"]["role_profile"]
-            if source["label"] == "manifest.json"
-        )
-        fixture = json.loads((ROOT / fixture_path).read_text(encoding="utf-8"))
-
         self.assertEqual(
-            [asset["name"] for asset in fixture["assets"]],
-            ["anti-pattern-details"],
+            route["layers"]["role_profile"],
+            [
+                {
+                    "label": "supervisor.md",
+                    "file": "skills/herdr-orchestrator/references/roles/supervisor.md",
+                }
+            ],
         )
-
-    def test_repository_card_fixtures_match_packaged_assets(self) -> None:
-        packaged = {
-            "topology": SKILL_ROOT / "references/lead/topology.md",
-            "peer-lifecycle": SKILL_ROOT / "references/lead/peer-lifecycle.md",
-            "candidate-and-verdict": SKILL_ROOT / "references/lead/candidate-and-verdict.md",
-            "anti-pattern-details": SKILL_ROOT / "references/anti-patterns/responses.md",
-            "peer-profile": SKILL_ROOT / "references/roles/peer.md",
-        }
-        for fixture_name in (
-            "lead-card-manifest.json",
-            "supervisor-card-manifest.json",
-        ):
-            fixture = json.loads(
-                (ROOT / "tests/fixtures" / fixture_name).read_text(encoding="utf-8")
-            )
-            for entry in fixture["assets"]:
-                data = packaged[entry["name"]].read_bytes()
-                self.assertEqual(entry["bytes"], len(data), entry["name"])
-                self.assertEqual(
-                    entry["sha256"],
-                    hashlib.sha256(data).hexdigest(),
-                    entry["name"],
-                )
 
     def test_reports_hard_and_drift_failures(self) -> None:
         result = context_budget.RouteResult(

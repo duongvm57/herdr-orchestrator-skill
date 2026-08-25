@@ -25,6 +25,7 @@ ValueValidator = Callable[[str, str], None]
 CatalogProjector = Callable[[bytes, str], list[dict[str, Any]]]
 CatalogSelector = Callable[[list[dict[str, Any]], Path], list[dict[str, Any]]]
 ArgumentSetValidator = Callable[[list[str], str], None]
+ControlPlaneValidator = Callable[[list[str], str], None]
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,7 @@ class HarnessAdapter:
     argument_set_validator: Optional[ArgumentSetValidator] = None
     catalog: Optional[CatalogSpec] = None
     evidence_root: Optional[EvidenceRootRule] = None
+    control_plane_validator: Optional[ControlPlaneValidator] = None
 
     def validate_arguments(self, args: list[str], location: str) -> None:
         seen: set[str] = set()
@@ -135,6 +137,10 @@ class HarnessAdapter:
                 f"{location} {self.kind} args must add the exact Git common directory "
                 f"with {rule.option}"
             )
+
+    def validate_control_plane(self, args: list[str], location: str) -> None:
+        if self.control_plane_validator is not None:
+            self.control_plane_validator(args, location)
 
     def project_catalog(
         self,

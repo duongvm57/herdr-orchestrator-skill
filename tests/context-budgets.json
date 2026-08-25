@@ -7,7 +7,7 @@
         "skills/herdr-orchestrator/SKILL.md"
       ],
       "hard_limit": 500,
-      "baseline": 394
+      "baseline": 425
     },
     "setup_launcher": {
       "render": "concat",
@@ -19,7 +19,7 @@
         "skills/herdr-orchestrator/assets/workspace-protocol-template.md"
       ],
       "hard_limit": 3000,
-      "baseline": 2909
+      "baseline": 3000
     },
     "task_launcher": {
       "render": "concat",
@@ -29,7 +29,7 @@
         "skills/herdr-orchestrator/references/launcher/task-launch.md"
       ],
       "hard_limit": 4000,
-      "baseline": 2856
+      "baseline": 1514
     },
     "supervisor_attachment": {
       "render": "concat",
@@ -39,7 +39,7 @@
         "skills/herdr-orchestrator/references/launcher/supervisor-attachment.md"
       ],
       "hard_limit": 3000,
-      "baseline": 2713
+      "baseline": 1631
     },
     "lead_initial_fixed": {
       "render": "pack",
@@ -49,21 +49,13 @@
           {
             "label": "lead.md",
             "file": "skills/herdr-orchestrator/references/roles/lead.md"
-          },
-          {
-            "label": "anti-pattern-index.md",
-            "file": "skills/herdr-orchestrator/references/anti-patterns/index.md"
-          },
-          {
-            "label": "manifest.json",
-            "file": "tests/fixtures/lead-card-manifest.json"
           }
         ],
         "workspace_protocol": [],
         "assignment": []
       },
-      "hard_limit": 3000,
-      "baseline": 1579
+      "hard_limit": 700,
+      "baseline": 374
     },
     "peer_fixed": {
       "render": "pack",
@@ -78,8 +70,8 @@
         "workspace_protocol": [],
         "assignment": []
       },
-      "hard_limit": 700,
-      "baseline": 598
+      "hard_limit": 450,
+      "baseline": 289
     },
     "supervisor_initial_fixed": {
       "render": "pack",
@@ -89,21 +81,13 @@
           {
             "label": "supervisor.md",
             "file": "skills/herdr-orchestrator/references/roles/supervisor.md"
-          },
-          {
-            "label": "anti-pattern-index.md",
-            "file": "skills/herdr-orchestrator/references/anti-patterns/index.md"
-          },
-          {
-            "label": "manifest.json",
-            "file": "tests/fixtures/supervisor-card-manifest.json"
           }
         ],
         "workspace_protocol": [],
         "assignment": []
       },
-      "hard_limit": 900,
-      "baseline": 850
+      "hard_limit": 450,
+      "baseline": 310
     }
   }
 }

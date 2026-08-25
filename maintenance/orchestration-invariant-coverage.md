@@ -23,10 +23,10 @@ The maintenance ownership map is `maintenance/assignments-and-evidence.md`.
 - Verification: **automated/static**
 
 Repository checks enforce user-only routing, ordered inline role/protocol/assignment
-packs, macro context only for Lead, bounded context for Peer, and digest-triggered byte
-disclosure.
+packs, short manifest-bound Lead context, bounded Peer context, and helper-owned runtime
+mechanics.
 
-Automation: 9 validated selector(s) in the manifest.
+Automation: 10 validated selector(s) in the manifest.
 
 ### Live Launcher opaque-body boundary
 
@@ -34,8 +34,8 @@ Automation: 9 validated selector(s) in the manifest.
 - Verification: **live/manual**
 
 Exercise a real Launcher with instrumented file access and transcript capture; verify
-opaque role and card bodies are passed by path and never enter Launcher attention or
-output.
+one start-lead call receives fixed paths while role bodies and runtime mechanics never
+enter Launcher attention or output.
 
 ### Static project contract and catalog projection
 

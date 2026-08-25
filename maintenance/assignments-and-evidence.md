@@ -7,13 +7,13 @@ authoritative home and is disclosed at the action that consumes it:
 | --- | --- | --- |
 | Three-layer pack and language ordering | `skills/herdr-orchestrator/SKILL.md` | Every delivery |
 | Run initialization, initial `launch`, and handoff | `skills/herdr-orchestrator/references/launcher/task-launch.md` | Task launch |
-| Peer Assignment fields, disposition, exact report schema, delivery, promotion, and `assignment`/`report` evidence | `skills/herdr-orchestrator/references/lead/peer-lifecycle.md` | Before first Peer lifecycle action |
-| Stable candidate, verification, review, Human request, verdict, ledger, and terminal `finish` | `skills/herdr-orchestrator/references/lead/candidate-and-verdict.md` | Before the first corresponding milestone |
-| Supervisor binding, notebook receipts, and authority | `skills/herdr-orchestrator/references/launcher/supervisor-attachment.md` | Explicit Supervisor attachment |
+| Peer request, routing, pack, delivery, typed result, candidate verification, report promotion, and events | `skills/herdr-orchestrator/scripts/herdr_runtime_ops.py` | Lead/Peer operation wrapper call |
+| Lead topology, independent review, correction, Human boundaries, and verdict judgment | `skills/herdr-orchestrator/references/roles/lead.md` | Lead project judgment |
+| Supervisor binding and notebook authority | `skills/herdr-orchestrator/references/launcher/supervisor-attachment.md` | Explicit Supervisor attachment |
+| Supervisor observation/Human-attention/handoff records | `skills/herdr-orchestrator/scripts/herdr_runtime_ops.py` | Supervisor operation wrapper call |
 
-The orchestration helper stages Lead cards and opaque Peer role bytes under the
-run, records their SHA-256 digests, assembles sources in role/protocol/assignment
-order, and delivers exact saved context. The Launcher consumes compact metadata
-rather than loading runtime role/card bodies. A Lead verifies and reads one
-card completely when its fixed trigger fires; the Peer profile is passed back
-to `pack --role peer` without being read by the Lead.
+The orchestration helper stages concise role profiles and stable operation
+wrappers under the run, assembles sources in role/protocol/assignment order, and
+delivers exact saved context. The Launcher consumes compact metadata rather
+than runtime role bodies. Lead, Peer, and Supervisor provide judgment payloads;
+the wrappers perform deterministic lifecycle, evidence, and notebook mechanics.

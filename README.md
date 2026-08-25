@@ -39,9 +39,10 @@ Every agent receives only three ordered instruction layers:
 Role Profile → Workspace Protocol → Assignment
 ```
 
-The Lead receives full project config, protocol, task, and only the
-orchestration guidance required by the current branch. A Peer receives its thin
-role, only relevant project constraints, and one assignment. Independent
+The Lead receives its thin role, full protocol, verbatim task, and a runtime
+manifest containing exact repositories, approved Peer profiles, and one
+operations command. A Peer receives its thin role, only relevant project
+constraints, and one assignment. Independent
 judgment uses a fresh session; correction returns to the same Engineer that owns
 the write.
 
@@ -155,15 +156,16 @@ or permission policy. Legacy `routes.toml` and `workers.*.toml` are unsupported.
 $herdr-orchestrator implement issue #42 and preserve my uncommitted changes
 ```
 
-The Launcher validates the project contract and configured live recipes,
-inventories existing agents/panes/worktrees/user changes, stores run evidence
-outside the checkout, starts a fresh Lead, and transfers focus. Missing
+The Launcher cheaply validates accepted project inputs, inventories existing
+agents/panes/worktrees/user changes, stores run evidence outside the checkout,
+starts a fresh Lead through one runtime primitive, and transfers focus. Missing
 Lead capability stops launch without runtime substitution; existing state is
 preserved.
 
 Fresh-agent panes are placed by a deterministic helper using only panes
-registered to that run. Layout code is not injected; the Lead receives only the
-helper and state paths needed to request Peer panes. When the display is full, a
+registered to that run. The Lead supplies only bounded Assignment judgment to
+`launch-peer`; the operation helper resolves profiles, repositories, panes,
+context, delivery, and receipts. When the display is full, a
 completed run-created Peer pane may be retired after its evidence is durable so
 a required fresh replacement can use that space; pre-existing panes and an
 Engineer awaiting correction remain protected. Each split or retirement intent
@@ -188,10 +190,11 @@ $herdr-orchestrator attach a Supervisor to run <run-id> and Lead <lead-name>
 Refocus an installed Launcher session before invoking that command; the fresh
 Lead does not need or invoke the skill.
 
-The Launcher binds a fresh project-read-only Supervisor to exact Lead/project/run
-identities. It observes evidence, asks open questions, and relays exact Human
-decisions. It never creates Peers, edits project code, or issues a project
-verdict.
+The Launcher binds a fresh project-read-only Supervisor to exact project/run
+evidence and notebook boundaries. It records observations, Human-attention
+requests, and handoff recommendations through a run-local operation helper. It
+is not exposed to a Lead and never creates Peers, edits project code, or issues
+a project verdict.
 
 ## Evidence and verdicts
 
@@ -209,9 +212,10 @@ not a general filesystem lock.
 
 It records intended context, delivery receipts, assignments, Peer reports,
 stable candidates, verification, review, Human decision requests, Supervisor
-observations, and the Lead verdict. Each Peer returns its full report through an
-exclusive writable file boundary; terminal snapshots are only status/debug
-signals. These records are assertions to compare with Herdr, Git, the
+observations, and the Lead verdict. Each Peer returns a small structured result
+through its exclusive writable boundary; the helper validates candidate and
+evidence, then creates and promotes the full report atomically. Terminal
+snapshots are only status/debug signals. These records are assertions to compare with Herdr, Git, the
 filesystem, and raw command results—not proof by themselves.
 
 ```text
