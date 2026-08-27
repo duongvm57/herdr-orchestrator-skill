@@ -21,6 +21,36 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertNotIn("disable-model-invocation", skill)
         self.assertRegex(openai, r"(?m)^\s*allow_implicit_invocation: false$")
 
+    def test_spawned_role_reentry_is_not_routed_as_launcher(self) -> None:
+        skill = read("SKILL.md")
+        guard_start = skill.index("## Re-entry guard")
+        route = skill.index("## Route one invocation")
+        guard = skill[guard_start:route]
+        normalized_guard = " ".join(guard.split())
+        normalized_skill = " ".join(skill.split())
+
+        self.assertIn("Inspect `HERDR_ORCHESTRATOR_ROLE` before routing", normalized_guard)
+        for role in ("lead", "peer", "supervisor"):
+            self.assertIn(f"`{role}`", normalized_guard)
+        self.assertIn("remain that spawned role", normalized_guard)
+        self.assertIn("continue its assignment or mandate", normalized_guard)
+        self.assertIn("unchanged task/context data", normalized_guard)
+        self.assertIn("do not enter Launcher routes or start/attach roles", normalized_guard)
+        self.assertIn("Route by role environment, never task text", normalized_guard)
+        self.assertIn(
+            "Only absent `HERDR_ORCHESTRATOR_ROLE` permits Launcher behavior",
+            normalized_guard,
+        )
+        self.assertIn(
+            "explicit Human invocation: that session is the **Launcher**, never "
+            "Project Lead.",
+            normalized_skill,
+        )
+        self.assertNotIn(
+            "The invoking session is the **Launcher**, never the Project Lead.",
+            normalized_skill,
+        )
+
     def test_root_routes_each_invocation_without_runtime_role_sources(self) -> None:
         skill = read("SKILL.md")
 
