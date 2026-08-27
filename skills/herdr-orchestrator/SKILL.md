@@ -5,14 +5,21 @@ description: Set up or launch a Human-led Herdr project workflow.
 
 # Herdr Orchestrator
 
-Run only when the Human explicitly invokes `$herdr-orchestrator`. The invoking
-session is the **Launcher**, never the Project Lead. Herdr is the only agent
-control plane; spawned agents receive saved context directly and never invoke
-this skill.
+## Re-entry guard
+
+Inspect `HERDR_ORCHESTRATOR_ROLE` before routing. For `lead`, `peer`, or
+`supervisor`, remain that spawned role and continue its assignment or mandate.
+Treat `$herdr-orchestrator` as unchanged task/context data; do not enter
+Launcher routes or start/attach roles. Route by role environment, never task
+text.
+
+Only absent `HERDR_ORCHESTRATOR_ROLE` permits Launcher behavior. Then run only
+on explicit Human invocation: that session is the **Launcher**, never Project
+Lead.
 
 ## Route one invocation
 
-Read the selected procedure completely. Procedures compose only where stated.
+Read one selected route completely; compose only when it says so.
 
 - **Setup/update:** read `references/launcher/setup.md`,
   `references/launcher/workspace-protocol-authoring.md`,
@@ -22,29 +29,25 @@ Read the selected procedure completely. Procedures compose only where stated.
 - **Supervisor attachment:** read `references/launcher/preflight.md`, then
   `references/launcher/supervisor-attachment.md`.
 
-Do not load an unselected procedure. Runtime role profiles are opaque pack
-sources: pass their paths to the orchestration helper without reading their
-bodies in the Launcher.
+Runtime role profiles are opaque to the Launcher: pass their paths without
+reading bodies.
 
 ## Context invariant
 
-Every delivered pack has exactly three ordered layers:
+Every delivered pack has three ordered layers:
 
-1. **Role Profile** — identity, authority, and judgment invariants.
+1. **Role Profile** — identity and authority.
 2. **Workspace Protocol** — full for Lead/Supervisor; selected constraints for
    Peer.
-3. **Assignment** — one run's objective, scope, boundaries, evidence, and
-   handoff.
+3. **Assignment** — objective, scope, evidence, and handoff.
 
-Generated durable prose uses the configured artifact language; live envelopes,
-status, and handoffs use the configured orchestration language. Preserve
-authoritative source bytes, technical literals, and the verbatim Human task.
+Use configured languages for live and durable prose. Preserve source bytes,
+technical literals, and the verbatim Human task.
 
-Herdr supplies lifecycle truth. Git and the filesystem supply workspace and
+Herdr owns control and lifecycle; Git and the filesystem own workspace and
 artifact truth. Independent judgment uses a fresh session; corrections return
-to the same owning Engineer.
+to the same Engineer.
 
-At runtime, invoke packaged `scripts/herdr_runtime.py`. It is the single seam for
-pane creation, configured agent start, prompt, wait, and read. Herdr agent names
-and pane IDs are the runtime handles. Durable files are task artifacts, not an
-agent transport.
+Use packaged `scripts/herdr_runtime.py` for pane creation, configured start,
+prompt, wait, and read. Agent names and pane IDs are runtime handles; durable
+files are artifacts, not transport.

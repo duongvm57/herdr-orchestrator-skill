@@ -20,6 +20,14 @@ import herdr_orchestrator as core
 AGENT_NAME_RE = re.compile(r"[a-z][a-z0-9_-]{0,31}\Z")
 PROFILE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}\Z")
 DEFAULT_TIMEOUT_MS = 120_000
+ORCHESTRATOR_ROLE_ENV = "HERDR_ORCHESTRATOR_ROLE"
+ORCHESTRATOR_ROLES = frozenset(("lead", "peer", "supervisor"))
+ALLOWED_CHILD_ROLES = {
+    None: frozenset(("lead", "supervisor")),
+    "lead": frozenset(("peer",)),
+    "peer": frozenset(),
+    "supervisor": frozenset(),
+}
 
 
 class RuntimeError_(RuntimeError):
@@ -154,7 +162,21 @@ def _current_rect(herdr: str) -> dict[str, int]:
     raise RuntimeError_("current pane is absent from its Herdr layout")
 
 
-def _split(herdr: str, root: Path, cwd: Path) -> str:
+def _authorize_transition(child_role: str) -> None:
+    parent_role = os.environ.get(ORCHESTRATOR_ROLE_ENV)
+    if parent_role is not None and parent_role not in ORCHESTRATOR_ROLES:
+        raise RuntimeError_(
+            f"{ORCHESTRATOR_ROLE_ENV} has unsupported role: {parent_role!r}"
+        )
+    allowed = ALLOWED_CHILD_ROLES[parent_role]
+    parent_label = parent_role or "launcher"
+    if child_role not in allowed:
+        raise RuntimeError_(
+            f"role transition {parent_label} -> {child_role} is not allowed"
+        )
+
+
+def _split(herdr: str, root: Path, cwd: Path, role: str) -> str:
     rect = _current_rect(herdr)
     direction = "right" if rect["width"] >= rect["height"] * 2 else "down"
     document = _run_json(
@@ -169,6 +191,8 @@ def _split(herdr: str, root: Path, cwd: Path) -> str:
             str(cwd),
             "--env",
             f"HERDR_ORCHESTRATOR_PROJECT_ROOT={root}",
+            "--env",
+            f"{ORCHESTRATOR_ROLE_ENV}={role}",
             "--no-focus",
         ]
     )
@@ -291,6 +315,7 @@ def _agent_snapshot(herdr: str, agent: str, *, lines: int = 120) -> dict[str, An
 def command_start(args: argparse.Namespace) -> dict[str, Any]:
     if os.environ.get("HERDR_ENV") != "1":
         raise RuntimeError_("HERDR_ENV=1 is required")
+    _authorize_transition(args.role)
     herdr = _herdr_executable(args.herdr)
     root = _project_root(args.project_root)
     config, protocol = _load_project(root)
@@ -301,7 +326,7 @@ def command_start(args: argparse.Namespace) -> dict[str, Any]:
     name = args.name or _agent_name(args.role)
     if AGENT_NAME_RE.fullmatch(name) is None:
         raise RuntimeError_(f"agent name must match {AGENT_NAME_RE.pattern!r}")
-    pane = _split(herdr, root, cwd)
+    pane = _split(herdr, root, cwd, args.role)
     start_argv = [
         herdr,
         "agent",

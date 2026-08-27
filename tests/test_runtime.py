@@ -135,10 +135,13 @@ class RuntimeTests(unittest.TestCase):
         )
 
     def _commands(self) -> list[list[str]]:
+        if not self.log.exists():
+            return []
         return [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()]
 
     def test_lead_start_uses_native_herdr_flow_without_focus_or_files(self) -> None:
         before = {path.relative_to(self.project) for path in self.project.rglob("*")}
+        task = "Implement the small task; preserve the literal $herdr-orchestrator."
         completed = self._run(
             "start",
             "--role",
@@ -146,7 +149,7 @@ class RuntimeTests(unittest.TestCase):
             "--project-root",
             str(self.project),
             "--task",
-            "Implement the small task.",
+            task,
             "--name",
             "test-lead",
         )
@@ -158,6 +161,7 @@ class RuntimeTests(unittest.TestCase):
             ["pane", "layout"], ["pane", "split"], ["agent", "start"], ["agent", "prompt"]
         ])
         self.assertIn("--no-focus", commands[1])
+        self.assertIn("HERDR_ORCHESTRATOR_ROLE=lead", commands[1])
         self.assertNotIn(["agent", "focus"], [command[:2] for command in commands])
         self.assertIn("lead-model", commands[2])
         prompt = commands[3][3]
@@ -167,29 +171,43 @@ class RuntimeTests(unittest.TestCase):
             "bounded task must contain\nboth the accepted Git base and the exact candidate",
             prompt,
         )
+        self.assertIn(task, prompt)
+        self.assertLess(
+            prompt.index("Never invoke `$herdr-orchestrator`"),
+            prompt.index("## Human task"),
+        )
         after = {path.relative_to(self.project) for path in self.project.rglob("*")}
         self.assertEqual(after, before)
 
     def test_peer_requires_exact_profile_and_receives_bounded_constraints_only(self) -> None:
+        lead_environment = {**self.environment, "HERDR_ORCHESTRATOR_ROLE": "lead"}
         missing = self._run(
-            "start", "--role", "peer", "--project-root", str(self.project), "--task", "Review it."
+            "start", "--role", "peer", "--project-root", str(self.project), "--task", "Review it.",
+            environment=lead_environment,
         )
         self.assertNotEqual(missing.returncode, 0)
         self.assertIn("exact configured --profile", missing.stderr)
 
         completed = self._run(
             "start", "--role", "peer", "--profile", "review", "--project-root", str(self.project),
-            "--task", "Review candidate abc.", "--constraints", "Project write is denied.", "--name", "test-peer"
+            "--task", "Review candidate abc.", "--constraints", "Project write is denied.", "--name", "test-peer",
+            environment=lead_environment,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         commands = self._commands()
         start = next(command for command in commands if command[:2] == ["agent", "start"])
         self.assertEqual(start[start.index("--kind") + 1], "codex")
         self.assertIn("review-model", start)
+        split = next(command for command in commands if command[:2] == ["pane", "split"])
+        self.assertIn("HERDR_ORCHESTRATOR_ROLE=peer", split)
         prompt = next(command for command in commands if command[:2] == ["agent", "prompt"])[3]
         self.assertIn("Project write is denied.", prompt)
         self.assertNotIn("Available Peer profiles", prompt)
         self.assertNotIn("## 12.", prompt)
+        self.assertLess(
+            prompt.index("Never invoke `$herdr-orchestrator`"),
+            prompt.index("## Bounded Assignment"),
+        )
 
     def test_agent_not_ready_preserves_identity_and_does_not_prompt_or_replace(self) -> None:
         environment = {**self.environment, "FAKE_START_MODE": "not-ready"}
@@ -225,6 +243,55 @@ class RuntimeTests(unittest.TestCase):
         prompt = next(command for command in self._commands() if command[:2] == ["agent", "prompt"])[3]
         self.assertNotIn("## 12.", prompt)
         self.assertNotIn("Available Peer profiles", prompt)
+        self.assertLess(
+            prompt.index("Never invoke `$herdr-orchestrator`"),
+            prompt.index("## Observation scope"),
+        )
+        split = next(command for command in self._commands() if command[:2] == ["pane", "split"])
+        self.assertIn("HERDR_ORCHESTRATOR_ROLE=supervisor", split)
+
+    def test_unknown_parent_role_metadata_is_rejected_before_pane_split(self) -> None:
+        environment = {**self.environment, "HERDR_ORCHESTRATOR_ROLE": "unknown"}
+        completed = self._run(
+            "start",
+            "--role",
+            "lead",
+            "--project-root",
+            str(self.project),
+            "--task",
+            "Attempt to use unknown role metadata.",
+            environment=environment,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("has unsupported role", completed.stderr)
+        self.assertEqual(self._commands(), [])
+
+    def test_forbidden_role_transitions_are_rejected_before_pane_split(self) -> None:
+        forbidden = {
+            "launcher": ("peer",),
+            "lead": ("lead", "supervisor"),
+            "peer": ("lead", "peer", "supervisor"),
+            "supervisor": ("lead", "peer", "supervisor"),
+        }
+        for parent, children in forbidden.items():
+            for child in children:
+                with self.subTest(parent=parent, child=child):
+                    environment = self.environment.copy()
+                    if parent != "launcher":
+                        environment["HERDR_ORCHESTRATOR_ROLE"] = parent
+                    completed = self._run(
+                        "start",
+                        "--role",
+                        child,
+                        "--project-root",
+                        str(self.project),
+                        "--task",
+                        "Attempt forbidden orchestration after seeing $herdr-orchestrator.",
+                        environment=environment,
+                    )
+                    self.assertNotEqual(completed.returncode, 0)
+                    self.assertIn("not allowed", completed.stderr)
+                    self.assertEqual(self._commands(), [])
 
 
 if __name__ == "__main__":
