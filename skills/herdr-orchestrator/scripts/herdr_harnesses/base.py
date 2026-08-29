@@ -26,6 +26,20 @@ CatalogProjector = Callable[[bytes, str], list[dict[str, Any]]]
 CatalogSelector = Callable[[list[dict[str, Any]], Path], list[dict[str, Any]]]
 ArgumentSetValidator = Callable[[list[str], str], None]
 ControlPlaneValidator = Callable[[list[str], str], None]
+RuntimeBindingRenderer = Callable[["RuntimeBinding"], str]
+PaneEnvironmentProjector = Callable[["RuntimeBinding"], tuple[tuple[str, str], ...]]
+
+
+@dataclass(frozen=True)
+class RuntimeBinding:
+    """Facts needed to attach one already-selected role to native runtime."""
+
+    role: str
+    herdr_executable: Path
+    herdr_socket_endpoint: Path
+    helper: Path
+    project_root: Path
+    herdr_pane_id: str
 
 
 @dataclass(frozen=True)
@@ -62,6 +76,8 @@ class HarnessAdapter:
     catalog: Optional[CatalogSpec] = None
     evidence_root: Optional[EvidenceRootRule] = None
     control_plane_validator: Optional[ControlPlaneValidator] = None
+    runtime_binding_renderer: Optional[RuntimeBindingRenderer] = None
+    pane_environment_projector: Optional[PaneEnvironmentProjector] = None
 
     def validate_arguments(self, args: list[str], location: str) -> None:
         seen: set[str] = set()
@@ -141,6 +157,23 @@ class HarnessAdapter:
     def validate_control_plane(self, args: list[str], location: str) -> None:
         if self.control_plane_validator is not None:
             self.control_plane_validator(args, location)
+
+    def render_runtime_binding(self, binding: RuntimeBinding) -> str:
+        if self.runtime_binding_renderer is None:
+            raise HarnessError(
+                f"{self.kind} has no verified runtime-binding projection"
+            )
+        return self.runtime_binding_renderer(binding)
+
+    def project_pane_environment(
+        self,
+        binding: RuntimeBinding,
+    ) -> tuple[tuple[str, str], ...]:
+        if self.pane_environment_projector is None:
+            raise HarnessError(
+                f"{self.kind} has no verified runtime-binding pane projection"
+            )
+        return self.pane_environment_projector(binding)
 
     def project_catalog(
         self,

@@ -1,10 +1,13 @@
 # Launch preflight
 
 Require `HERDR_ENV=1`; otherwise stop rather than controlling a session from
-outside Herdr. Resolve the canonical project root and run:
+outside Herdr. Resolve the canonical project root and the exact absolute path
+of `scripts/herdr_orchestrator.py` in this active installed skill. Call that
+path `<canonical-helper>`; it is never a path guessed under the consumer
+repository. Run:
 
 ```text
-python3 scripts/herdr_orchestrator.py validate-project --project-root <root>
+python3 <canonical-helper> validate-project --project-root <root>
 ```
 
 Capture the installed-contract snapshot before launch:
@@ -27,6 +30,13 @@ prompt. CLI support alone does not prove the spawned agent received the skill.
 The project config and Workspace Protocol are authoritative for recipe,
 language, and SLP policy; Herdr is authoritative for pane, agent, and
 lifecycle mechanics.
+
+Read `references/launcher/runtime-binding.md` before starting a role. Resolve
+the active session's exact Herdr executable and socket endpoint; after native
+pane creation, read the returned exact pane ID before constructing that role's
+fresh binding. Production roles retain the user's normal harness profile,
+configuration, and authentication. The selected adapter, not this generic
+route, decides how native execution consumes the bounded binding.
 
 Stop on invalid configuration, unavailable skill/binary, or incompatible
 approval policy. Do not substitute a harness, model, profile, or authority

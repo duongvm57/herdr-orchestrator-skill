@@ -26,53 +26,58 @@ Stop on error. Choose configuration mode with one card:
   edit it. Strictly parse and validate live tuples, then ask only missing
   protocol decisions.
 
-Use structured user-input when available: one question per card; 2–3 exclusive
-choices with explicit labels/impacts; evidence-backed recommendation first;
-free-form answer. Otherwise show every valid answer as a numbered choice and
-request its number or free-form. Ask one question and wait; preserve answers.
+Use structured user input when available: one question/card, 2–3 choices,
+evidence-backed recommendation first, and free-form. Otherwise number answers.
 
-In Guided setup, read verified kinds from the helper's `harness-models --help`;
-intersect kinds with `herdr agent start --help` and runnable executables, and
-omit the rest. Mark Herdr-only kinds unavailable and annotate retained rows using
-`herdr integration status`. Build a profile matrix: Lead, optional Supervisor,
-and `fast/general/reasoning/coding/architecture/reviewer` Peer capability routes,
-plus custom or omit. Each row independently selects its harness; then discover
-and choose its model, reasoning/cost, access, and native arguments. Rows may
-differ; the Human chooses reuse and one fallback recipe. Routes describe
-capability/model fit; the assignment binds the Peer disposition.
+In Guided setup, intersect helper-verified kinds, `herdr agent start --help`,
+and runnable executables; omit the rest and mark Herdr-only kinds unavailable.
+Build Lead, optional Supervisor, and applicable Peer capability rows. Each row
+independently selects harness, model/cost, access, and native args; the Human
+chooses reuse and one fallback. Recipes express capability/model fit; the
+Assignment binds Peer disposition.
 
-Deep-probe configured candidates for auth, native choices, access, and spawn
-control. Targeted Herdr and helper `--help` remain command authority.
-
-Run `python3 scripts/herdr_orchestrator.py harness-models --kind <kind> --project-root
-<repository-root> --output <file>` per selected kind in a temporary directory;
-consume its compact projection, then remove it. OMP projects its authenticated-
-provider catalog. Pi projects only effective native `enabledModels` scope and
-stops if absent or stale. Missing adapters fail closed;
-prove each choice with a bounded native check or approved smoke. Decide:
+Deep-probe auth, native choices, access, and spawn control; Herdr/helper
+`--help` remains authority. Per selected kind, run `harness-models` in a
+temporary directory, consume its compact projection, then remove it. Missing
+adapters fail closed; prove each choice with a bounded native check or smoke.
+Decide:
 
 - live orchestration and artifact languages on first setup or change;
 - project risk, review triggers, costly reversals, and minimum verdict proof;
 - edit, commit, push, deploy, publish, and other external-effect authority; and
 - scope expansion, reserved architecture, budget, and Human-only boundaries.
 
-Pass choices as unchanged native argument vectors. Store no credential, secret
-path/value, or inferred shared effort vocabulary. Every option needs a strict
-rule in its exact harness adapter. A new harness requires native inspection and
-an approved end-to-end smoke; create no placeholder, passthrough, or fallback.
-If a selected route needs an approval-gated MCP or tool, set its optional
-`approval_required = true` capability field. Validation rejects
-`--ask-for-approval never` for that route before launch. Do not diagnose such a
-failure as credentials or discovery; recreate the session after any policy
-change fixed at process startup.
+Pass unchanged native vectors. Store no credential, secret path/value, or
+inferred shared effort. Each option needs an exact adapter rule; a new harness
+needs native inspection and approved end-to-end smoke, never a placeholder or
+fallback. Approval-gated routes set `approval_required = true`; validation
+rejects `--ask-for-approval never`. Recreate the session after any process-
+startup policy change.
 
 ## 2. Prove each role envelope
 
 Disable native spawning. A Lead needs Herdr reachability and authorized
 project/Git access. Each Peer gets only the configured workspace authority. A
 read-only Peer does not receive a writable project root; a Supervisor is
-project-read-only unless an explicit observation artifact root is assigned.
-Check shared recipes separately per role.
+governance/project-read-only by role authority unless an explicit observation
+artifact root is assigned. Codex Herdr observation needs
+`--sandbox workspace-write` and
+`--config sandbox_workspace_write.network_access=true`; this grants a broader
+filesystem envelope for IPC and must not be described as a technical read-only
+ACL.
+
+Apply only the selected adapter's verified runtime-binding projection. Do not
+promote one harness's subprocess, home, or shell behavior into a project-wide
+recipe requirement. When present, read the selected adapter's concise
+`references/harnesses/<kind>-runtime-binding.md` before serializing its native
+recipe. Never hardcode Herdr IDs.
+
+Normal production and dogfood launch preserves the user's installed native
+harness profile, configuration, and authenticated provider setup. Isolation
+means a fresh consumer repository/worktree and clean orchestration/evidence
+state, not a fresh harness profile home, credential copy, or login preparation.
+A Human/project may request harness-profile isolation as a separate capability;
+it is never implied by this orchestration contract.
 
 Validate static controls; use a Human-approved collision-free smoke only when
 inspection is insufficient. It may create, read, fsync, and remove one in-scope
@@ -86,7 +91,8 @@ temporary directory, then run `validate-project --project-root <repository-root>
 static rule need the live probe. Show every
 granted root/network capability and grant it to other profiles only when
 authorized. A read-only Peer receives its project cwd read-only; a Supervisor
-receives only its assigned observation scope and optional artifact root.
+receives only its assigned observation scope and optional artifact root by role
+policy; disclose any broader technical sandbox access required for Herdr IPC.
 
 Discovery is complete when the Human saw the kind map and compact inventory;
 every selected executable, model, argument, spawn/access boundary is proven;
@@ -122,7 +128,7 @@ protocol free of task paths, secrets, and global role manuals.
 
 ## 4. Validate and review
 
-Run `python3 scripts/herdr_orchestrator.py validate-project --project-root
+Run `python3 <canonical-helper> validate-project --project-root
 <repository-root> --config <candidate-config> --protocol <candidate-protocol>`;
 consume its compact JSON before serialization. After serialization, rerun the
 default canonical-path validation. Recheck every recipe live. Confirm only the
@@ -132,4 +138,4 @@ scoped diff and unresolved assumptions for Human review.
 
 Setup is complete when version 3 and all protocol sections parse; discovery and
 every recipe/envelope pass live validation; role boundaries hold; the Human
-reviewed a credential-free diff; no agent launched; and no probe residue remains.
+reviewed a credential-free diff; no agent or probe residue remains.

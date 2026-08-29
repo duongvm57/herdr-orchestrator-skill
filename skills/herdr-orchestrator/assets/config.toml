@@ -2,6 +2,8 @@ version = 3
 fallback_peer_recipe = "<fallback-recipe-name>"
 
 # Setup replaces every placeholder with a recipe validated on this machine.
+# Keep any adapter-required native compatibility policy in that adapter's exact
+# recipe argv; do not depend on a user's global harness defaults.
 [roles.lead]
 kind = "<lead-kind>"
 args = ["<lead-native-arg>"]

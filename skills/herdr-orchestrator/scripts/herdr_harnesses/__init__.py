@@ -2,7 +2,7 @@
 
 from importlib import import_module
 
-from .base import HarnessAdapter, HarnessError
+from .base import HarnessAdapter, HarnessError, RuntimeBinding
 
 
 VERIFIED_HARNESS_KINDS = (
