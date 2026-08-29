@@ -60,11 +60,9 @@ Disable native spawning. A Lead needs Herdr reachability and authorized
 project/Git access. Each Peer gets only the configured workspace authority. A
 read-only Peer does not receive a writable project root; a Supervisor is
 governance/project-read-only by role authority unless an explicit observation
-artifact root is assigned. Codex Herdr observation needs
-`--sandbox workspace-write` and
-`--config sandbox_workspace_write.network_access=true`; this grants a broader
-filesystem envelope for IPC and must not be described as a technical read-only
-ACL.
+artifact root is assigned. An adapter-specific Herdr IPC requirement may need a
+broader technical sandbox envelope; disclose it precisely without describing
+it as a role-authority ACL.
 
 Apply only the selected adapter's verified runtime-binding projection. Do not
 promote one harness's subprocess, home, or shell behavior into a project-wide
@@ -92,7 +90,8 @@ static rule need the live probe. Show every
 granted root/network capability and grant it to other profiles only when
 authorized. A read-only Peer receives its project cwd read-only; a Supervisor
 receives only its assigned observation scope and optional artifact root by role
-policy; disclose any broader technical sandbox access required for Herdr IPC.
+policy; disclose any adapter-specific broader technical sandbox access required
+for Herdr IPC.
 
 Discovery is complete when the Human saw the kind map and compact inventory;
 every selected executable, model, argument, spawn/access boundary is proven;

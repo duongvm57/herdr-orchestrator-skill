@@ -49,6 +49,7 @@ CANDIDATE_SCHEMA_VERSION = 1
 ACCEPTANCE_SCHEMA_VERSION = 1
 MAX_RECIPE_ARGUMENTS = 64
 MAX_RECIPE_ARGUMENT_BYTES = 1024
+MAX_NATIVE_DIAGNOSTIC_BYTES = 4096
 PLACEHOLDER_RE = re.compile(r"^\s*(?:todo|tbd|unknown|n/?a|yyyy-mm-dd)\s*$", re.I)
 SENSITIVE_LITERAL_RE = re.compile(
     r"(?i)(?:\bsk-[a-z0-9][a-z0-9_-]{8,}\b|\b(?:api[-_]?key|access[-_]?token|"
@@ -151,6 +152,30 @@ def _safe_text(data: bytes, label: str) -> str:
     if any(unicodedata.category(char) == "Cc" and char not in "\t\r\n" for char in text):
         raise HelperError(f"{label} contains a forbidden control character")
     return text
+
+
+def _safe_diagnostic_text(data: bytes, label: str) -> str:
+    """Return bounded native diagnostics without changing command semantics.
+
+    Native side-effect success is authoritative.  Diagnostics are best-effort
+    reporting only, so malformed output must never turn that success into an
+    ambiguous helper failure.
+    """
+    try:
+        raw = bytes(data)
+        text = raw[:MAX_NATIVE_DIAGNOSTIC_BYTES].decode("utf-8", errors="replace")
+        sanitized = "".join(
+            char if unicodedata.category(char) != "Cc" or char in "\t\r\n"
+            else f"\\x{ord(char):02x}"
+            for char in text
+        )
+        if len(raw) > MAX_NATIVE_DIAGNOSTIC_BYTES:
+            sanitized += "\n[truncated native diagnostic]"
+        return sanitized
+    except Exception:
+        # `subprocess.run(..., capture_output=True)` supplies bytes, but retain
+        # the reporting-only boundary even if an unexpected object reaches it.
+        return f"[{label} diagnostic unavailable]"
 
 
 def _check_output(path: Path, replace: bool) -> Path:
@@ -485,8 +510,8 @@ def command_start_peer(args: argparse.Namespace) -> dict[str, Any]:
     result.update({
         "launch": "executed",
         "returncode": completed.returncode,
-        "stdout": _safe_text(completed.stdout, "Herdr Peer start stdout"),
-        "stderr": _safe_text(completed.stderr, "Herdr Peer start stderr"),
+        "stdout": _safe_diagnostic_text(completed.stdout, "Herdr Peer start stdout"),
+        "stderr": _safe_diagnostic_text(completed.stderr, "Herdr Peer start stderr"),
     })
     return result
 
@@ -507,7 +532,7 @@ def command_submit_prompt(args: argparse.Namespace) -> dict[str, Any]:
     except OSError as exc:
         raise HelperError(f"native Herdr prompt submission could not invoke herdr: {exc}") from exc
     if completed.returncode:
-        detail = completed.stderr.decode("utf-8", errors="replace").strip()
+        detail = _safe_diagnostic_text(completed.stderr, "Herdr prompt stderr").strip()
         raise HelperError(
             "native Herdr prompt submission failed"
             + (f" with exit status {completed.returncode}" if completed.returncode else "")
@@ -522,8 +547,8 @@ def command_submit_prompt(args: argparse.Namespace) -> dict[str, Any]:
         "prompt_bytes": len(prompt_data),
         "herdr_argv": herdr_argv[:-1] + ["<prompt-file-content>"],
         "submission": "accepted-by-native-herdr",
-        "stdout": _safe_text(completed.stdout, "Herdr prompt stdout"),
-        "stderr": _safe_text(completed.stderr, "Herdr prompt stderr"),
+        "stdout": _safe_diagnostic_text(completed.stdout, "Herdr prompt stdout"),
+        "stderr": _safe_diagnostic_text(completed.stderr, "Herdr prompt stderr"),
     }
 
 
