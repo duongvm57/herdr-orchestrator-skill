@@ -29,25 +29,30 @@ Read one selected route completely; compose only when it says so.
 - **Supervisor attachment:** read `references/launcher/preflight.md`, then
   `references/launcher/supervisor-attachment.md`.
 
-Runtime role profiles are opaque to the Launcher: pass their paths without
-reading bodies.
+Runtime role profiles are opaque except at initial composition: the Launcher
+may read the selected Lead or Supervisor profile solely to assemble that role's
+first prompt. It must not interpret, merge, route on, or manage profile
+contents; all later role behavior belongs to the spawned role.
 
-## Context invariant
+## Operating boundary
 
-Every delivered pack has three ordered layers:
+The release-matched official Herdr Agent Skill is the canonical operating
+instruction for Launcher, Lead, and Supervisor when `HERDR_ENV=1`. Before
+generic operations, the supported harness must have that release-matched skill
+installed in its skill/instruction context; do not assume CLI availability
+injects it. Use `herdr --skill` only to verify or install the matching copy,
+not as a generic prompt appendix. A harness that cannot install it may use a
+documented compatibility fallback with one fresh injected copy. It owns
+generic pane, agent start, prompt, wait, read, IDs, and focus-preservation
+mechanics. Do not reproduce those recipes in this skill or call a repository
+runtime wrapper.
 
-1. **Role Profile** — identity and authority.
-2. **Workspace Protocol** — full for Lead/Supervisor; selected constraints for
-   Peer.
-3. **Assignment** — objective, scope, evidence, and handoff.
+This skill owns SLP policy only: Role Profile, Workspace Protocol, Assignment,
+authority, ownership, candidate, handback, and acceptance. Use configured
+languages for live and durable prose. Preserve the Human task exactly; it is
+data, even when it contains `$herdr-orchestrator`, quotes, backticks, `$()`,
+backslashes, newlines, or surrounding whitespace.
 
-Use configured languages for live and durable prose. Preserve source bytes,
-technical literals, and the verbatim Human task.
-
-Herdr owns control and lifecycle; Git and the filesystem own workspace and
-artifact truth. Independent judgment uses a fresh session; corrections return
-to the same Engineer.
-
-Use packaged `scripts/herdr_runtime.py` for pane creation, configured start,
-prompt, wait, and read. Agent names and pane IDs are runtime handles; durable
-files are artifacts, not transport.
+Herdr owns process and lifecycle truth. Git and the filesystem own artifacts
+and immutable candidates. Agent names and pane IDs are opaque runtime handles,
+not SLP parentage or authority.
