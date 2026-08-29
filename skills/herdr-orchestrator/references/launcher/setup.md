@@ -6,7 +6,7 @@ task via the task-launch route.
 
 ## 1. Preserve and discover
 
-Resolve repository and Git-common roots. Inventory status, worktrees,
+Resolve the canonical repository root. Inventory status, worktrees,
 agents/panes, and destinations. Understand and preserve Human-owned or unrelated
 changes; present an in-place diff.
 
@@ -44,7 +44,7 @@ capability/model fit; the assignment binds the Peer disposition.
 Deep-probe configured candidates for auth, native choices, access, and spawn
 control. Targeted Herdr and helper `--help` remain command authority.
 
-Run `scripts/herdr_orchestrator.py harness-models --kind <kind> --project-root
+Run `python3 scripts/herdr_orchestrator.py harness-models --kind <kind> --project-root
 <repository-root> --output <file>` per selected kind in a temporary directory;
 consume its compact projection, then remove it. OMP projects its authenticated-
 provider catalog. Pi projects only effective native `enabledModels` scope and
@@ -60,6 +60,11 @@ Pass choices as unchanged native argument vectors. Store no credential, secret
 path/value, or inferred shared effort vocabulary. Every option needs a strict
 rule in its exact harness adapter. A new harness requires native inspection and
 an approved end-to-end smoke; create no placeholder, passthrough, or fallback.
+If a selected route needs an approval-gated MCP or tool, set its optional
+`approval_required = true` capability field. Validation rejects
+`--ask-for-approval never` for that route before launch. Do not diagnose such a
+failure as credentials or discovery; recreate the session after any policy
+change fixed at process startup.
 
 ## 2. Prove each role envelope
 
@@ -75,12 +80,13 @@ probe, must reject out-of-scope writes without residue, and for control roles
 runs `herdr agent list` inside the exact native boundary. Do not configure an
 unenforceable envelope; state limitations precisely.
 
-Before smoke or serialization, run `validate-project --git-common-dir`; the
-selected Lead adapter checks its static evidence-root rules. Kinds without a
-static rule need the live probe. Show every granted root/network capability and
-grant it to other profiles only when authorized. A read-only Peer receives its
-project cwd read-only; a Supervisor receives only its assigned observation scope
-and optional artifact root.
+Before smoke or serialization, write candidate config and protocol files in a
+temporary directory, then run `validate-project --project-root <repository-root>
+--config <candidate-config> --protocol <candidate-protocol>`. Kinds without a
+static rule need the live probe. Show every
+granted root/network capability and grant it to other profiles only when
+authorized. A read-only Peer receives its project cwd read-only; a Supervisor
+receives only its assigned observation scope and optional artifact root.
 
 Discovery is complete when the Human saw the kind map and compact inventory;
 every selected executable, model, argument, spawn/access boundary is proven;
@@ -93,14 +99,19 @@ Copy `assets/config.toml` and replace every placeholder. Require exactly:
 - `version = 3`;
 - one `fallback_peer_recipe` naming an exact Peer recipe;
 - one `[roles.lead]` and optional `[roles.supervisor]`, each containing only
-  `kind` and `args`; and
+  `kind`, `args`, and optional boolean `approval_required`; and
 - one or more uniquely named `[peer_recipes.<name>]`, each containing exactly
-  nonempty `description`, `kind`, and `args`.
+  nonempty `description`, `kind`, `args`, and optional boolean
+  `approval_required`.
 
 Peer recipe names identify reusable capabilities, not dispositions. Choose one
 general recipe as the fallback for unmatched Assignments; its validated
 harness, model, arguments, and authority remain unchanged. `kind` resolves
 exactly one adapter without inheritance, translation, or legacy migration.
+Set `approval_required = true` only for a route that actually needs an
+approval-gated MCP/tool; such a route must not contain `--ask-for-approval
+never` and needs a fresh session if the provider fixes approval policy at
+startup.
 
 Read `references/launcher/workspace-protocol-authoring.md`, copy
 `assets/workspace-protocol-template.md`, and fill all twelve sections with
@@ -111,9 +122,11 @@ protocol free of task paths, secrets, and global role manuals.
 
 ## 4. Validate and review
 
-Run `scripts/herdr_orchestrator.py validate-project` with the repository and
-resolved `--git-common-dir`; consume its compact JSON. Recheck every recipe
-live. Confirm only the two intended files changed, placeholders and
+Run `python3 scripts/herdr_orchestrator.py validate-project --project-root
+<repository-root> --config <candidate-config> --protocol <candidate-protocol>`;
+consume its compact JSON before serialization. After serialization, rerun the
+default canonical-path validation. Recheck every recipe live. Confirm only the
+two intended files changed, placeholders and
 credential-like values are absent, and unrelated state remains. Present the
 scoped diff and unresolved assumptions for Human review.
 
