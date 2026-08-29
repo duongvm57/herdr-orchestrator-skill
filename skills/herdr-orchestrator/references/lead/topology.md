@@ -15,9 +15,13 @@ writer and each decision or evidence boundary to one owner.
   tests only decision-changing propositions and owns the verdict; a council is
   not a vote.
 
-Read-only agents may share a checkout. Concurrent writers require non-overlapping
-ownership and isolated workspaces, branches, exclusive resources, artifacts,
-and verification. Pre-existing workspaces remain untouched.
+Read-only agents may share a checkout. For one active Lead orchestration,
+record the active delegation map and reject/reconcile overlap before concurrent
+writes. Use canonical `path:<repository-relative-path>` or
+`resource:<exclusive-resource>` scopes; this is contractual Lead enforcement,
+not cross-Lead atomic locking. Concurrent writers also require isolated
+workspaces, branches, exclusive resources, artifacts, and verification.
+Pre-existing workspaces remain untouched.
 
 Review starts only after the writer identifies an exact stable candidate. A
 changed candidate invalidates earlier review. The Lead owns the project verdict;

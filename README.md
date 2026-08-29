@@ -39,10 +39,16 @@ Every agent receives only three ordered instruction layers:
 Role Profile → Workspace Protocol → Assignment
 ```
 
-The Lead receives its thin role, full protocol, verbatim task, and a runtime
-manifest containing exact repositories, approved Peer profiles, and one
-operations command. A Peer receives its thin role, only relevant project
-constraints, and one assignment. Independent
+The Lead receives its Lead role/profile, the full Workspace Protocol, the
+verbatim Human task, and configured Peer recipes. A Peer receives its thin Peer
+role/profile, a bounded protocol projection, and an explicit Peer Assignment.
+Launcher, Lead, and Supervisor use
+the release-matched official Herdr Agent Skill for generic agent operations;
+their supported harness must have it installed. Use `herdr --skill` to verify
+or install that matching copy, not as a default prompt appendage. A Peer uses
+only its bounded SLP profile,
+Assignment, and task-local technical capabilities—not the orchestration
+operating skill. Independent
 judgment uses a fresh session; correction returns to the same Engineer that owns
 the write.
 
@@ -89,8 +95,11 @@ installer also asks which supported agents receive each selected skill. Install
 the orchestrator into the Launcher harness; install the OCR add-on into any
 Peer-capable harness where you want OCR-backed review.
 
-Leads, Peers, and Supervisors do not need `herdr-orchestrator` installed; their
-role-specific context is sent directly when they are created. A Reviewer that
+Launchers, Leads, and Supervisors need the official `herdr` Agent Skill
+available inside their Herdr-managed pane; `herdr --skill` is the
+release-matching/install source, not a default initial-prompt dump.
+`herdr-orchestrator` supplies only SLP role and Assignment policy. Peers must not load that orchestration
+skill as a generic launcher. A Reviewer that
 does not discover `ocr-peer-reviewer` continues with direct review. Every
 Reviewer report records the procedure actually used and an OCR status. An
 OCR-backed review preserves raw `preview.json` and `rules.json` beside its inbox
@@ -155,15 +164,16 @@ or permission policy. Legacy `routes.toml` and `workers.*.toml` are unsupported.
 $herdr-orchestrator implement issue #42 and preserve my uncommitted changes
 ```
 
-The Launcher cheaply validates accepted project inputs and existing state, then
-uses one runtime helper to split a background pane, start the exact configured
-Lead recipe, and deliver the task. Missing capability stops launch without
-runtime substitution. Focus changes only when explicitly requested.
+The Launcher validates accepted project inputs, then follows the installed
+official Herdr skill to split a background pane, start the exact configured
+Lead recipe, and submit the task as one direct value with no shell evaluation.
+Missing capability stops launch without substitution. Focus changes only when
+explicitly requested.
 
-The Lead receives the full Workspace Protocol, the Human task, available Peer
-profiles, and three operations: start an agent, wait for and read its result, or
-send a continuation. These operations use Herdr's native agent lifecycle; they
-do not create a second mailbox or lifecycle state machine.
+The Lead receives its Lead role/profile, the full Workspace Protocol, the
+verbatim Human task, and configured Peer recipes. It uses native Herdr operations for
+start/prompt/wait/read, but lifecycle state is observation only: matching
+semantic handback and evidence determine Assignment completion.
 
 After handoff, work with the Lead. A tiny task may need zero or one Peer.
 Architecture-sensitive work may use a fresh Architect, one Engineer, and a fresh
@@ -184,9 +194,11 @@ Refocus an installed Launcher session before invoking that command; the fresh
 Lead does not need or invoke the skill.
 
 The Launcher starts the exact configured Supervisor recipe with a bounded
-observation mandate. It is not exposed to a Lead and never creates Peers, edits
-project code, or issues a project verdict. Full protocol context is supplied
-only when the Human mandate requires protocol audit or update judgment.
+observation mandate and explicit supervised-Lead scope. The Supervisor may send
+an evidence-backed open question or Human decision to that Lead; it never
+creates Peers, edits project code, or issues a project verdict. Full protocol
+context is supplied only when the Human mandate requires protocol audit or
+update judgment. There is no automatic event-to-wake bridge in core.
 
 ## Evidence and verdicts
 

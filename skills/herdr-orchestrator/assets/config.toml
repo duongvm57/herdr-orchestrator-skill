@@ -5,11 +5,15 @@ fallback_peer_recipe = "<fallback-recipe-name>"
 [roles.lead]
 kind = "<lead-kind>"
 args = ["<lead-native-arg>"]
+# Set true only when this route must use an approval-gated MCP or tool.
+# A recipe with this field cannot use `--ask-for-approval never`.
+# approval_required = true
 
 # Optional. Its presence never authorizes or automatically launches a Supervisor.
 [roles.supervisor]
 kind = "<supervisor-kind>"
 args = ["<supervisor-native-arg>"]
+# approval_required = true
 
 # Repeat independently for each Human-approved capability route; kinds may differ.
 # The description includes its project and report-return write boundaries.
@@ -19,3 +23,4 @@ args = ["<supervisor-native-arg>"]
 description = "<capability-cost-independence-and-access-summary>"
 kind = "<peer-kind>"
 args = ["<peer-native-arg>"]
+# approval_required = true
