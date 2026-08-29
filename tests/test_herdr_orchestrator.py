@@ -586,6 +586,59 @@ class ProjectValidationTests(unittest.TestCase):
         self.assertIn("native Herdr prompt submission failed with exit status 17", completed.stderr)
         self.assertIn("native prompt rejected", completed.stderr)
 
+    def test_successful_side_effects_tolerate_malformed_native_diagnostics(self) -> None:
+        project = self.project()
+        arguments = type("Arguments", (), {
+            "project_root": str(project), "config": None, "protocol": None,
+            "recipe": "engineer", "name": "csv-engineer", "pane": "wX:pED",
+            "dry_run": False,
+        })()
+        native_diagnostics = b"\xff\x1b[31mwarning\x00\x07\n"
+        peer_completed = subprocess.CompletedProcess([], 0, native_diagnostics, native_diagnostics)
+
+        with mock.patch("subprocess.run", return_value=peer_completed):
+            from importlib.util import module_from_spec, spec_from_file_location
+
+            specification = spec_from_file_location("herdr_orchestrator_diagnostic_test", HELPER)
+            assert specification is not None and specification.loader is not None
+            module = module_from_spec(specification)
+            sys.modules[specification.name] = module
+            try:
+                specification.loader.exec_module(module)
+                peer_result = module.command_start_peer(arguments)
+            finally:
+                sys.modules.pop(specification.name, None)
+
+        self.assertEqual(peer_result["launch"], "executed")
+        self.assertEqual(peer_result["returncode"], 0)
+        self.assertIn("\ufffd\\x1b[31mwarning\\x00\\x07", peer_result["stdout"])
+
+        command_directory = self.root / "malformed-diagnostic-commands"
+        command_directory.mkdir()
+        fake_herdr = command_directory / "herdr"
+        fake_herdr.write_text(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            "sys.stdout.buffer.write(b'\\xff\\x1b[32maccepted\\x00')\n"
+            "sys.stderr.buffer.write(b'\\xff\\x1b[31mdiag\\x07')\n",
+            encoding="utf-8",
+        )
+        fake_herdr.chmod(0o755)
+        prompt = self.root / "prompt.txt"
+        prompt.write_text("one payload", encoding="utf-8")
+
+        submitted = subprocess.run(
+            [sys.executable, str(HELPER), "submit-prompt", "--agent", "lead-01", "--prompt-file", str(prompt)],
+            check=False, capture_output=True, text=True,
+            env={**os.environ, "PATH": str(command_directory) + os.pathsep + os.environ.get("PATH", "")},
+        )
+
+        self.assertEqual(submitted.returncode, 0, submitted.stderr)
+        submission = json.loads(submitted.stdout)
+        self.assertEqual(submission["submission"], "accepted-by-native-herdr")
+        self.assertIn("\ufffd\\x1b[32maccepted\\x00", submission["stdout"])
+        self.assertIn("\ufffd\\x1b[31mdiag\\x07", submission["stderr"])
+
     def test_approval_required_recipe_rejects_never_policy(self) -> None:
         project = self.project()
         config = project / ".orchestration/herdr-orchestrator.toml"

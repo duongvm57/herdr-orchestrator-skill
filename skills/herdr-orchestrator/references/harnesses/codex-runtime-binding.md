@@ -14,6 +14,12 @@ in its exact recipe argv: `shell_environment_policy.inherit="all"`,
 wildcard TOML keys). This preserves the bounded process-start policy and does
 not replace the runtime-binding projection.
 
+Codex Herdr observation requires `--sandbox workspace-write` together with
+`--config sandbox_workspace_write.network_access=true` (or an explicitly
+authorized broader envelope). This is a verified technical IPC compatibility
+requirement for a Codex role, including a Supervisor; it does not grant SLP
+authority or turn a governance-only Supervisor into a project writer.
+
 For the active role, run `render-runtime-binding` with `--kind codex` and put
 the emitted fragment in the initial prompt. That Codex adapter fragment renders
 literal native Herdr and helper commands carrying the exact binding. Use those

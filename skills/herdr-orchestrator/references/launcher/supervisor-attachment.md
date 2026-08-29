@@ -15,12 +15,12 @@ fresh Supervisor runtime binding and render the configured adapter's projection 
 it does not enlarge the Supervisor's governance authority or create a lifecycle
 manager.
 
-For current Codex, Herdr socket observation requires the bounded
-`--sandbox workspace-write` plus
-`--config sandbox_workspace_write.network_access=true` envelope. This is a
-technical IPC requirement, not Supervisor authority: the Supervisor remains
-governance-only and must not edit the consumer project. Do not describe this
-technical envelope as filesystem read-only.
+Apply only the selected adapter's verified runtime-compatibility projection.
+Any adapter-specific Herdr IPC or sandbox requirement is technical execution
+context, not Supervisor authority: the Supervisor remains governance-only and
+must not edit the consumer project. See the selected
+`references/harnesses/<kind>-runtime-binding.md`; do not promote one adapter's
+requirements into this generic Supervisor contract.
 
 ```text
 herdr pane split --current --direction <right-or-down> --cwd <root> \

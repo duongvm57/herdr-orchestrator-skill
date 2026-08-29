@@ -1204,77 +1204,17 @@ def _cleanup_eval_owned_panes(project: Path, provisioned_panes: Sequence[str]) -
             print(f"warning: could not close eval-owned pane {pane_id}: {close.stderr.strip()}", file=sys.stderr)
 
 
-def _lead_instruction_package(project: Path, source_skill: Path | None) -> str:
-    """Compose the production Lead inputs from the materialized project contract.
-
-    The live runner is the bounded Launcher for its fresh consumer project.  A
-    project-local skill tree being present is not itself proof that Codex loaded
-    its role profile, so the direct Lead handoff carries the same role/profile,
-    full Workspace Protocol, and configured Peer recipes required by the
-    production task-launch contract.
-    """
-    if source_skill is None:
-        return ""
-    skill_root = project / ".codex/skills/herdr-orchestrator"
-    profile = skill_root / "references/roles/lead.md"
-    protocol = project / "WORKSPACE_PROTOCOL.md"
-    config = project / ".orchestration/herdr-orchestrator.toml"
-    try:
-        peer_recipes = tomllib.loads(config.read_text(encoding="utf-8"))["peer_recipes"]
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, KeyError) as exc:
-        raise EvalError(f"cannot compose configured Peer recipes for Lead delivery: {exc}") from exc
-    if not isinstance(peer_recipes, dict):
-        raise EvalError("cannot compose configured Peer recipes for Lead delivery")
-    try:
-        return (
-            "# Lead role/profile\n\n"
-            + profile.read_text(encoding="utf-8")
-            + "\n# Full Workspace Protocol\n\n"
-            + protocol.read_text(encoding="utf-8")
-            + "\n# Configured Peer recipes\n\n"
-            + json.dumps(peer_recipes, ensure_ascii=False, indent=2, sort_keys=True)
-            + "\n"
-        )
-    except (OSError, UnicodeDecodeError) as exc:
-        raise EvalError(f"cannot compose canonical Lead instruction package: {exc}") from exc
-
-
 def _live_prompt(case: dict[str, Any], project: Path, source_skill: Path | None, supervisor_agents: Sequence[str] = ()) -> str:
     activation = "Activate and follow the installed $herdr-orchestrator skill; " if source_skill is not None else "Use the release-matched installed Herdr skill only; "
-    requires_peers = case["topology"]["minimum_peer_agents"] > 0
-    topology_guidance = ""
-    if case["id"] in {"decomposition-independent", "decomposition-coupled"}:
-        topology_guidance = "For this multi-scope work, record a nonempty topology_rationale based on the observed coupling, dependency, and verification facts. "
-    premise_evidence_guidance = ""
-    if case["id"] in {"peer-invalid-premise-reopen", "peer-valid-premise-control"}:
-        foundation = "foundation-a.json" if case["id"] == "peer-invalid-premise-reopen" else "foundation-b.json"
-        premise_evidence_guidance = f"For this premise-assessment Assignment, require the Peer to include the inspected {foundation} as an absolute evidence_path in its structured handback. "
-    peer_workflow = (
-        "Choose each distinct Peer name before creating its Assignment; it must differ from this Lead. Start from .orchestration/peer-assignment-template.json, replacing its template identities and tailoring its bounded scope to the actual public task before validating it and launching that exact named Peer. In every Assignment, parent.id is this Lead's exact agent name and owner is the exact distinct Peer agent that will receive and own the bounded outcome; owner is never the Lead. An Assignment with a nonempty owned_scope must use authority \"write\". Render the validated Assignment with the installed render-assignment helper and send that rendered Peer instruction directly; do not improvise a Peer prompt. The Peer handback must be a JSON object with exactly assignment_id, outcome, evidence, impact, and need, each a nonempty string; it may additionally include an absolute evidence_path to an inspected project-owned file. Use the canonical semantic outcome from the rendered Peer instruction. Inspect an existing Peer and its handback before action; never create a replacement or same-work Peer merely because lifecycle state is ambiguous. For this bounded run, create the Assignment under evidence/, launch the required named Peer once, have that Peer write a structured handback under evidence/, validate it, then immediately write the evidence index. "
-        if requires_peers
-        else "This case requires zero Peer agents. Complete only the bounded contract or materialization work in the public task; do not create a Peer Assignment, Peer pane, Peer agent, or Peer handback. "
-    )
-    evidence_workflow = (
-        "Its records must use this exact public shape (repeat one object per actual Peer): {\"peer_agents\":[\"<actual-peer>\"],\"supervisor_agents\":[],\"handbacks\":[{\"assignment\":\"evidence/<assignment>.json\",\"handback\":\"evidence/<handback>.json\",\"peer_agent\":\"<actual-peer>\"}],\"dispatches\":[{\"assignment\":\"evidence/<assignment>.json\",\"assignment_sha256\":\"<actual-sha256>\",\"peer_agent\":\"<actual-peer>\"}]}. Before writing each dispatch, calculate assignment_sha256 from the final Assignment file bytes with sha256sum; do not reuse a digest from before that file changed. "
-        if requires_peers
-        else "Use empty peer_agents, handbacks, and dispatches arrays in the evidence index unless the configured topology requires a Supervisor. "
-    )
     return (
-        _lead_instruction_package(project, source_skill)
-        + "\n# Bounded live evaluation mandate\n\n"
+        "# Bounded live evaluation mandate\n\n"
         + "You are the already-spawned Project Lead for a bounded repeatable live evaluation in a fresh consumer project. The harness already materialized the skills and validated the project preflight. Do not take a Launcher/setup route, repeat setup, or create another Lead or Supervisor. "
         + activation + "do not read any source repository outside this project. "
         + f"Public task: {case['task']}\n"
         + (f"Human-attached Supervisor agent(s) for this public task: {', '.join(supervisor_agents)}.\n" if supervisor_agents else "")
         + "Any dynamically created Peer must use the installed orchestration contract's exact bound Lead pane as the native split target, then derive its binding from the exact pane ID returned by Herdr. Pass only the rendered project/helper/peer-role pane context; do not override a harness profile home, copy credentials, or prepare login. Do not set HERDR_ENV, HERDR_SOCKET_PATH, HERDR_PANE_ID, HERDR_TAB_ID, or HERDR_WORKSPACE_ID. "
-        + "Use the installed skill and public workspace protocol to perform the task while respecting the configured topology. Runner preflight is already complete: do not reread setup documentation. "
-        + peer_workflow
-        + ("Do not perform unrelated implementation or further investigation after the handback is available. " if requires_peers else "Do not perform unrelated implementation or further investigation after completing the public contract work. ")
-        + ("Complete only the first bounded Peer Assignment now; do not issue its successor until a later Human follow-up. " if case["workflow"] == "correlate-follow-up" else "")
-        + topology_guidance
-        + premise_evidence_guidance
-        + "Use .orchestration/evaluation-evidence-template.json as the public schema for ./evaluation-evidence.json at the consumer-project root; do not place that index under evidence/. The index root is one JSON object, never a JSON list. Before your turn settles, populate it with every actual Peer and Supervisor name used. Never list this Lead in peer_agents or supervisor_agents. "
-        + evidence_workflow
+        + "Use the installed skill and public workspace protocol to perform the public task. Runner preflight is already complete: do not reread setup documentation or perform unrelated work. "
+        + "Use .orchestration/evaluation-evidence-template.json as the public schema for ./evaluation-evidence.json at the consumer-project root. Before your turn settles, index the actual task artifacts and every actual Peer and Supervisor used; do not invent participants or artifact records. "
         + "Do not write an answer key, eval ID, invariant list, grader rubric, or claimed pass/fail result. Then reply with one short sentence naming the evidence file."
     )
 

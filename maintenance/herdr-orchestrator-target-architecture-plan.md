@@ -1090,8 +1090,27 @@ It is not required that each concept = one file/class. Prefer the smallest cohes
 ### Other scripts
 
 - [x] Audit `herdr_balanced_split.py`; delete it if the official Herdr skill has fully replaced its responsibility.
-- [x] Keep `herdr_harnesses/**` only for model/recipe/config discovery-validation.
+- [x] Keep `herdr_harnesses/**` primarily for model/recipe/config discovery-validation. Following the accepted §1.3 live-evidence gate, it may also contain a verified harness-specific runtime-compatibility projection; that projection carries execution facts only and does not own orchestration lifecycle.
 - [x] Harness adapter must not start/manage persistent process/session outside Herdr.
+
+### Accepted evidence-triggered compatibility deviations
+
+The following narrow deviations were Human-accepted after observed live
+failures. They are not a general runtime/control-plane design and must not be
+extended without new §1.3 evidence:
+
+- `start-peer` is the canonical safe-invocation exception for a configured Peer
+  recipe after a live argv-fidelity failure. It validates and passes one native
+  `herdr agent start` argv unchanged; it does not own pane creation, wait,
+  read, session identity, or lifecycle.
+- A runtime binding carries one role's already-observed execution context and
+  pane identity when a harness loses ambient Herdr/helper context in native
+  subprocesses. It is not a registry, control plane, authority source, or
+  lifecycle manager.
+- A selected adapter may render the binding only when that harness-specific
+  compatibility requirement has been verified. The generic role contract
+  references the adapter requirement rather than duplicating a Codex sandbox or
+  IPC detail.
 
 ### Context-budget / coverage migration after retiring `pack`
 
@@ -1420,7 +1439,7 @@ At minimum, add the following cases, reusing existing scenario/invariant setup i
 | `scripts/herdr_runtime.py` | **Delete in Phase 1 immediately after official-path focused smoke** | Do not let an alternate generic runtime seam exist through Phase 2–4 |
 | `scripts/herdr_balanced_split.py` | **Audit; likely delete** | Generic pane balancing belongs to official Herdr operation knowledge |
 | `scripts/herdr_orchestrator.py` | **Heavily simplify in place** | Keep project/config/model semantic helpers; delete run/pack/deliver/lifecycle duplication |
-| `scripts/herdr_harnesses/**` | **Keep + narrow** | Provider/model/capability discovery only |
+| `scripts/herdr_harnesses/**` | **Keep + narrow** | Provider/model/capability discovery, plus a verified harness-specific runtime-compatibility projection only when the §1.3 evidence gate has triggered |
 | `scripts/context_budget.py` | **Modify** | Remove `pack` renderer assumptions; measure canonical Assignment/prompt renderer |
 | `tests/test_context_budget.py` | **Modify** | Remove parity with retired `pack`; test canonical renderer |
 | `scripts/render_coverage.py` | **Modify if selectors reference retired routes** | Remove run/pack/deliver/ledger coverage selectors |
