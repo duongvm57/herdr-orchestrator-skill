@@ -5,7 +5,7 @@
     "setup_launcher": {"files": ["skills/herdr-orchestrator/SKILL.md", "skills/herdr-orchestrator/references/launcher/setup.md", "skills/herdr-orchestrator/references/launcher/workspace-protocol-authoring.md", "skills/herdr-orchestrator/assets/config.toml", "skills/herdr-orchestrator/assets/workspace-protocol-template.md"], "hard_limit": 3500, "baseline": 3300},
     "task_launcher": {"files": ["skills/herdr-orchestrator/SKILL.md", "skills/herdr-orchestrator/references/launcher/preflight.md", "skills/herdr-orchestrator/references/launcher/task-launch.md"], "hard_limit": 4500, "baseline": 2500},
     "supervisor_attachment": {"files": ["skills/herdr-orchestrator/SKILL.md", "skills/herdr-orchestrator/references/launcher/preflight.md", "skills/herdr-orchestrator/references/launcher/supervisor-attachment.md"], "hard_limit": 3500, "baseline": 2200},
-    "lead_profile": {"files": ["skills/herdr-orchestrator/references/roles/lead.md"], "hard_limit": 900, "baseline": 700},
+    "lead_profile": {"files": ["skills/herdr-orchestrator/references/roles/lead.md"], "hard_limit": 900, "baseline": 830},
     "peer_profile": {"files": ["skills/herdr-orchestrator/references/roles/peer.md"], "hard_limit": 650, "baseline": 500},
     "supervisor_profile": {"files": ["skills/herdr-orchestrator/references/roles/supervisor.md"], "hard_limit": 650, "baseline": 500}
   }

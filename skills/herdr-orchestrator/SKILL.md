@@ -44,8 +44,11 @@ injects it. Use `herdr --skill` only to verify or install the matching copy,
 not as a generic prompt appendix. A harness that cannot install it may use a
 documented compatibility fallback with one fresh injected copy. It owns
 generic pane, agent start, prompt, wait, read, IDs, and focus-preservation
-mechanics. Do not reproduce those recipes in this skill or call a repository
-runtime wrapper.
+mechanics. Do not reproduce generic recipes in this skill or call a repository
+runtime wrapper. The only helper exceptions are `start-peer` (one validated
+Peer recipe, unchanged to `herdr agent start`) and `submit-prompt` (one
+already-composed prompt file, direct argv to Herdr). Neither owns pane, wait,
+read, state, identity, or lifecycle policy.
 
 This skill owns SLP policy only: Role Profile, Workspace Protocol, Assignment,
 authority, ownership, candidate, handback, and acceptance. Use configured

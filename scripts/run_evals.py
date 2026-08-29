@@ -34,7 +34,26 @@ SUITES = {"install-materialization", "regression-orchestration", "contract-evide
 CASE_MODES = {"deterministic", "live", "dry-run"}
 WORKFLOWS = {"single-turn", "correlate-follow-up"}
 EVAL_MODEL = "gpt-5.6-luna"
-EVAL_AGENT_ARGS = ("--model", EVAL_MODEL, "--config", "sandbox_workspace_write.network_access=true", "--ask-for-approval", "never")
+EVAL_AGENT_ARGS = ("--model", EVAL_MODEL, "--sandbox", "workspace-write", "--config", "sandbox_workspace_write.network_access=true", "--ask-for-approval", "never")
+CODEX_ROLE_ENVIRONMENT_ARGS = (
+    "--config", 'shell_environment_policy.inherit="all"',
+    "--config", "shell_environment_policy.ignore_default_excludes=false",
+    "--config", "allow_login_shell=false",
+    "--config", 'shell_environment_policy.filters.HOME="include"',
+    "--config", 'shell_environment_policy.filters.CODEX_HOME="include"',
+    "--config", 'shell_environment_policy.filters.PATH="include"',
+    "--config", 'shell_environment_policy.filters.SHELL="include"',
+    "--config", 'shell_environment_policy.filters.USER="include"',
+    "--config", 'shell_environment_policy.filters.LOGNAME="include"',
+    "--config", 'shell_environment_policy.filters.PWD="include"',
+    "--config", 'shell_environment_policy.filters.TERM="include"',
+    "--config", 'shell_environment_policy.filters.TMPDIR="include"',
+    "--config", 'shell_environment_policy.filters.LANG="include"',
+    "--config", 'shell_environment_policy.filters."LC_*"="include"',
+    "--config", 'shell_environment_policy.filters.XDG_RUNTIME_DIR="include"',
+    "--config", 'shell_environment_policy.filters."HERDR_*"="include"',
+    "--config", 'shell_environment_policy.filters."HERDR_ORCHESTRATOR_*"="include"',
+)
 SLUG_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
 SEMANTIC_OUTCOMES = {"COMPLETE", "REOPEN_REQUEST", "DEPENDENCY_REQUEST", "BLOCKED"}
 PRIVATE_HOME_PREFIX = "home-"
@@ -444,7 +463,26 @@ def _isolated_codex_config(agent: dict[str, str], project: Path) -> str:
     """Return the minimal, reproducible Codex config used by live eval agents."""
     return (
         f"model = {json.dumps(agent['model'])}\n"
-        "model_reasoning_effort = \"low\"\n\n"
+        "model_reasoning_effort = \"low\"\n"
+        "allow_login_shell = false\n\n"
+        "[shell_environment_policy]\n"
+        "inherit = \"all\"\n"
+        "ignore_default_excludes = false\n\n"
+        "[shell_environment_policy.filters]\n"
+        "HOME = \"include\"\n"
+        "CODEX_HOME = \"include\"\n"
+        "PATH = \"include\"\n"
+        "SHELL = \"include\"\n"
+        "USER = \"include\"\n"
+        "LOGNAME = \"include\"\n"
+        "PWD = \"include\"\n"
+        "TERM = \"include\"\n"
+        "TMPDIR = \"include\"\n"
+        "LANG = \"include\"\n"
+        "\"LC_*\" = \"include\"\n"
+        "XDG_RUNTIME_DIR = \"include\"\n"
+        "\"HERDR_*\" = \"include\"\n"
+        "\"HERDR_ORCHESTRATOR_*\" = \"include\"\n\n"
         f"[projects.{json.dumps(str(project))}]\ntrust_level = \"trusted\"\n"
     )
 
@@ -479,23 +517,20 @@ def _prepare_fixture(seed: Path, project: Path) -> None:
         raise EvalError("fixture must include WORKSPACE_PROTOCOL.md")
     orchestration = project / ".orchestration"
     orchestration.mkdir()
+    role_args = [
+        "--model", EVAL_MODEL, "--sandbox", "workspace-write",
+        "--config", "sandbox_workspace_write.network_access=true",
+        *CODEX_ROLE_ENVIRONMENT_ARGS, "--ask-for-approval", "never",
+    ]
     (orchestration / "herdr-orchestrator.toml").write_text(
-        """version = 3
-fallback_peer_recipe = "eval-peer"
-
-[roles.lead]
-kind = "codex"
-args = ["--model", "gpt-5.6-luna", "--config", "sandbox_workspace_write.network_access=true", "--ask-for-approval", "never"]
-
-[roles.supervisor]
-kind = "codex"
-args = ["--model", "gpt-5.6-luna", "--config", "sandbox_workspace_write.network_access=true", "--ask-for-approval", "never"]
-
-[peer_recipes.eval-peer]
-description = "Bounded Luna Peer for isolated evaluation work."
-kind = "codex"
-args = ["--model", "gpt-5.6-luna", "--config", "sandbox_workspace_write.network_access=true", "--ask-for-approval", "never"]
-""",
+        "\n".join([
+            "version = 3", 'fallback_peer_recipe = "eval-peer"',
+            "", "[roles.lead]", 'kind = "codex"', f"args = {json.dumps(role_args)}",
+            "", "[roles.supervisor]", 'kind = "codex"', f"args = {json.dumps(role_args)}",
+            "", "[peer_recipes.eval-peer]",
+            'description = "Bounded Luna Peer for isolated evaluation work."',
+            'kind = "codex"', f"args = {json.dumps(role_args)}", "",
+        ]),
         encoding="utf-8",
     )
     labels = (
@@ -513,7 +548,7 @@ args = ["--model", "gpt-5.6-luna", "--config", "sandbox_workspace_write.network_
         ("Recipe reuse or mixing across dynamically created Peers", "allowed for bounded independent work"), ("Specialized miss, configured fallback recipe, and out-of-envelope escalation", "use eval-peer or stop"),
         ("Fresh Architect required when", "architecture changes"), ("Fresh Reviewer required when", "candidate review"), ("Sealed council allowed when", "never"), ("Same-Engineer correction rule", "return bounded correction to same Engineer"),
         ("One writer per moving scope", "validate before writer dispatch"), ("Worktree rules for concurrent writers", "disjoint scopes only"), ("Exclusive resources", "none"), ("Handback and integration owner", "assigned Peer handback to Lead"),
-        ("Allowed identity forms (commit or deterministic base/diff/artifact digest)", "exact commit or frozen snapshot"), ("Candidate freeze and replacement rules", "replacement needs fresh review"),
+        ("Allowed identity forms (Git commit or Git tree with exact base commit)", "exact commit or immutable Git tree"), ("Candidate freeze and replacement rules", "replacement needs fresh review"),
         ("Checks by task class", "validate exact Assignment and handback"), ("Independent falsification expectations", "fresh Reviewer when required"), ("Subjective/Human evidence", "escalate"), ("Minimum evidence required for Lead verdict", "validated handback"), ("Residual risk reporting", "record bounded risk"),
         ("`REOPEN_REQUEST` for failed foundations or premises", "route to Lead"), ("`DEPENDENCY_REQUEST` for another owner, API, scope, or prerequisite", "route to Lead"), ("`BLOCKED` for missing authority, external state, or Human decision", "route to Human"),
         ("Signal, evidence, suspected mechanism, open question, allowed response", "inspect before action"), ("Supervisor observation retention/export policy", "task-owned bounded artifact"), ("Supervisor project-read/notebook-write boundary", "read project, write only routing artifact"), ("Repeated-failure prerequisite check", "stop and report"),
@@ -655,12 +690,18 @@ def _run_deterministic(case: dict[str, Any], project: Path, home: Path, installa
         _write_eval_json(project / "evidence/independent-a.json", _deterministic_assignment("deterministic:independent-a", "peer-a", ["path:src/alpha.txt"]))
         _write_eval_json(project / "evidence/independent-b.json", _deterministic_assignment("deterministic:independent-b", "peer-b", ["path:src/beta.txt"]))
     elif case_id == "candidate-binding-contract":
-        base = _git_revision(project)
-        stale_artifact, current_artifact = project / "evidence/stale-snapshot.json", project / "evidence/current-snapshot.json"
-        _write_eval_json(stale_artifact, {"snapshot": "stale"})
-        _write_eval_json(current_artifact, {"snapshot": "current"})
-        stale = {"kind": "frozen_snapshot", "base_commit": base, "artifact_path": "evidence/stale-snapshot.json", "sha256": _sha256(stale_artifact.read_bytes())}
-        current = {"kind": "frozen_snapshot", "base_commit": base, "artifact_path": "evidence/current-snapshot.json", "sha256": _sha256(current_artifact.read_bytes())}
+        helper = project / ".codex/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
+        if not helper.is_file():
+            raise EvalError("materialized candidate helper is unavailable for deterministic grading")
+        first_freeze = _command([sys.executable, str(helper), "freeze-candidate", "--project-root", str(project)], cwd=project, timeout=30)
+        if first_freeze.returncode:
+            raise EvalError(f"could not freeze deterministic stale candidate: {first_freeze.stderr.strip()}")
+        stale = json.loads(first_freeze.stdout)["candidate"]
+        (project / "candidate-current.txt").write_text("new immutable candidate tree\n", encoding="utf-8")
+        current_freeze = _command([sys.executable, str(helper), "freeze-candidate", "--project-root", str(project)], cwd=project, timeout=30)
+        if current_freeze.returncode:
+            raise EvalError(f"could not freeze deterministic current candidate: {current_freeze.stderr.strip()}")
+        current = json.loads(current_freeze.stdout)["candidate"]
         _write_eval_json(project / "evidence/stale-review.json", _deterministic_assignment("deterministic:stale-review", "reviewer-a", [], authority="read-only", disposition="Reviewer", candidate=stale))
         _write_eval_json(project / "evidence/current-candidate.json", current)
         _write_eval_json(project / "evidence/matching-candidate.json", stale)
@@ -1225,7 +1266,7 @@ def _live_prompt(case: dict[str, Any], project: Path, source_skill: Path | None,
         + activation + "do not read any source repository outside this project. "
         + f"Public task: {case['task']}\n"
         + (f"Human-attached Supervisor agent(s) for this public task: {', '.join(supervisor_agents)}.\n" if supervisor_agents else "")
-        + "Any dynamically created Peer must retain this Lead's fresh HOME and CODEX_HOME environment when its official Herdr pane is created: pass HOME=$HOME and CODEX_HOME=$CODEX_HOME as pane-split environment values, then verify the Peer did not fall back to host user state. "
+        + "Any dynamically created Peer must use the installed orchestration contract's exact bound Lead pane as the native split target, then derive its binding from the exact pane ID returned by Herdr. Pass only the rendered project/helper/peer-role pane context; do not override a harness profile home, copy credentials, or prepare login. Do not set HERDR_ENV, HERDR_SOCKET_PATH, HERDR_PANE_ID, HERDR_TAB_ID, or HERDR_WORKSPACE_ID. "
         + "Use the installed skill and public workspace protocol to perform the task while respecting the configured topology. Runner preflight is already complete: do not reread setup documentation. "
         + peer_workflow
         + ("Do not perform unrelated implementation or further investigation after the handback is available. " if requires_peers else "Do not perform unrelated implementation or further investigation after completing the public contract work. ")

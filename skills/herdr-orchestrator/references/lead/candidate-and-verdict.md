@@ -1,25 +1,32 @@
 # Candidate, review, and verdict
 
-## Freeze an exact candidate
+## Freeze and inspect the exact candidate
 
-Prefer an exact Git commit when authority permits. Otherwise use an explicitly
-frozen reproducible snapshot covering the accepted base, diff, untracked
-artifacts, and generated artifacts. A digest of a mutable worktree, file list,
-or working-tree description is not an identity. Freeze the candidate during
-verification and review; every candidate mutation creates a new identity and
-invalidates earlier verification and review.
+Do not hand-construct a candidate identity and never use a working-tree hash,
+`git diff` digest, file-hash list, or mutable path as one. Freeze the current
+application artifact with the canonical helper:
 
-The canonical snapshot document has `kind=frozen_snapshot`, an existing exact
-`base_commit`, a canonical repository-relative `artifact_path`, and the
-lowercase SHA-256 digest of that frozen artifact. The artifact is a materialized
-bundle/manifest of the base, diff, untracked, and generated inputs—not a digest
-of the mutable worktree. Before review, resolve it under the canonical project
-root, read it, verify its digest, and verify the base commit exists. A Git
-candidate uses `kind=git_commit` and an existing exact commit.
+```text
+python3 "$HERDR_ORCHESTRATOR_HELPER" freeze-candidate --project-root <root>
+python3 "$HERDR_ORCHESTRATOR_HELPER" inspect-candidate --project-root <root>
+```
 
-The Engineer proves writes. A fresh Reviewer falsifies the exact candidate when
-the protocol or risk requires independence. Verification demonstrates observed
-behavior; it does not accept the candidate.
+`freeze-candidate` writes `.orchestration/current-candidate.json`. Its identity
+is an immutable Git tree plus the exact base commit; it uses a temporary Git
+index and the candidate-owned `.orchestration/candidate-objects` Git object
+directory. The real repository object directory is a read-only Git alternate:
+new blobs and trees never require a write to `.git`. Every helper candidate
+operation resolves through that same object-store environment. It never moves
+`HEAD`, never stages the user's index, and restores known project-control paths
+to their base state. The document records the bounded application scope and
+exclusions. `inspect-candidate` writes a bounded exact base-to-tree diff control
+artifact with its digest; inspect that artifact before verification, review, or
+verdict. Missing or corrupt candidate object storage is a clear
+candidate failure, never permission to inspect mutable worktree state. Any
+application mutation requires a new freeze and invalidates earlier verification
+and review.
+Project-control paths, including `skills-lock.json`, are excluded, so creating
+candidate or acceptance evidence does not itself stale the application tree.
 
 ## Decide with the owning authority
 
@@ -28,6 +35,50 @@ independent findings, unresolved issues, residual risk, and applicable authority
 before issuing the project verdict. Missing or stale evidence keeps the decision
 open. Correctable findings return to the same Engineer before a new candidate is
 reviewed.
+
+After inspecting the frozen candidate, run actual candidate-bound verification
+and write `.orchestration/current-acceptance.json` with exactly these fields:
+`schema_version`, `candidate`, `candidate_document_sha256`, `lead`,
+`inspection`, `verification`, `unresolved_findings`, `residual_risk`, and
+`review`. `inspection` and each nonempty `verification` item contain the exact
+candidate, command, and observed result. `unresolved_findings` may be empty but
+must be deliberately surfaced; `residual_risk` is always nonempty. `lead` is
+the exact Lead identity with role `lead`.
+
+`review.decision` is exactly `required` or `not_required`. The latter requires
+a nonempty risk/protocol rationale. Required review adds project-relative
+`assignment_path` and `handback_path`; the read-only Reviewer Assignment must
+bind the exact candidate and its accepted semantic handback must be `COMPLETE`.
+Reviewer remains conditional: obtain independent review only when
+the applicable protocol or risk requires it.
+
+The no-review form is:
+
+```json
+{
+  "schema_version": 1,
+  "candidate": {"kind": "git_tree", "base_commit": "<SHA>", "tree": "<SHA>"},
+  "candidate_document_sha256": "<SHA-256>",
+  "lead": {"role": "lead", "id": "<Lead>"},
+  "inspection": {"candidate": {"kind": "git_tree", "base_commit": "<SHA>", "tree": "<SHA>"}, "command": "<command>", "result": "<result>"},
+  "verification": [{"candidate": {"kind": "git_tree", "base_commit": "<SHA>", "tree": "<SHA>"}, "command": "<command>", "result": "<result>"}],
+  "unresolved_findings": [],
+  "residual_risk": "<risk>",
+  "review": {"decision": "not_required", "rationale": "<protocol/risk rationale>"}
+}
+```
+
+Before a Human-facing verdict, run:
+
+```text
+python3 "$HERDR_ORCHESTRATOR_HELPER" validate-acceptance --project-root <root> \
+  --lead-id <exact-lead-name>
+```
+
+An acceptance or Human-facing final verdict is prohibited until this validator
+passes. It checks mechanical evidence; the Lead still decides project
+acceptance. Passing tests does
+not create a candidate or permit a verdict.
 
 Product, portfolio, irreversible, external-effect, publication, material-cost,
 and protocol-change decisions remain Human-owned. A Supervisor recommendation

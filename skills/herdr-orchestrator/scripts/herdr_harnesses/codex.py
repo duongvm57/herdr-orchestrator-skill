@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from typing import Any
 
 from .base import (
@@ -11,12 +12,41 @@ from .base import (
     EvidenceRootRule,
     HarnessAdapter,
     HarnessError,
+    RuntimeBinding,
     catalog_model_id,
     choices,
     decode_catalog,
     validate_absolute_directory,
     validate_model,
 )
+
+
+ROLE_ENVIRONMENT_FILTERS = frozenset({
+    "HOME",
+    "CODEX_HOME",
+    "PATH",
+    "SHELL",
+    "USER",
+    "LOGNAME",
+    "PWD",
+    "TERM",
+    "TMPDIR",
+    "LANG",
+    '"LC_*"',
+    "XDG_RUNTIME_DIR",
+    '"HERDR_*"',
+    '"HERDR_ORCHESTRATOR_*"',
+})
+
+ROLE_ENVIRONMENT_CONFIG = {
+    "shell_environment_policy.inherit": '"all"',
+    "shell_environment_policy.ignore_default_excludes": "false",
+    "allow_login_shell": "false",
+    **{
+        f"shell_environment_policy.filters.{key}": '"include"'
+        for key in ROLE_ENVIRONMENT_FILTERS
+    },
+}
 
 
 def validate_config(value: str, location: str) -> None:
@@ -41,9 +71,70 @@ def validate_config(value: str, location: str) -> None:
         },
         "service_tier": {"priority", '"priority"'},
         "agents.enabled": {"false"},
+        "shell_environment_policy.inherit": {'"all"'},
+        "shell_environment_policy.ignore_default_excludes": {"false"},
+        "allow_login_shell": {"false"},
     }
+    allowed_values.update({
+        f"shell_environment_policy.filters.{key}": {'"include"'}
+        for key in ROLE_ENVIRONMENT_FILTERS
+    })
     if key not in allowed_values or configured not in allowed_values[key]:
         raise HarnessError(f"{location} uses an unsupported Codex configuration override")
+
+
+def validate_role_environment(args: list[str], location: str) -> None:
+    """Require Codex's observed native subprocess compatibility policy."""
+    configured = {
+        args[index + 1].split("=", 1)[0]: args[index + 1].split("=", 1)[1]
+        for index in range(len(args) - 1)
+        if args[index] == "--config" and "=" in args[index + 1]
+    }
+    missing = [
+        f"{key}={value}"
+        for key, value in ROLE_ENVIRONMENT_CONFIG.items()
+        if configured.get(key) != value
+    ]
+    if missing:
+        raise HarnessError(
+            f"{location} Codex requires the explicit role subprocess environment policy: "
+            + ", ".join(missing)
+        )
+
+
+def render_runtime_binding(binding: RuntimeBinding) -> str:
+    """Render literal native commands because Codex subprocesses drop ambient role env."""
+    environment = (
+        ("HERDR_ENV", "1"),
+        ("HERDR_SOCKET_PATH", str(binding.herdr_socket_endpoint)),
+        ("HERDR_ORCHESTRATOR_PANE_ID", binding.herdr_pane_id),
+        ("HERDR_ORCHESTRATOR_PROJECT_ROOT", str(binding.project_root)),
+        ("HERDR_ORCHESTRATOR_HELPER", str(binding.helper)),
+        ("HERDR_ORCHESTRATOR_ROLE", binding.role),
+    )
+    prefix = "env " + " ".join(
+        f"{key}={shlex.quote(value)}" for key, value in environment
+    )
+    return "\n".join((
+        "## Codex native runtime binding",
+        "",
+        "Codex tool subprocesses cannot rely on inherited role environment. "
+        "For every native Herdr or helper operation, use the applicable literal "
+        "command form below; never replace it with bare `herdr` or a bare helper path.",
+        "",
+        f"- Native Herdr: `{prefix} {shlex.quote(str(binding.herdr_executable))} <native-herdr-args...>`",
+        f"- Canonical helper: `{prefix} python3 {shlex.quote(str(binding.helper))} <helper-command-and-args...>`",
+        "",
+        "These commands carry runtime facts only. They do not change the configured "
+        "recipe, Assignment authority, role topology, or lifecycle ownership.",
+    )) + "\n"
+
+
+def project_pane_environment(
+    binding: RuntimeBinding,
+) -> tuple[tuple[str, str], ...]:
+    """Preserve the user's normal Codex profile for every role process."""
+    return ()
 
 
 def project_catalog(raw: bytes, label: str) -> list[dict[str, Any]]:
@@ -131,10 +222,14 @@ def validate_control_plane(args: list[str], location: str) -> None:
             configs.add(value)
     if sandbox == "danger-full-access":
         return
-    if "sandbox_workspace_write.network_access=true" not in configs:
+    if (
+        sandbox != "workspace-write"
+        or "sandbox_workspace_write.network_access=true" not in configs
+    ):
         raise HarnessError(
-            f"{location} Codex cannot reach the Herdr control socket unless its "
-            "native sandbox grants network access"
+            f"{location} Codex requires --sandbox workspace-write with "
+            "sandbox_workspace_write.network_access=true to reach the Herdr "
+            "control socket"
         )
 
 
@@ -165,5 +260,8 @@ ADAPTER = HarnessAdapter(
         mode_option="--sandbox",
         restricted_modes=frozenset({"workspace-write"}),
     ),
+    argument_set_validator=validate_role_environment,
     control_plane_validator=validate_control_plane,
+    runtime_binding_renderer=render_runtime_binding,
+    pane_environment_projector=project_pane_environment,
 )

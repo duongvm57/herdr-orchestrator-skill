@@ -58,7 +58,7 @@
 
 ## 8. Stable candidates
 
-- Allowed identity forms (commit or deterministic base/diff/artifact digest):
+- Allowed identity forms (Git commit or Git tree with exact base commit):
 - Candidate freeze and replacement rules:
 
 ## 9. Verification and acceptance evidence

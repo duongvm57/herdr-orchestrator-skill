@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import hashlib
 import subprocess
 import sys
 import tempfile
@@ -255,52 +254,21 @@ class AssignmentContractTests(unittest.TestCase):
             self.assertEqual(stale.returncode, 2)
             self.assertIn("Git commit must exist", stale.stderr)
 
-    def test_review_accepts_an_existing_frozen_snapshot(self) -> None:
+    def test_review_rejects_mutable_diff_digest_as_candidate_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            repository, commit = self.git_repository(root)
-            snapshot = repository / "candidate.snapshot"
-            snapshot.write_bytes(b"frozen base, diff, untracked, and generated artifacts\n")
-            path = root / "review.json"
-            path.write_text(json.dumps(assignment_document(candidate={
-                "kind": "frozen_snapshot", "base_commit": commit, "artifact_path": "candidate.snapshot",
-                "sha256": hashlib.sha256(snapshot.read_bytes()).hexdigest(),
-            })), encoding="utf-8")
-
-            current = root / "current.json"
-            current.write_text(json.dumps({
-                "kind": "frozen_snapshot", "base_commit": commit, "artifact_path": "candidate.snapshot",
-                "sha256": hashlib.sha256(snapshot.read_bytes()).hexdigest(),
-            }), encoding="utf-8")
-            completed = self.run_cli("validate-review", "--assignment", str(path), "--current-candidate", str(current), "--project-root", str(repository))
-
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertTrue(json.loads(completed.stdout)["review_applicable"])
-            snapshot.write_text("mutated\n", encoding="utf-8")
-            corrupted = self.run_cli("validate-review", "--assignment", str(path), "--current-candidate", str(current), "--project-root", str(repository))
-            self.assertEqual(corrupted.returncode, 2)
-            self.assertIn("digest does not match", corrupted.stderr)
-
-    def test_review_rejects_a_different_snapshot_from_the_same_base_commit(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            repository, commit = self.git_repository(root)
-            first, second = repository / "first.snapshot", repository / "second.snapshot"
-            first.write_bytes(b"first frozen candidate\n")
-            second.write_bytes(b"second frozen candidate\n")
+            repository, _ = self.git_repository(root)
             assignment = root / "review.json"
             assignment.write_text(json.dumps(assignment_document(candidate={
-                "kind": "frozen_snapshot", "base_commit": commit, "artifact_path": "first.snapshot",
-                "sha256": hashlib.sha256(first.read_bytes()).hexdigest(),
+                "kind": "working_tree_diff", "sha256": "a" * 64,
             })), encoding="utf-8")
             current = root / "current.json"
-            current.write_text(json.dumps({
-                "kind": "frozen_snapshot", "base_commit": commit, "artifact_path": "second.snapshot",
-                "sha256": hashlib.sha256(second.read_bytes()).hexdigest(),
-            }), encoding="utf-8")
+            current.write_text(json.dumps({"kind": "working_tree_diff", "sha256": "a" * 64}), encoding="utf-8")
+
             completed = self.run_cli("validate-review", "--assignment", str(assignment), "--current-candidate", str(current), "--project-root", str(repository))
+
             self.assertEqual(completed.returncode, 2)
-            self.assertIn("review candidate is stale", completed.stderr)
+            self.assertIn("git_commit or git_tree", completed.stderr)
 
     def test_matching_handback_is_semantic_completion_and_reads_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
