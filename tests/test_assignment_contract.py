@@ -19,6 +19,8 @@ def assignment_document(**changes: object) -> dict[str, object]:
         "role": "peer",
         "parent": {"role": "lead", "id": "lead-01"},
         "owner": "peer-01",
+        "project_root": "/tmp",
+        "worktree": None,
         "objective": "Review the exact candidate without modifying it.",
         "owned_scope": [],
         "exclusions": ["Do not change project files."],
@@ -71,6 +73,7 @@ class AssignmentContractTests(unittest.TestCase):
             self.assertEqual(result["assignment_id"], "lead-01:peer-01")
             self.assertEqual(result["parent"], {"role": "lead", "id": "lead-01"})
             self.assertEqual(result["owner"], "peer-01")
+            self.assertEqual(result["project_root"], "/tmp")
             self.assertEqual(result["disposition"], "Reviewer")
             self.assertEqual(result["recipe"], "review")
             self.assertEqual(result["languages"], {"artifact": "English", "live": "Vietnamese"})
@@ -235,6 +238,120 @@ class AssignmentContractTests(unittest.TestCase):
 
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(json.loads(completed.stdout)["writer_assignment_ids"], ["lead-01:peer-01"])
+
+    def test_concurrent_writers_require_distinct_project_root_worktrees(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            integration_root, _ = self.git_repository(root)
+            first = root / "first.json"
+            second = root / "second.json"
+            first.write_text(json.dumps(assignment_document(
+                authority="write", owned_scope=["path:src/api"], disposition="Engineer", recipe="engineer",
+                project_root=str(integration_root),
+            )), encoding="utf-8")
+            second.write_text(json.dumps(assignment_document(
+                assignment_id="lead-01:peer-02", authority="write", owned_scope=["path:src/ui"],
+                disposition="Engineer", recipe="engineer", project_root=str(integration_root),
+            )), encoding="utf-8")
+
+            shared = self.run_cli("validate-delegation", "--assignment", str(first), "--assignment", str(second))
+
+            self.assertEqual(shared.returncode, 2)
+            self.assertIn("require distinct project_root worktrees", shared.stderr)
+
+            first_root, second_root = root / "first-worktree", root / "second-worktree"
+            for branch, checkout in (("writer-first", first_root), ("writer-second", second_root)):
+                subprocess.run(
+                    ("git", "-C", str(integration_root), "worktree", "add", "-q", "-b", branch, str(checkout), "HEAD"),
+                    check=True, capture_output=True, text=True,
+                )
+            worktree_list = root / "herdr-worktree-list.json"
+            worktree_list.write_text(json.dumps({
+                "result": {
+                    "type": "worktree_list",
+                    "source": {"repo_root": str(integration_root)},
+                    "worktrees": [
+                        {"path": str(first_root), "open_workspace_id": "wA"},
+                        {"path": str(second_root), "open_workspace_id": "wB"},
+                    ],
+                },
+            }), encoding="utf-8")
+            first.write_text(json.dumps(assignment_document(
+                authority="write", owned_scope=["path:src/api"], disposition="Engineer", recipe="engineer",
+                project_root=str(first_root),
+            )), encoding="utf-8")
+            second.write_text(json.dumps(assignment_document(
+                assignment_id="lead-01:peer-02", authority="write", owned_scope=["path:src/ui"],
+                disposition="Engineer", recipe="engineer", project_root=str(second_root),
+            )), encoding="utf-8")
+
+            missing_allocation = self.run_cli("validate-delegation", "--assignment", str(first), "--assignment", str(second), "--worktree-list", str(worktree_list))
+
+            self.assertEqual(missing_allocation.returncode, 2)
+            self.assertIn("requires Herdr worktree allocation metadata; dispatch is blocked", missing_allocation.stderr)
+
+            allocation = {"kind": "herdr_worktree", "source_project_root": str(integration_root)}
+            first.write_text(json.dumps(assignment_document(
+                authority="write", owned_scope=["path:src/api"], disposition="Engineer", recipe="engineer",
+                project_root=str(first_root), worktree={**allocation, "workspace_id": "wA"},
+            )), encoding="utf-8")
+            isolated = self.run_cli("validate-delegation", "--assignment", str(first), "--assignment", str(second), "--worktree-list", str(worktree_list))
+
+            self.assertEqual(isolated.returncode, 2)
+            self.assertIn("requires Herdr worktree allocation metadata; dispatch is blocked", isolated.stderr)
+
+            second.write_text(json.dumps(assignment_document(
+                assignment_id="lead-01:peer-02", authority="write", owned_scope=["path:src/ui"],
+                disposition="Engineer", recipe="engineer", project_root=str(second_root),
+                worktree={**allocation, "workspace_id": "wB"},
+            )), encoding="utf-8")
+
+            uncaptured = self.run_cli("validate-delegation", "--assignment", str(first), "--assignment", str(second))
+
+            self.assertEqual(uncaptured.returncode, 2)
+            self.assertIn("requires captured Herdr worktree list evidence; dispatch is blocked", uncaptured.stderr)
+
+            worktree_list.write_text(json.dumps({
+                "result": {
+                    "type": "worktree_list",
+                    "source": {"repo_root": str(integration_root)},
+                    "worktrees": [{"path": str(first_root), "open_workspace_id": "wA"}],
+                },
+            }), encoding="utf-8")
+            unbound = self.run_cli("validate-delegation", "--assignment", str(first), "--assignment", str(second), "--worktree-list", str(worktree_list))
+
+            self.assertEqual(unbound.returncode, 2)
+            self.assertIn("does not bind every concurrent writer", unbound.stderr)
+
+            worktree_list.write_text(json.dumps({
+                "result": {
+                    "type": "worktree_list",
+                    "source": {"repo_root": str(integration_root)},
+                    "worktrees": [
+                        {"path": str(first_root), "open_workspace_id": "wA"},
+                        {"path": str(second_root), "open_workspace_id": "wB"},
+                    ],
+                },
+            }), encoding="utf-8")
+            isolated = self.run_cli("validate-delegation", "--assignment", str(first), "--assignment", str(second), "--worktree-list", str(worktree_list))
+
+            self.assertEqual(isolated.returncode, 0, isolated.stderr)
+            self.assertEqual(json.loads(isolated.stdout)["writer_project_roots"], {
+                "lead-01:peer-01": str(first_root), "lead-01:peer-02": str(second_root),
+            })
+            self.assertEqual(json.loads(isolated.stdout)["writer_workspaces"], {
+                "lead-01:peer-01": "wA", "lead-01:peer-02": "wB",
+            })
+
+    def test_assignment_rejects_noncanonical_project_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "assignment.json"
+            path.write_text(json.dumps(assignment_document(project_root="relative-root")), encoding="utf-8")
+
+            completed = self.run_cli("validate-assignment", "--assignment", str(path))
+
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn("project_root must be a canonical absolute path", completed.stderr)
 
     def test_review_requires_exact_immutable_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

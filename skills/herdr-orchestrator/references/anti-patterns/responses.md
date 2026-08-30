@@ -20,7 +20,9 @@ restore the Peer's right to reopen premises.
 
 **Mechanism:** Local optimization protects one failed shared foundation.
 **Response:** Stop symptom patches and identify the root mechanism that creates
-the whole failure sequence.
+the whole failure sequence. Severity labels do not outrank dependency
+structure: a lower-priority prerequisite or root mechanism can require repair
+before a higher-priority symptom.
 
 ## 4. Architecture lock-in
 
@@ -105,6 +107,49 @@ review, unresolved risk, and acceptance authority.
 **Mechanism:** Governance becomes a competing Project Lead.
 **Response:** Return to evidence-backed questions, owner-decision relay, or a
 proposed fresh-Lead handoff; intervention requires explicit Human authority.
+
+## 18. Contract-minting red test
+
+**Mechanism:** A new test, mock, or fixture invents an API, data shape, or
+behavior that no contract owner authorized, then production is changed to obey
+that assumption.
+**Response:** Do not change production merely to satisfy the invented premise.
+Resolve contract ownership; use `REOPEN_REQUEST` or `DEPENDENCY_REQUEST` until
+the contract is stable, then freeze the agreed behavior as a test.
+
+## 19. Foundation ballooning
+
+**Mechanism:** A missing or weak foundation remains unexamined while wrappers,
+compatibility layers, duplicate state, adapters, heuristics, or special cases
+keep the feature locally alive.
+**Response:** Group the symptoms by their shared mechanism and reopen the
+foundation when needed. Retain a compatibility layer only for a clear boundary
+or migration reason. Unlike architecture fog, the warning is that a known weak
+base is still accumulating layers.
+
+## 20. Review-loop non-convergence
+
+**Mechanism:** Each review finding receives a local correction while related
+findings are never grouped around their shared root mechanism.
+**Response:** Stop the loop, group findings by mechanism, prioritize impact and
+probability, make one coherent correction batch, then use independent review
+or verification to test the evidence after correction.
+
+## 21. Scout-as-Judge
+
+**Mechanism:** A Peer assigned to discover files, evidence, APIs, or options has
+its interpretation silently promoted to binding authority.
+**Response:** Keep the Scout output to evidence and uncertainty. The Lead or
+the role with the relevant authority makes the decision; obtain independent
+review where the protocol requires it.
+
+## 22. Nested orchestration ownership
+
+**Mechanism:** Two control planes both manage spawn, parentage, retry, wait,
+cleanup, or follow-up, leaving runtime truth non-deterministic.
+**Response:** One control plane owns the runtime graph. Here Herdr is that
+truth; the SLP layer retains semantic authority and contracts only. This does
+not turn native-subagent configuration into a global SLP enforcement duty.
 
 Response is complete only when the observed signal is recorded as evidence,
 the suspected mechanism has been tested rather than assumed from its label, the

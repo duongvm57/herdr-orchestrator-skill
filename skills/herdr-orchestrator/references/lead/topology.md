@@ -19,9 +19,12 @@ Read-only agents may share a checkout. For one active Lead orchestration,
 record the active delegation map and reject/reconcile overlap before concurrent
 writes. Use canonical `path:<repository-relative-path>` or
 `resource:<exclusive-resource>` scopes; this is contractual Lead enforcement,
-not cross-Lead atomic locking. Concurrent writers also require isolated
-workspaces, branches, exclusive resources, artifacts, and verification.
-Pre-existing workspaces remain untouched.
+not cross-Lead atomic locking. One writer may use its assigned existing
+checkout. Two or more concurrent writers require distinct Herdr-created
+worktree checkouts, branches, exclusive resources, artifacts, and verification.
+Their Assignments name the exact `project_root`; no read-only Peer receives a
+worktree merely because writers are concurrent. Pre-existing workspaces remain
+untouched.
 
 Review starts only after the writer identifies an exact stable candidate. A
 changed candidate invalidates earlier review. The Lead owns the project verdict;

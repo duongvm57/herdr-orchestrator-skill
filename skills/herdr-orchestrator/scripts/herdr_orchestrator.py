@@ -96,6 +96,8 @@ class Assignment:
     role: str
     parent: dict[str, str]
     owner: str
+    project_root: str
+    worktree: dict[str, str] | None
     objective: str
     owned_scope: tuple[str, ...]
     exclusions: tuple[str, ...]
@@ -302,9 +304,10 @@ def command_validate_project(args: argparse.Namespace) -> dict[str, Any]:
     protocol_path = _require_file(Path(args.protocol) if args.protocol else root / ".orchestration/workspace-protocol.md", "workspace protocol")
     config_data, protocol_data = _read(config_path, "project config"), _read(protocol_path, "workspace protocol")
     config, protocol = _parse_project_config(config_data, str(config_path)), _parse_protocol(protocol_data, str(protocol_path))
-    if Path(protocol["Repository root"]).resolve() != root or protocol["Repository root"] != str(root):
+    protocol_root = _canonical_runtime_path(protocol["Repository root"], "workspace protocol Repository root")
+    if protocol_root != root and not _same_git_worktree_repository(root, protocol_root):
         raise HelperError("workspace protocol Repository root must be this canonical project root")
-    return {"schema_version": SCHEMA_VERSION, "command": "validate-project", "project_root": str(root), "config": {"path": str(config_path), "sha256": _sha256(config_data), "version": config["version"]}, "protocol": {"path": str(protocol_path), "sha256": _sha256(protocol_data)}, "languages": {"live": protocol[LANGUAGE_FIELDS[0]], "artifact": protocol[LANGUAGE_FIELDS[1]]}, "recipes": {"lead": config["roles"]["lead"], "supervisor": config["roles"].get("supervisor"), "fallback_peer": {"name": config["fallback_peer_recipe"], **config["peer_recipes"][config["fallback_peer_recipe"]]}, "peers": [{"name": name, **recipe} for name, recipe in config["peer_recipes"].items()]}}
+    return {"schema_version": SCHEMA_VERSION, "command": "validate-project", "project_root": str(root), "protocol_repository_root": str(protocol_root), "config": {"path": str(config_path), "sha256": _sha256(config_data), "version": config["version"]}, "protocol": {"path": str(protocol_path), "sha256": _sha256(protocol_data)}, "languages": {"live": protocol[LANGUAGE_FIELDS[0]], "artifact": protocol[LANGUAGE_FIELDS[1]]}, "recipes": {"lead": config["roles"]["lead"], "supervisor": config["roles"].get("supervisor"), "fallback_peer": {"name": config["fallback_peer_recipe"], **config["peer_recipes"][config["fallback_peer_recipe"]]}, "peers": [{"name": name, **recipe} for name, recipe in config["peer_recipes"].items()]}}
 
 
 RUNTIME_BINDING_SCHEMA_VERSION = 2
@@ -475,6 +478,20 @@ def _runtime_handle(value: str, label: str) -> str:
     if RUNTIME_HANDLE_RE.fullmatch(value) is None:
         raise HelperError(f"{label} has unsupported characters")
     return value
+
+
+def _assignment_worktree(value: Any) -> dict[str, str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) != {"kind", "workspace_id", "source_project_root"}:
+        raise HelperError("worktree must be null or contain exactly kind, workspace_id, and source_project_root")
+    if _required_text(value["kind"], "worktree.kind") != "herdr_worktree":
+        raise HelperError("worktree.kind must be herdr_worktree")
+    return {
+        "kind": "herdr_worktree",
+        "workspace_id": _runtime_handle(_required_text(value["workspace_id"], "worktree.workspace_id"), "worktree.workspace_id"),
+        "source_project_root": str(_canonical_runtime_path(value["source_project_root"], "worktree.source_project_root")),
+    }
 
 
 def command_start_peer(args: argparse.Namespace) -> dict[str, Any]:
@@ -661,7 +678,7 @@ def _candidate_document_from_value(value: Any, label: str, *, allow_identity: bo
 
 
 def _assignment_from_document(value: Any) -> Assignment:
-    fields = {"schema_version", "assignment_id", "role", "parent", "owner", "objective", "owned_scope", "exclusions", "authority", "disposition", "recipe", "verification", "dependencies", "languages", "topology_rationale", "candidate"}
+    fields = {"schema_version", "assignment_id", "role", "parent", "owner", "project_root", "worktree", "objective", "owned_scope", "exclusions", "authority", "disposition", "recipe", "verification", "dependencies", "languages", "topology_rationale", "candidate"}
     if not isinstance(value, dict) or set(value) != fields:
         raise HelperError("assignment has unsupported or missing fields")
     if value["schema_version"] != ASSIGNMENT_SCHEMA_VERSION:
@@ -676,6 +693,8 @@ def _assignment_from_document(value: Any) -> Assignment:
     owner = _required_text(value["owner"], "owner")
     if owner == parent["id"]:
         raise HelperError("owner must name the assigned Peer, not the delegating Lead")
+    project_root = str(_canonical_runtime_path(value["project_root"], "project_root"))
+    worktree = _assignment_worktree(value["worktree"])
     authority = _required_text(value["authority"], "authority")
     scope = tuple(_canonical_scope(item, f"owned_scope[{index}]") for index, item in enumerate(_text_list(value["owned_scope"], "owned_scope")))
     if authority not in {"read-only", "write"} or len(set(scope)) != len(scope) or (authority == "write" and not scope):
@@ -687,11 +706,11 @@ def _assignment_from_document(value: Any) -> Assignment:
     rationale = value["topology_rationale"]
     if rationale is not None:
         rationale = _required_text(rationale, "topology_rationale")
-    return Assignment(assignment_id, role, parent, owner, _required_text(value["objective"], "objective"), scope, _text_list(value["exclusions"], "exclusions"), authority, disposition, _required_text(value["recipe"], "recipe"), _text_list(value["verification"], "verification", 1), _text_list(value["dependencies"], "dependencies"), _string_map(value["languages"], "languages", {"live", "artifact"}), rationale, candidate)
+    return Assignment(assignment_id, role, parent, owner, project_root, worktree, _required_text(value["objective"], "objective"), scope, _text_list(value["exclusions"], "exclusions"), authority, disposition, _required_text(value["recipe"], "recipe"), _text_list(value["verification"], "verification", 1), _text_list(value["dependencies"], "dependencies"), _string_map(value["languages"], "languages", {"live", "artifact"}), rationale, candidate)
 
 
 def _assignment_document(assignment: Assignment) -> dict[str, Any]:
-    return {"schema_version": ASSIGNMENT_SCHEMA_VERSION, "assignment_id": assignment.assignment_id, "role": assignment.role, "parent": assignment.parent, "owner": assignment.owner, "objective": assignment.objective, "owned_scope": list(assignment.owned_scope), "exclusions": list(assignment.exclusions), "authority": assignment.authority, "disposition": assignment.disposition, "recipe": assignment.recipe, "verification": list(assignment.verification), "dependencies": list(assignment.dependencies), "languages": assignment.languages, "topology_rationale": assignment.topology_rationale, "candidate": assignment.candidate}
+    return {"schema_version": ASSIGNMENT_SCHEMA_VERSION, "assignment_id": assignment.assignment_id, "role": assignment.role, "parent": assignment.parent, "owner": assignment.owner, "project_root": assignment.project_root, "worktree": assignment.worktree, "objective": assignment.objective, "owned_scope": list(assignment.owned_scope), "exclusions": list(assignment.exclusions), "authority": assignment.authority, "disposition": assignment.disposition, "recipe": assignment.recipe, "verification": list(assignment.verification), "dependencies": list(assignment.dependencies), "languages": assignment.languages, "topology_rationale": assignment.topology_rationale, "candidate": assignment.candidate}
 
 
 def command_validate_assignment(args: argparse.Namespace) -> dict[str, Any]:
@@ -725,7 +744,51 @@ def command_validate_delegation(args: argparse.Namespace) -> dict[str, Any]:
         for right in writers[index + 1:]:
             if any(_scopes_overlap(a, b) for a in left.owned_scope for b in right.owned_scope):
                 raise HelperError("moving-scope ownership conflicts require Lead reconciliation")
-    return {"assignment_ids": [assignment.assignment_id for assignment in assignments], "writer_assignment_ids": [assignment.assignment_id for assignment in writers], "topology_rationales": {assignment.assignment_id: assignment.topology_rationale for assignment in assignments}}
+            if left.project_root == right.project_root:
+                raise HelperError("concurrent writer Assignments require distinct project_root worktrees")
+    if len(writers) >= 2:
+        if args.worktree_list is None:
+            raise HelperError("concurrent writer validation requires captured Herdr worktree list evidence; dispatch is blocked")
+        integration_roots: set[str] = set()
+        for writer in writers:
+            if writer.worktree is None:
+                raise HelperError("concurrent writer Assignment requires Herdr worktree allocation metadata; dispatch is blocked")
+            integration_root = writer.worktree["source_project_root"]
+            if writer.project_root == integration_root or not _same_git_worktree_repository(
+                Path(writer.project_root), Path(integration_root)
+            ):
+                raise HelperError("concurrent writer project_root must be a linked Git worktree of its integration root")
+            integration_roots.add(integration_root)
+        if len(integration_roots) != 1:
+            raise HelperError("concurrent writer worktrees must name one shared integration root")
+        _validate_herdr_worktree_list(
+            _json_document(Path(args.worktree_list), "Herdr worktree list"), writers, integration_roots.pop()
+        )
+    return {"assignment_ids": [assignment.assignment_id for assignment in assignments], "writer_assignment_ids": [assignment.assignment_id for assignment in writers], "writer_project_roots": {assignment.assignment_id: assignment.project_root for assignment in writers}, "writer_workspaces": {assignment.assignment_id: assignment.worktree["workspace_id"] for assignment in writers if assignment.worktree is not None}, "topology_rationales": {assignment.assignment_id: assignment.topology_rationale for assignment in assignments}}
+
+
+def _validate_herdr_worktree_list(value: Any, writers: list[Assignment], integration_root: str) -> None:
+    if not isinstance(value, dict) or not isinstance(value.get("result"), dict):
+        raise HelperError("Herdr worktree list must be a native JSON object with result")
+    result = value["result"]
+    if result.get("type") != "worktree_list" or not isinstance(result.get("source"), dict) or not isinstance(result.get("worktrees"), list):
+        raise HelperError("Herdr worktree list has unsupported or missing fields")
+    source_root = str(_canonical_runtime_path(result["source"].get("repo_root"), "Herdr worktree list source.repo_root"))
+    if source_root != integration_root:
+        raise HelperError("Herdr worktree list source.repo_root does not match the concurrent integration root")
+    bindings: set[tuple[str, str]] = set()
+    for index, worktree in enumerate(result["worktrees"]):
+        if not isinstance(worktree, dict):
+            raise HelperError(f"Herdr worktree list worktrees[{index}] must be an object")
+        try:
+            path = str(_canonical_runtime_path(worktree["path"], f"Herdr worktree list worktrees[{index}].path"))
+            workspace_id = _runtime_handle(_required_text(worktree["open_workspace_id"], f"Herdr worktree list worktrees[{index}].open_workspace_id"), f"Herdr worktree list worktrees[{index}].open_workspace_id")
+        except KeyError as exc:
+            raise HelperError(f"Herdr worktree list worktrees[{index}] has unsupported or missing fields") from exc
+        bindings.add((path, workspace_id))
+    missing = [assignment.assignment_id for assignment in writers if (assignment.project_root, assignment.worktree["workspace_id"] if assignment.worktree is not None else "") not in bindings]
+    if missing:
+        raise HelperError("Herdr worktree list does not bind every concurrent writer project_root and workspace_id: " + ", ".join(missing))
 
 
 def _git(
@@ -773,6 +836,36 @@ def _repository_root(project_root: Path) -> Path:
     if repository != root:
         raise HelperError("project root must be the Git worktree root for candidate operations")
     return root
+
+
+def _git_common_directory(project_root: Path, label: str) -> Path:
+    raw = Path(_git_text(project_root, ["rev-parse", "--git-common-dir"], label))
+    path = raw if raw.is_absolute() else project_root / raw
+    try:
+        return path.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HelperError(f"{label} has no resolvable Git common directory") from exc
+
+
+def _git_worktree_root(project_root: Path, label: str) -> Path:
+    reported = Path(_git_text(project_root, ["rev-parse", "--show-toplevel"], label))
+    try:
+        root = reported.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HelperError(f"{label} has no resolvable Git worktree root") from exc
+    if root != project_root:
+        raise HelperError(f"{label} must be a Git worktree root")
+    return root
+
+
+def _same_git_worktree_repository(project_root: Path, protocol_root: Path) -> bool:
+    """Accept a declared canonical root only for a sibling checkout of one Git repo."""
+    try:
+        _git_worktree_root(project_root, "project Git repository")
+        _git_worktree_root(protocol_root, "workspace protocol Git repository")
+        return _git_common_directory(project_root, "project Git repository") == _git_common_directory(protocol_root, "workspace protocol Git repository")
+    except HelperError:
+        return False
 
 
 def _candidate_object_directory(project_root: Path, *, create: bool) -> Path:
@@ -1242,6 +1335,7 @@ def build_parser() -> argparse.ArgumentParser:
     render.set_defaults(handler=command_render_assignment)
     delegation = commands.add_parser("validate-delegation")
     delegation.add_argument("--assignment", action="append", required=True)
+    delegation.add_argument("--worktree-list")
     delegation.set_defaults(handler=command_validate_delegation)
     freeze = commands.add_parser("freeze-candidate")
     freeze.add_argument("--project-root", default=".")

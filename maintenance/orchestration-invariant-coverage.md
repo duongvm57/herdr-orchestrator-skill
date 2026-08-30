@@ -21,12 +21,12 @@ Automation: 4 validated selector(s).
 ### Assignment, ownership, and candidate contract
 
 - Verification: **automated/static**
-- Invariants: `explicit-parentage`, `one-writer-active-lead`, `candidate-and-handback`, `production-acceptance-gate`
+- Invariants: `explicit-parentage`, `one-writer-active-lead`, `concurrent-writer-worktree-isolation`, `candidate-and-handback`, `production-acceptance-gate`
 
 Validate bounded data contracts and the final mechanical acceptance gate without a
 registry, journal, daemon, plugin, or Herdr control wrapper.
 
-Automation: 9 validated selector(s).
+Automation: 12 validated selector(s).
 
 ### Project and context policy
 

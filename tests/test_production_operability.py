@@ -92,13 +92,15 @@ class ProductionOperabilityTests(unittest.TestCase):
             json.dumps(value), encoding="utf-8"
         )
 
-    def reviewer_assignment(self, candidate: dict[str, str]) -> dict[str, object]:
+    def reviewer_assignment(self, project: Path, candidate: dict[str, str]) -> dict[str, object]:
         return {
             "schema_version": 1,
             "assignment_id": "lead-01:review-01",
             "role": "peer",
             "parent": {"role": "lead", "id": "lead-01"},
             "owner": "reviewer-01",
+            "project_root": str(project.resolve()),
+            "worktree": None,
             "objective": "Falsify the exact candidate without modifying it.",
             "owned_scope": [],
             "exclusions": ["Do not change project files."],
@@ -168,7 +170,7 @@ class ProductionOperabilityTests(unittest.TestCase):
         second, _ = self.freeze(project)
         self.assertEqual(second["candidate"], first["candidate"])
 
-        reviewer = self.reviewer_assignment(candidate)
+        reviewer = self.reviewer_assignment(project, candidate)
         review_path = project / ".orchestration/reviewer-assignment.json"
         review_path.write_text(json.dumps(reviewer), encoding="utf-8")
         review = self.run_cli(
@@ -350,7 +352,7 @@ class ProductionOperabilityTests(unittest.TestCase):
         self.assertEqual(absent.returncode, 2)
 
         (project / ".orchestration/reviewer-assignment.json").write_text(
-            json.dumps(self.reviewer_assignment(candidate)), encoding="utf-8"
+            json.dumps(self.reviewer_assignment(project, candidate)), encoding="utf-8"
         )
         (project / ".orchestration/reviewer-handback.json").write_text(json.dumps({
             "assignment_id": "lead-01:review-01", "outcome": "COMPLETE",
