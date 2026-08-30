@@ -69,6 +69,61 @@ projection and include it in the rendered Peer prompt. The adapter owns how its
 native process consumes that binding; do not assume that a different harness
 needs inherited shell values or another harness's command syntax.
 
+## Concurrent writer worktrees
+
+Before dispatch, validate the entire active Assignment map. Every Assignment
+has a canonical absolute `project_root`. One writer may use the assigned
+existing checkout. When two or more write Assignments will be active together,
+their scopes must be disjoint and every writer must receive a distinct Herdr
+worktree checkout; read-only Peers may continue to share a checkout.
+
+Create each writer checkout through Herdr, never through raw `git worktree`:
+
+```text
+herdr worktree create --cwd <canonical-integration-root> --branch <new-owned-branch> \
+  --base <integration-base> --path <new-owned-absolute-worktree-path> \
+  --label <writer-label> --no-focus
+```
+
+Read `workspace.workspace_id`, `workspace.worktree.checkout_path`, and
+`root_pane.pane_id` from the native JSON response. Put that exact checkout path
+in the writer Assignment's `project_root`, and record the returned workspace ID
+plus canonical integration root in its `worktree`; use that checkout as `--cwd` and
+`start-peer --project-root`. Build the temporary peer launch binding from those
+same facts (role `peer`, checkout path, returned root pane ID), render its pane
+projection, then split its returned root pane to create the Peer pane. Build the
+fresh Peer binding from the resulting Peer pane ID before rendering the prompt.
+This uses the existing runtime-binding contract; it does not create a worktree
+registry or a second lifecycle service.
+
+Before starting any concurrent writer, capture the authoritative native list
+and bind every Assignment root/workspace ID to it. This is validation evidence,
+not a helper-owned Herdr operation:
+
+```text
+herdr worktree list --cwd <canonical-integration-root> > <temporary-worktree-list.json>
+python3 "$HERDR_ORCHESTRATOR_HELPER" validate-delegation \
+  --assignment <active-writer-a.json> --assignment <active-writer-b.json> \
+  --worktree-list <temporary-worktree-list.json>
+```
+
+The validator rejects absent allocation metadata, a non-linked checkout, a
+different integration repository, or a list that does not bind each exact
+`project_root` and `workspace_id`. Do not dispatch after any failure.
+
+If any required allocation, binding, or launch preparation fails, do not launch
+that concurrent writer in the shared checkout. Stop the concurrent dispatch and
+return the failure to the Lead for a bounded decision. The Lead may remove only
+newly owned, unused successful allocations with `herdr worktree remove
+--workspace <workspace.workspace_id>`; it never removes pre-existing workspaces.
+
+After matching handbacks, the Lead or named integration owner integrates the
+writer results using the project's existing Git protocol. Only then freeze the
+single common candidate in the integration checkout, bind review and acceptance
+to it, and remove each newly owned worktree with `herdr worktree remove
+--workspace <workspace.workspace_id>`. A worktree handback never substitutes
+for integration, candidate freeze, review, or acceptance.
+
 Before creating the pane, render the same binding's pane projection:
 
 ```text
@@ -120,6 +175,8 @@ It is a Peer-only handoff contract, with this directly usable shape:
   "role": "peer",
   "parent": {"role": "lead", "id": "<lead-id>"},
   "owner": "<peer-id>",
+  "project_root": "/absolute/path/to/assigned-checkout",
+  "worktree": null,
   "objective": "<bounded outcome>",
   "owned_scope": ["path:<project-relative-path>"],
   "exclusions": ["<out-of-scope constraint>"],
@@ -132,6 +189,12 @@ It is a Peer-only handoff contract, with this directly usable shape:
   "topology_rationale": null,
   "candidate": null
 }
+```
+
+For a concurrent writer, replace `null` with the exact allocation binding:
+
+```json
+{"kind":"herdr_worktree","workspace_id":"<returned-workspace-id>","source_project_root":"/absolute/path/to/integration-root"}
 ```
 
 `parent.id` identifies the Lead that delegated the work. `owner` identifies the

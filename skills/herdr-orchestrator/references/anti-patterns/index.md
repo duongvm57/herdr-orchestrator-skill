@@ -19,3 +19,8 @@ Signals are hypotheses. Match the number to `anti-pattern-details`.
 15. **Role pollution:** roles perform unrelated orchestration work.
 16. **Status acceptance:** lifecycle or passing tests becomes the verdict.
 17. **Supervisor overreach:** observation becomes implementation or acceptance.
+18. **Contract-minting red test:** a new test or mock invents an unauthorized contract.
+19. **Foundation ballooning:** wrappers and exceptions accumulate over a weak base.
+20. **Review-loop non-convergence:** local review fixes multiply without a shared-mechanism reframe.
+21. **Scout-as-Judge:** discovery evidence is promoted into a binding decision.
+22. **Nested orchestration ownership:** two control planes claim the same runtime lifecycle.

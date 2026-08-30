@@ -204,7 +204,7 @@ class LiveEvalTests(unittest.TestCase):
             project.mkdir()
             foundation = project / "foundation.json"
             foundation.write_text('{"ready":true}\n', encoding="utf-8")
-            assignment = run_evals._deterministic_assignment("assignment-a", "peer-a", ["path:evidence/handback.json"])
+            assignment = run_evals._deterministic_assignment("assignment-a", "peer-a", ["path:evidence/handback.json"], project)
             handback = {**run_evals._deterministic_handback("assignment-a", "COMPLETE"), "evidence_path": str(foundation.resolve())}
             run_evals._write_eval_json(project / "evidence/assignment.json", assignment)
             run_evals._write_eval_json(project / "evidence/handback.json", handback)

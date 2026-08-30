@@ -134,6 +134,35 @@ class ProjectValidationTests(unittest.TestCase):
         self.assertEqual(wrong_root.returncode, 2)
         self.assertIn("canonical project root", wrong_root.stderr)
 
+    def test_validate_project_accepts_a_linked_worktree_of_protocol_repository_root(self) -> None:
+        project = self.project()
+        for command in (
+            ("git", "init", "-q", str(project)),
+            ("git", "-C", str(project), "config", "user.email", "test@example.invalid"),
+            ("git", "-C", str(project), "config", "user.name", "Project Validation"),
+            ("git", "-C", str(project), "add", "."),
+            ("git", "-C", str(project), "commit", "-qm", "base"),
+        ):
+            subprocess.run(command, check=True, capture_output=True, text=True)
+        worktree = self.root / "writer-worktree"
+        subprocess.run(
+            ("git", "-C", str(project), "worktree", "add", "-q", "-b", "writer", str(worktree), "HEAD"),
+            check=True, capture_output=True, text=True,
+        )
+        self.addCleanup(
+            lambda: subprocess.run(
+                ("git", "-C", str(project), "worktree", "remove", "--force", str(worktree)),
+                check=False, capture_output=True, text=True,
+            )
+        )
+
+        completed = self.run_cli("validate-project", "--project-root", str(worktree))
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["project_root"], str(worktree.resolve()))
+        self.assertEqual(result["protocol_repository_root"], str(project.resolve()))
+
     def test_validate_project_accepts_first_setup_candidate_paths(self) -> None:
         project = self.project()
         canonical = project / ".orchestration"

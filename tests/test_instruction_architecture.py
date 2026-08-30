@@ -114,6 +114,37 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("explicit Human/Launcher attachment", supervisor)
         self.assertIn("runtime observation/state only", supervisor)
 
+    def test_concurrent_writer_route_uses_herdr_worktrees_and_preserves_candidate_gate(self) -> None:
+        lifecycle = read("references/lead/peer-lifecycle.md")
+        topology = read("references/lead/topology.md")
+
+        self.assertIn("herdr worktree create", lifecycle)
+        self.assertIn("herdr worktree list", lifecycle)
+        self.assertIn("herdr worktree remove", lifecycle)
+        self.assertIn("workspace.worktree.checkout_path", lifecycle)
+        self.assertIn("project_root", lifecycle)
+        self.assertIn("do not launch\nthat concurrent writer in the shared checkout", lifecycle)
+        self.assertIn("Only then freeze the\nsingle common candidate", lifecycle)
+        self.assertIn("--worktree-list", lifecycle)
+        self.assertIn("Two or more concurrent writers require distinct Herdr-created", topology)
+        self.assertIn("no read-only Peer receives a\nworktree", topology)
+
+    def test_global_anti_pattern_catalog_adds_only_the_remaining_mechanisms(self) -> None:
+        index = read("references/anti-patterns/index.md")
+        responses = read("references/anti-patterns/responses.md")
+
+        for title in (
+            "Contract-minting red test",
+            "Foundation ballooning",
+            "Review-loop non-convergence",
+            "Scout-as-Judge",
+            "Nested orchestration ownership",
+        ):
+            self.assertIn(title, index)
+            self.assertIn(title, responses)
+        self.assertIn("Severity labels do not outrank dependency", responses)
+        self.assertNotIn("Priority myopia", index)
+
     def test_lead_acceptance_gate_is_delivered_and_keeps_review_conditional(self) -> None:
         launch = read("references/launcher/task-launch.md")
         lead = read("references/roles/lead.md")

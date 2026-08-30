@@ -583,6 +583,8 @@ def _prepare_fixture(seed: Path, project: Path) -> None:
                 "role": "peer",
                 "parent": {"role": "lead", "id": "template-lead"},
                 "owner": "template-peer",
+                "project_root": str(project.resolve()),
+                "worktree": None,
                 "objective": "Record one bounded peer observation for the Lead.",
                 "owned_scope": ["path:evidence/peer-output.json"],
                 "exclusions": ["Do not create or coordinate another agent."],
@@ -621,6 +623,9 @@ def _run_delegation_control(project: Path, assignments: list[Any]) -> int:
     command = [sys.executable, str(helper), "validate-delegation"]
     for raw in assignments:
         command.extend(["--assignment", str(_relative_evidence_path(project, raw, "control assignment"))])
+    worktree_list = project / "evidence/herdr-worktree-list.json"
+    if worktree_list.is_file():
+        command.extend(["--worktree-list", str(worktree_list)])
     return _command(command, cwd=project, timeout=30).returncode
 
 
@@ -650,13 +655,15 @@ def _write_eval_json(path: Path, value: dict[str, Any]) -> None:
     path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _deterministic_assignment(assignment_id: str, owner: str, scopes: list[str], *, authority: str = "write", disposition: str = "Engineer", candidate: dict[str, str] | None = None) -> dict[str, Any]:
+def _deterministic_assignment(assignment_id: str, owner: str, scopes: list[str], project_root: Path, *, worktree: dict[str, str] | None = None, authority: str = "write", disposition: str = "Engineer", candidate: dict[str, str] | None = None) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "assignment_id": assignment_id,
         "role": "peer",
         "parent": {"role": "lead", "id": "deterministic-lead"},
         "owner": owner,
+        "project_root": str(project_root.resolve()),
+        "worktree": worktree,
         "objective": "Validate one bounded deterministic contract.",
         "owned_scope": scopes,
         "exclusions": ["Do not create or coordinate another agent."],
@@ -685,10 +692,30 @@ def _run_deterministic(case: dict[str, Any], project: Path, home: Path, installa
         names = ("overlap-a", "overlap-b") if case_id == "ownership-overlap-contract" else ("retained-a", "retained-nested")
         scopes = (["path:src/shared"], ["path:src/shared/nested"]) if case_id == "ownership-overlap-contract" else (["path:src"], ["path:src/api"])
         for index, (name, owned_scope) in enumerate(zip(names, scopes, strict=True), 1):
-            _write_eval_json(project / "evidence" / f"{name}.json", _deterministic_assignment(f"deterministic:{name}", f"peer-{index}", owned_scope))
+            _write_eval_json(project / "evidence" / f"{name}.json", _deterministic_assignment(f"deterministic:{name}", f"peer-{index}", owned_scope, project))
     elif case_id == "ownership-independent-contract":
-        _write_eval_json(project / "evidence/independent-a.json", _deterministic_assignment("deterministic:independent-a", "peer-a", ["path:src/alpha.txt"]))
-        _write_eval_json(project / "evidence/independent-b.json", _deterministic_assignment("deterministic:independent-b", "peer-b", ["path:src/beta.txt"]))
+        worktrees = (("peer-a", project / "worktree-peer-a", "wdet-a"), ("peer-b", project / "worktree-peer-b", "wdet-b"))
+        for owner, checkout, workspace_id in worktrees:
+            created = _command(["git", "worktree", "add", "-q", "-b", f"deterministic-{owner}", str(checkout), "HEAD"], cwd=project, timeout=30)
+            if created.returncode:
+                raise EvalError(f"could not prepare deterministic linked worktree: {created.stderr.strip()}")
+            _write_eval_json(
+                project / f"evidence/independent-{owner[-1]}.json",
+                _deterministic_assignment(
+                    f"deterministic:independent-{owner[-1]}", owner, [f"path:src/{'alpha' if owner == 'peer-a' else 'beta'}.txt"], checkout,
+                    worktree={"kind": "herdr_worktree", "workspace_id": workspace_id, "source_project_root": str(project.resolve())},
+                ),
+            )
+        _write_eval_json(project / "evidence/herdr-worktree-list.json", {
+            "result": {
+                "type": "worktree_list",
+                "source": {"repo_root": str(project.resolve())},
+                "worktrees": [
+                    {"path": str(checkout.resolve()), "open_workspace_id": workspace_id}
+                    for _, checkout, workspace_id in worktrees
+                ],
+            },
+        })
     elif case_id == "candidate-binding-contract":
         helper = project / ".codex/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
         if not helper.is_file():
@@ -702,13 +729,13 @@ def _run_deterministic(case: dict[str, Any], project: Path, home: Path, installa
         if current_freeze.returncode:
             raise EvalError(f"could not freeze deterministic current candidate: {current_freeze.stderr.strip()}")
         current = json.loads(current_freeze.stdout)["candidate"]
-        _write_eval_json(project / "evidence/stale-review.json", _deterministic_assignment("deterministic:stale-review", "reviewer-a", [], authority="read-only", disposition="Reviewer", candidate=stale))
+        _write_eval_json(project / "evidence/stale-review.json", _deterministic_assignment("deterministic:stale-review", "reviewer-a", [], project, authority="read-only", disposition="Reviewer", candidate=stale))
         _write_eval_json(project / "evidence/current-candidate.json", current)
         _write_eval_json(project / "evidence/matching-candidate.json", stale)
     elif case_id in {"reopen-handback-invalid-contract", "reopen-handback-valid-contract"}:
         outcome = "REOPEN_REQUEST" if case_id == "reopen-handback-invalid-contract" else "COMPLETE"
         stem = "reopen-invalid" if outcome == "REOPEN_REQUEST" else "reopen-valid"
-        assignment = _deterministic_assignment(f"deterministic:{stem}", "deterministic-peer", [f"path:evidence/{stem}.json"])
+        assignment = _deterministic_assignment(f"deterministic:{stem}", "deterministic-peer", [f"path:evidence/{stem}.json"], project)
         _write_eval_json(project / f"evidence/{stem}-assignment.json", assignment)
         _write_eval_json(project / f"evidence/{stem}-handback.json", _deterministic_handback(assignment["assignment_id"], outcome))
     else:
