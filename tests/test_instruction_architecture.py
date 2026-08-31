@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -43,6 +44,10 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("HERDR_ORCHESTRATOR_ROLE=lead", launch)
         self.assertIn("--no-focus", launch)
         self.assertIn("submit-prompt --agent <unique-lead-name> --prompt-file <prompt-file>", launch)
+        self.assertIn("--project-root <root>", launch)
+        self.assertIn("# Human elevated-cost approval", launch)
+        self.assertIn("copy it unchanged into each applicable Assignment", launch)
+        self.assertIn("<adapter-runtime-bound-helper> submit-prompt", launch)
         self.assertIn("direct subprocess argv", launch)
         self.assertIn("Do not strip, normalize", launch)
         self.assertIn("agent_not_ready", launch)
@@ -50,6 +55,16 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("continue with that same Lead and pane", launch)
         self.assertIn("do not blind-retry", launch)
         self.assertIn("never change pre-existing topology", launch)
+
+    def test_launcher_and_supervisor_split_explicitly_bound_panes(self) -> None:
+        launch = read("references/launcher/task-launch.md")
+        supervisor = read("references/launcher/supervisor-attachment.md")
+
+        for document in (launch, supervisor):
+            self.assertIn("herdr pane current --current", document)
+            self.assertIn("herdr pane split --pane <returned-launcher-pane-id>", document)
+            self.assertNotIn("herdr pane split --current", document)
+            self.assertNotIn("HERDR_PANE_ID", document)
 
     def test_setup_uses_current_validation_and_approval_policy_boundary(self) -> None:
         setup = read("references/launcher/setup.md")
@@ -82,6 +97,15 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("explicit supervised Lead name/pane", attachment)
         self.assertIn("do not create a Supervisor inference turn", " ".join(attachment.split()))
 
+    def test_continuous_supervision_stays_fail_closed_without_native_wake_proof(self) -> None:
+        attachment = read("references/launcher/supervisor-attachment.md")
+        scenarios = (ROOT / "tests/orchestration-scenarios.json").read_text(encoding="utf-8")
+
+        self.assertIn("return `DEPENDENCY_REQUEST`", attachment)
+        self.assertIn("no native-wake proof bundled", attachment)
+        self.assertIn("On-demand Supervisor and topology dogfood", scenarios)
+        self.assertIn("continuous supervision remains a DEPENDENCY_REQUEST", scenarios)
+
     def test_lead_wires_assignment_and_bounded_protocol_context(self) -> None:
         lead = read("references/roles/lead.md")
         lifecycle = read("references/lead/peer-lifecycle.md")
@@ -106,7 +130,9 @@ class InstructionArchitectureTests(unittest.TestCase):
             self.assertIn(managed, lifecycle)
         self.assertIn("not a separate runtime role", lifecycle)
         self.assertIn("Send the rendered Assignment prompt once", lifecycle)
-        self.assertIn("one bounded\nnative `agent get` or `agent read` observation", lifecycle)
+        self.assertIn("native `agent wait`\nwithout a short default timeout", lifecycle)
+        self.assertIn("Do not repeat that\nwait or send another prompt until new state or evidence appears", lifecycle)
+        self.assertIn("one bounded native `agent get` or `agent read` observation", lifecycle)
         self.assertIn("Do not resend the Assignment blindly", lifecycle)
         self.assertIn("prompt-wait subsystem or exact-turn tracker", lifecycle)
         self.assertIn("start-peer", lifecycle)
@@ -128,6 +154,21 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("--worktree-list", lifecycle)
         self.assertIn("Two or more concurrent writers require distinct Herdr-created", topology)
         self.assertIn("no read-only Peer receives a\nworktree", topology)
+        self.assertIn("--cwd <canonical-integration-root>", lifecycle)
+        self.assertIn("never from an ambient workspace or a workspace ID", lifecycle)
+        self.assertIn("Do not use\n`--workspace` as a repository selector", lifecycle)
+
+    def test_config_template_documents_native_permission_policy_without_new_schema(self) -> None:
+        template = read("assets/config.toml")
+
+        parsed = tomllib.loads(template)
+        self.assertEqual(parsed["version"], 4)
+        self.assertEqual(parsed["assessment_after_cycles"], 2)
+        self.assertEqual(set(parsed["routing"]), {"engineer", "reviewer", "architect", "default"})
+        self.assertIn("approval_required", template)
+        self.assertIn("provider-native recipe policy", template)
+        self.assertIn("`never` removes prompts only", template)
+        self.assertIn("do not translate them into a generic SLP", template)
 
     def test_global_anti_pattern_catalog_adds_only_the_remaining_mechanisms(self) -> None:
         index = read("references/anti-patterns/index.md")
@@ -165,18 +206,44 @@ class InstructionArchitectureTests(unittest.TestCase):
         lead = read("references/roles/lead.md")
         candidate = read("references/lead/candidate-and-verdict.md")
 
-        self.assertIn('"$HERDR_ORCHESTRATOR_HELPER" freeze-candidate --project-root <root>', lead)
-        self.assertIn('"$HERDR_ORCHESTRATOR_HELPER" inspect-candidate --project-root <root>', lead)
-        self.assertIn('"$HERDR_ORCHESTRATOR_HELPER" validate-acceptance --project-root <root>', lead)
+        self.assertIn("<adapter-runtime-bound-helper> freeze-candidate --project-root <root>", lead)
+        self.assertIn("candidate-specific diff path/digest", lead)
+        self.assertIn("<adapter-runtime-bound-helper> validate-acceptance --project-root <root>", lead)
+        self.assertIn("A bare helper command does not\ncarry that binding and is rejected", lead)
+        self.assertIn("<adapter-runtime-bound-helper> validate-acceptance --project-root <root>", launch)
         self.assertIn(".orchestration/current-acceptance.json", candidate)
         self.assertIn("candidate-owned `.orchestration/candidate-objects`", candidate)
         self.assertIn("read-only Git alternate", candidate)
-        self.assertIn("bounded exact base-to-tree diff control\nartifact with its digest", candidate)
+        self.assertIn("candidate-specific immutable diff", candidate)
         self.assertIn("not successful project completion", launch)
         self.assertIn("Only a passing check permits the Launcher", launch)
         self.assertIn("one structured follow-up to that same Lead", launch)
         self.assertIn("Do not edit implementation, manufacture evidence, create a", launch)
         self.assertIn("There is no third validation or correction loop", launch)
+
+    def test_guarded_helper_examples_use_the_role_runtime_binding(self) -> None:
+        documents = {
+            "lead profile": read("references/roles/lead.md"),
+            "candidate card": read("references/lead/candidate-and-verdict.md"),
+            "peer lifecycle": read("references/lead/peer-lifecycle.md"),
+            "task launch": read("references/launcher/task-launch.md"),
+            "OCR Reviewer": (ROOT / "skills/ocr-peer-reviewer/SKILL.md").read_text(encoding="utf-8"),
+        }
+        guarded = {
+            "lead profile": ("start-peer", "freeze-candidate", "validate-acceptance"),
+            "candidate card": ("freeze-candidate", "validate-acceptance"),
+            "peer lifecycle": ("start-peer",),
+            "task launch": ("submit-prompt", "validate-acceptance"),
+            "OCR Reviewer": ("materialize-candidate",),
+        }
+        for name, commands in guarded.items():
+            with self.subTest(document=name):
+                for command in commands:
+                    self.assertIn(f"<adapter-runtime-bound-helper> {command}", documents[name])
+                    self.assertNotIn(
+                        f'python3 "$HERDR_ORCHESTRATOR_HELPER" {command}', documents[name],
+                    )
+                    self.assertNotIn(f"python3 <canonical-helper> {command}", documents[name])
 
     def test_installed_helper_and_observation_contract_are_unambiguous(self) -> None:
         launch = read("references/launcher/task-launch.md")
@@ -191,6 +258,8 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("only\nhelper path the Lead may use", launch)
         self.assertIn("Never guess consumer-root `scripts/`", lead)
         self.assertIn("submit-prompt --agent <unique-supervisor-name>", supervisor)
+        self.assertIn("--project-root <root>", supervisor)
+        self.assertIn("no native-wake proof bundled", supervisor)
         self.assertIn("do not depend on a final result from `agent prompt\n--wait`", launch)
         self.assertIn("matching Assignment handback", launch)
         self.assertIn("candidate plus valid acceptance evidence", launch)
@@ -235,6 +304,8 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("literal native Herdr and helper commands", codex_projection)
         self.assertIn("does not override `HOME` or `CODEX_HOME`", codex_projection)
         self.assertIn("HERDR_ORCHESTRATOR_PANE_ID", codex_adapter)
+        self.assertIn("use its exact\nhelper command form for every guarded helper call", binding)
+        self.assertIn("compares it to native\n`HERDR_PANE_ID`", binding)
         self.assertIn("Do not copy this syntax into OMP, Pi, Claude", codex_projection)
 
     def test_instruction_pointers_resolve(self) -> None:

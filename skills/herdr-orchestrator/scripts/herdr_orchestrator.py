@@ -30,6 +30,9 @@ if sys.version_info < (3, 11):
     raise SystemExit(2)
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+# The helper can be installed next to the harness package.  Do this before the
+# local import so inspection/rendering never leaves __pycache__ in that skill.
+sys.dont_write_bytecode = True
 if str(SCRIPT_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIRECTORY))
 
@@ -43,9 +46,9 @@ from herdr_harnesses import (
 
 
 SCHEMA_VERSION = 1
-PROJECT_CONFIG_VERSION = 3
-ASSIGNMENT_SCHEMA_VERSION = 1
-CANDIDATE_SCHEMA_VERSION = 1
+PROJECT_CONFIG_VERSION = 4
+ASSIGNMENT_SCHEMA_VERSION = 2
+CANDIDATE_SCHEMA_VERSION = 2
 ACCEPTANCE_SCHEMA_VERSION = 1
 MAX_RECIPE_ARGUMENTS = 64
 MAX_RECIPE_ARGUMENT_BYTES = 1024
@@ -60,6 +63,9 @@ RUNTIME_HANDLE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z")
 GIT_COMMIT_RE = re.compile(r"[0-9a-f]{40}\Z")
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 SEMANTIC_OUTCOMES = frozenset({"COMPLETE", "REOPEN_REQUEST", "DEPENDENCY_REQUEST", "BLOCKED"})
+ROUTED_DISPOSITIONS = frozenset({"engineer", "reviewer", "architect"})
+COST_CLASSES = frozenset({"standard", "elevated"})
+CONVERGENCE_DECISIONS = frozenset({"continue", "re-architect", "escalate", "block"})
 CANDIDATE_EXCLUDED_PREFIXES = (
     ".orchestration",
     ".codex",
@@ -103,12 +109,16 @@ class Assignment:
     exclusions: tuple[str, ...]
     authority: str
     disposition: str
-    recipe: str
+    recipe: str | None
     verification: tuple[str, ...]
     dependencies: tuple[str, ...]
     languages: dict[str, str]
     topology_rationale: str | None
     candidate: dict[str, str] | None
+    review_cycle: int
+    prior_review: dict[str, str] | None
+    convergence_assessment: dict[str, Any] | None
+    cost_approval: str | None
 
 
 def _sha256(data: bytes) -> str:
@@ -220,7 +230,7 @@ def _populated(value: Any, label: str) -> str:
 
 
 def _validate_recipe(value: Any, location: str, description: bool, control_plane: bool = False) -> dict[str, Any]:
-    required = {"kind", "args"} | ({"description"} if description else set())
+    required = {"kind", "args", "cost_class"} | ({"description"} if description else set())
     allowed = required | {"approval_required"}
     if not isinstance(value, dict) or not required <= set(value) or set(value) - allowed:
         raise HelperError(f"{location} must contain required fields: {', '.join(sorted(required))}")
@@ -251,6 +261,10 @@ def _validate_recipe(value: Any, location: str, description: bool, control_plane
         result["approval_required"] = True
     if description:
         result["description"] = _populated(value["description"], f"{location}.description")
+    cost_class = value["cost_class"]
+    if cost_class not in COST_CLASSES:
+        raise HelperError(f"{location}.cost_class must be standard or elevated")
+    result["cost_class"] = cost_class
     return result
 
 
@@ -259,7 +273,7 @@ def _parse_project_config(data: bytes, label: str) -> dict[str, Any]:
         config = tomllib.loads(_safe_text(data, label))
     except tomllib.TOMLDecodeError as exc:
         raise HelperError(f"invalid project config TOML: {exc}") from exc
-    if set(config) != {"version", "fallback_peer_recipe", "roles", "peer_recipes"}:
+    if set(config) != {"version", "assessment_after_cycles", "roles", "peer_recipes", "routing"}:
         raise HelperError("invalid project config top level")
     if config["version"] != PROJECT_CONFIG_VERSION:
         raise HelperError(f"project config version must be {PROJECT_CONFIG_VERSION}")
@@ -272,10 +286,22 @@ def _parse_project_config(data: bytes, label: str) -> dict[str, Any]:
     validated_peers = {name: _validate_recipe(recipe, f"peer_recipes.{name}", True) for name, recipe in peers.items() if isinstance(name, str) and name}
     if len(validated_peers) != len(peers):
         raise HelperError("peer_recipes keys must be nonempty strings")
-    fallback = _populated(config["fallback_peer_recipe"], "fallback_peer_recipe")
-    if fallback not in validated_peers:
-        raise HelperError("fallback_peer_recipe must name an exact peer_recipes entry")
-    result = {"version": PROJECT_CONFIG_VERSION, "fallback_peer_recipe": fallback, "roles": {"lead": _validate_recipe(roles["lead"], "roles.lead", False, control_plane=True)}, "peer_recipes": validated_peers}
+    threshold = config["assessment_after_cycles"]
+    if not isinstance(threshold, int) or isinstance(threshold, bool) or threshold < 1 or threshold > 32:
+        raise HelperError("assessment_after_cycles must be an integer from 1 through 32")
+    routing = config["routing"]
+    if not isinstance(routing, dict) or set(routing) != {"engineer", "reviewer", "architect", "default"}:
+        raise HelperError("routing must contain exactly engineer, reviewer, architect, and default")
+    validated_routes: dict[str, dict[str, Any]] = {}
+    for disposition, route in routing.items():
+        if not isinstance(route, dict) or set(route) != {"default_recipe", "allowed_recipes"}:
+            raise HelperError(f"routing.{disposition} must contain exactly default_recipe and allowed_recipes")
+        default_recipe = _populated(route["default_recipe"], f"routing.{disposition}.default_recipe")
+        allowed_recipes = _text_list(route["allowed_recipes"], f"routing.{disposition}.allowed_recipes", 1)
+        if default_recipe not in allowed_recipes or any(recipe not in validated_peers for recipe in allowed_recipes):
+            raise HelperError(f"routing.{disposition} must use configured peer_recipes and include its default_recipe")
+        validated_routes[disposition] = {"default_recipe": default_recipe, "allowed_recipes": list(allowed_recipes)}
+    result = {"version": PROJECT_CONFIG_VERSION, "assessment_after_cycles": threshold, "roles": {"lead": _validate_recipe(roles["lead"], "roles.lead", False, control_plane=True)}, "peer_recipes": validated_peers, "routing": validated_routes}
     if "supervisor" in roles:
         result["roles"]["supervisor"] = _validate_recipe(roles["supervisor"], "roles.supervisor", False, control_plane=True)
     return result
@@ -294,7 +320,10 @@ def _parse_protocol(data: bytes, label: str) -> dict[str, str]:
             matches = re.findall(rf"(?m)^\s*-\s+{re.escape(field)}:\s*(.*?)\s*$", body)
             if len(matches) != 1:
                 raise HelperError(f"workspace protocol section {index + 1} requires one {field}")
-            values[field] = _populated(matches[0], f"workspace protocol {field}")
+            value = matches[0]
+            if field == "Repository root" and value.startswith("`") and value.endswith("`") and value.count("`") == 2:
+                value = value[1:-1]
+            values[field] = _populated(value, f"workspace protocol {field}")
     return {field: values[field] for field in ("Repository root", *LANGUAGE_FIELDS)}
 
 
@@ -307,11 +336,11 @@ def command_validate_project(args: argparse.Namespace) -> dict[str, Any]:
     protocol_root = _canonical_runtime_path(protocol["Repository root"], "workspace protocol Repository root")
     if protocol_root != root and not _same_git_worktree_repository(root, protocol_root):
         raise HelperError("workspace protocol Repository root must be this canonical project root")
-    return {"schema_version": SCHEMA_VERSION, "command": "validate-project", "project_root": str(root), "protocol_repository_root": str(protocol_root), "config": {"path": str(config_path), "sha256": _sha256(config_data), "version": config["version"]}, "protocol": {"path": str(protocol_path), "sha256": _sha256(protocol_data)}, "languages": {"live": protocol[LANGUAGE_FIELDS[0]], "artifact": protocol[LANGUAGE_FIELDS[1]]}, "recipes": {"lead": config["roles"]["lead"], "supervisor": config["roles"].get("supervisor"), "fallback_peer": {"name": config["fallback_peer_recipe"], **config["peer_recipes"][config["fallback_peer_recipe"]]}, "peers": [{"name": name, **recipe} for name, recipe in config["peer_recipes"].items()]}}
+    return {"schema_version": SCHEMA_VERSION, "command": "validate-project", "project_root": str(root), "protocol_repository_root": str(protocol_root), "config": {"path": str(config_path), "sha256": _sha256(config_data), "version": config["version"], "assessment_after_cycles": config["assessment_after_cycles"]}, "protocol": {"path": str(protocol_path), "sha256": _sha256(protocol_data)}, "languages": {"live": protocol[LANGUAGE_FIELDS[0]], "artifact": protocol[LANGUAGE_FIELDS[1]]}, "recipes": {"lead": config["roles"]["lead"], "supervisor": config["roles"].get("supervisor"), "peers": [{"name": name, **recipe} for name, recipe in config["peer_recipes"].items()], "routing": config["routing"]}}
 
 
 RUNTIME_BINDING_SCHEMA_VERSION = 2
-RUNTIME_BINDING_ROLES = frozenset({"lead", "peer", "supervisor"})
+RUNTIME_BINDING_ROLES = frozenset({"launcher", "lead", "peer", "supervisor"})
 PANE_ENVIRONMENT_NAME_RE = re.compile(r"[A-Z_][A-Z0-9_]{0,127}\Z")
 HERDR_MANAGED_PANE_ENVIRONMENT = frozenset({
     "HERDR_ENV",
@@ -356,7 +385,7 @@ def _runtime_binding_from_document(value: Any) -> RuntimeBinding:
         )
     role = _required_text(value["role"], "runtime binding.role")
     if role not in RUNTIME_BINDING_ROLES:
-        raise HelperError("runtime binding.role must be lead, peer, or supervisor")
+        raise HelperError("runtime binding.role must be launcher, lead, peer, or supervisor")
     executable = _require_file(
         _canonical_runtime_path(value["herdr_executable"], "runtime binding.herdr_executable"),
         "runtime binding.herdr_executable",
@@ -414,11 +443,17 @@ def _runtime_pane_environment(
     binding: RuntimeBinding,
     role: str,
     adapter_environment: tuple[tuple[str, str], ...],
+    assignment: Assignment | None = None,
 ) -> list[dict[str, str]]:
     environment = [
         ("HERDR_ORCHESTRATOR_PROJECT_ROOT", str(binding.project_root)),
         ("HERDR_ORCHESTRATOR_HELPER", str(binding.helper)),
         ("HERDR_ORCHESTRATOR_ROLE", role),
+        *(
+            (("HERDR_ORCHESTRATOR_ASSIGNMENT_ID", assignment.assignment_id),
+             ("HERDR_ORCHESTRATOR_OWNER", assignment.owner))
+            if assignment is not None else ()
+        ),
         *adapter_environment,
     ]
     result: list[dict[str, str]] = []
@@ -453,13 +488,20 @@ def command_render_runtime_binding_pane(args: argparse.Namespace) -> dict[str, A
         raise HelperError(str(exc)) from exc
     role = _required_text(args.role, "role")
     if role not in RUNTIME_BINDING_ROLES:
-        raise HelperError("role must be lead, peer, or supervisor")
+        raise HelperError("role must be launcher, lead, peer, or supervisor")
+    assignment = None
+    if args.assignment is not None:
+        if role != "peer":
+            raise HelperError("--assignment is only valid for a Peer pane projection")
+        assignment = _assignment_from_document(_json_document(Path(args.assignment), "assignment"))
+        if assignment.project_root != str(binding.project_root):
+            raise HelperError("Peer pane Assignment project_root must match the runtime binding")
     projection = {
         "schema_version": RUNTIME_BINDING_SCHEMA_VERSION,
         "role": role,
         "harness": adapter.kind,
         "source_pane_id": binding.herdr_pane_id,
-        "pane_environment": _runtime_pane_environment(binding, role, adapter_environment),
+        "pane_environment": _runtime_pane_environment(binding, role, adapter_environment, assignment),
     }
     output = _check_output(Path(args.output), args.replace)
     data = (json.dumps(projection, ensure_ascii=False, sort_keys=True) + "\n").encode()
@@ -480,6 +522,52 @@ def _runtime_handle(value: str, label: str) -> str:
     return value
 
 
+def _require_capability(allowed_roles: frozenset[str], *, project_root: Path | None = None) -> str:
+    """Reject accidental use of a child/foreign pane as an SLP control role.
+
+    This is intentionally a binding-contamination guard, not a claim that raw
+    Herdr commands are an ACL.  Pure document validators do not call it.
+    """
+    role = os.environ.get("HERDR_ORCHESTRATOR_ROLE")
+    pane = os.environ.get("HERDR_PANE_ID")
+    bound_pane = os.environ.get("HERDR_ORCHESTRATOR_PANE_ID")
+    bound_root = os.environ.get("HERDR_ORCHESTRATOR_PROJECT_ROOT")
+    helper = os.environ.get("HERDR_ORCHESTRATOR_HELPER")
+    if role not in allowed_roles:
+        raise HelperError("this command requires a bound role with the required capability")
+    if not pane or RUNTIME_HANDLE_RE.fullmatch(pane) is None:
+        raise HelperError("this command requires the exact Herdr-managed HERDR_PANE_ID")
+    if bound_pane is None or _runtime_handle(bound_pane, "HERDR_ORCHESTRATOR_PANE_ID") != pane:
+        raise HelperError("this command requires HERDR_ORCHESTRATOR_PANE_ID to match the exact HERDR_PANE_ID")
+    if helper is None or _canonical_runtime_path(helper, "HERDR_ORCHESTRATOR_HELPER") != Path(__file__).resolve():
+        raise HelperError("this command requires the canonical bound HERDR_ORCHESTRATOR_HELPER")
+    if project_root is not None:
+        if bound_root is None or _canonical_runtime_path(bound_root, "HERDR_ORCHESTRATOR_PROJECT_ROOT") != project_root:
+            raise HelperError("this command requires a bound canonical project root")
+    return role
+
+
+def _route_for_assignment(config: dict[str, Any], assignment: Assignment) -> dict[str, Any]:
+    if assignment.disposition.lower() == "reviewer" and assignment.authority != "read-only":
+        raise HelperError("Reviewer Assignments must be read-only")
+    if assignment.review_cycle > config["assessment_after_cycles"] and assignment.convergence_assessment is None:
+        raise HelperError("review_cycle beyond assessment_after_cycles requires convergence_assessment")
+    disposition = assignment.disposition.strip().lower()
+    route_name = disposition if disposition in ROUTED_DISPOSITIONS else "default"
+    route = config["routing"][route_name]
+    recipe_name = assignment.recipe or route["default_recipe"]
+    if recipe_name not in route["allowed_recipes"]:
+        raise HelperError(f"assignment recipe is not allowed for routing.{route_name}")
+    recipe = config["peer_recipes"].get(recipe_name)
+    if recipe is None:
+        raise HelperError("assignment recipe must name an exact configured peer_recipes entry")
+    if recipe["cost_class"] == "elevated" and assignment.cost_approval is None:
+        raise HelperError("elevated recipe requires verbatim Human cost approval in Assignment.cost_approval")
+    if recipe["cost_class"] == "standard" and assignment.cost_approval is not None:
+        raise HelperError("standard recipe must not carry elevated-cost approval evidence")
+    return {"name": route_name, "default_recipe": route["default_recipe"], "allowed_recipes": route["allowed_recipes"], "recipe_name": recipe_name, "recipe": recipe}
+
+
 def _assignment_worktree(value: Any) -> dict[str, str] | None:
     if value is None:
         return None
@@ -496,13 +584,14 @@ def _assignment_worktree(value: Any) -> dict[str, str] | None:
 
 def command_start_peer(args: argparse.Namespace) -> dict[str, Any]:
     """Start one configured Peer without reconstructing its native recipe."""
-    validation = command_validate_project(args)
-    recipe_name = _populated(args.recipe, "recipe")
-    recipes = validation["recipes"]["peers"]
-    recipe = next((item for item in recipes if item["name"] == recipe_name), None)
-    if recipe is None:
-        raise HelperError("recipe must name an exact configured peer_recipes entry")
-    name = _runtime_handle(args.name, "name")
+    assignment = _assignment_from_document(_json_document(Path(args.assignment), "assignment"))
+    project_root = _require_directory(Path(assignment.project_root), "assignment project root")
+    _require_capability(frozenset({"lead"}), project_root=project_root)
+    validation = command_validate_project(argparse.Namespace(project_root=str(project_root), config=None, protocol=None))
+    config = _parse_project_config(_read(project_root / ".orchestration/herdr-orchestrator.toml", "project config"), "project config")
+    route = _route_for_assignment(config, assignment)
+    recipe = route["recipe"]
+    name = _runtime_handle(assignment.owner, "assignment.owner")
     pane = _runtime_handle(args.pane, "pane")
     native_args = list(recipe["args"])
     herdr_argv = [
@@ -512,7 +601,12 @@ def command_start_peer(args: argparse.Namespace) -> dict[str, Any]:
     result: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "command": "start-peer",
-        "recipe": {"name": recipe_name, "kind": recipe["kind"], "args": native_args},
+        "assignment_id": assignment.assignment_id,
+        "project_root": assignment.project_root,
+        "disposition": assignment.disposition,
+        "routing": {"name": route["name"], "default_recipe": route["default_recipe"]},
+        "recipe": {"name": route["recipe_name"], "kind": recipe["kind"], "args": native_args, "cost_class": recipe["cost_class"]},
+        "cost_approval": assignment.cost_approval,
         "name": name,
         "pane": pane,
         "herdr_argv": herdr_argv,
@@ -539,6 +633,8 @@ def command_submit_prompt(args: argparse.Namespace) -> dict[str, Any]:
     This is deliberately a one-shot delivery boundary, not a lifecycle or wait
     abstraction.  Native Herdr remains responsible for all later observation.
     """
+    project_root = _require_directory(Path(args.project_root), "project root")
+    _require_capability(frozenset({"launcher", "lead", "supervisor"}), project_root=project_root)
     name = _runtime_handle(args.agent, "agent")
     prompt_path = _require_file(Path(args.prompt_file), "prompt file")
     prompt_data = _read(prompt_path, "prompt file")
@@ -558,6 +654,7 @@ def command_submit_prompt(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "command": "submit-prompt",
+        "project_root": str(project_root),
         "agent": name,
         "prompt_file": str(prompt_path),
         "prompt_sha256": _sha256(prompt_data),
@@ -644,10 +741,10 @@ def _canonical_relative_path(value: Any, label: str) -> str:
     return path
 
 
-def _candidate_document_from_value(value: Any, label: str, *, allow_identity: bool = False) -> tuple[dict[str, str], dict[str, Any] | None]:
-    """Read the canonical candidate envelope, with raw identities only for review compatibility."""
+def _candidate_document_from_value(value: Any, label: str) -> tuple[dict[str, str], dict[str, Any]]:
+    """Read the canonical v2 candidate envelope; raw identities are never review evidence."""
     if isinstance(value, dict) and "candidate" in value:
-        required = {"schema_version", "candidate", "artifact_scope", "excluded_path_prefixes"}
+        required = {"schema_version", "candidate", "synthetic_commit", "artifact_scope", "excluded_path_prefixes", "diff"}
         if set(value) != required:
             raise HelperError(f"{label} has unsupported or missing fields")
         if value["schema_version"] != CANDIDATE_SCHEMA_VERSION:
@@ -657,28 +754,39 @@ def _candidate_document_from_value(value: Any, label: str, *, allow_identity: bo
             raise HelperError(f"{label}.candidate must be immutable")
         if candidate["kind"] != "git_tree":
             raise HelperError(f"{label}.candidate must be a canonical Git tree candidate")
+        synthetic_commit = _required_text(value["synthetic_commit"], f"{label}.synthetic_commit")
+        if GIT_COMMIT_RE.fullmatch(synthetic_commit) is None:
+            raise HelperError(f"{label}.synthetic_commit must be an exact lowercase 40-character hash")
         scope = _required_text(value["artifact_scope"], f"{label}.artifact_scope")
         if scope != "project-worktree-excluding-project-control":
             raise HelperError(f"{label}.artifact_scope must be the canonical application scope")
         prefixes = _text_list(value["excluded_path_prefixes"], f"{label}.excluded_path_prefixes", 1)
         if tuple(prefixes) != CANDIDATE_EXCLUDED_PREFIXES:
             raise HelperError(f"{label}.excluded_path_prefixes must use the canonical project-control exclusions")
+        diff = value["diff"]
+        if not isinstance(diff, dict) or set(diff) != {"path", "sha256", "bytes"}:
+            raise HelperError(f"{label}.diff must contain exactly path, sha256, and bytes")
+        diff_path = _canonical_relative_path(diff["path"], f"{label}.diff.path")
+        if not diff_path.startswith(".orchestration/candidates/") or not diff_path.endswith(".diff"):
+            raise HelperError(f"{label}.diff.path must be a candidate-specific immutable diff path")
+        if not isinstance(diff["bytes"], int) or isinstance(diff["bytes"], bool) or diff["bytes"] < 0 or diff["bytes"] > MAX_CANDIDATE_DIFF_BYTES:
+            raise HelperError(f"{label}.diff.bytes is invalid")
+        diff_sha256 = _required_text(diff["sha256"], f"{label}.diff.sha256")
+        if SHA256_RE.fullmatch(diff_sha256) is None:
+            raise HelperError(f"{label}.diff.sha256 must be a lowercase SHA-256 digest")
         return candidate, {
             "schema_version": CANDIDATE_SCHEMA_VERSION,
             "candidate": candidate,
+            "synthetic_commit": synthetic_commit,
             "artifact_scope": scope,
             "excluded_path_prefixes": list(prefixes),
+            "diff": {"path": diff_path, "sha256": diff_sha256, "bytes": diff["bytes"]},
         }
-    if allow_identity:
-        candidate = _candidate_from_document(value)
-        if candidate is None:
-            raise HelperError(f"{label} must be an immutable candidate document")
-        return candidate, None
     raise HelperError(f"{label} must be a canonical candidate document")
 
 
 def _assignment_from_document(value: Any) -> Assignment:
-    fields = {"schema_version", "assignment_id", "role", "parent", "owner", "project_root", "worktree", "objective", "owned_scope", "exclusions", "authority", "disposition", "recipe", "verification", "dependencies", "languages", "topology_rationale", "candidate"}
+    fields = {"schema_version", "assignment_id", "role", "parent", "owner", "project_root", "worktree", "objective", "owned_scope", "exclusions", "authority", "disposition", "recipe", "verification", "dependencies", "languages", "topology_rationale", "candidate", "review_cycle", "prior_review", "convergence_assessment", "cost_approval"}
     if not isinstance(value, dict) or set(value) != fields:
         raise HelperError("assignment has unsupported or missing fields")
     if value["schema_version"] != ASSIGNMENT_SCHEMA_VERSION:
@@ -703,18 +811,100 @@ def _assignment_from_document(value: Any) -> Assignment:
     disposition = _required_text(value["disposition"], "disposition")
     if disposition.lower() == "peer":
         raise HelperError("disposition must describe work, not repeat role=peer")
+    recipe = value["recipe"]
+    if recipe is not None:
+        recipe = _required_text(recipe, "recipe")
     rationale = value["topology_rationale"]
     if rationale is not None:
         rationale = _required_text(rationale, "topology_rationale")
-    return Assignment(assignment_id, role, parent, owner, project_root, worktree, _required_text(value["objective"], "objective"), scope, _text_list(value["exclusions"], "exclusions"), authority, disposition, _required_text(value["recipe"], "recipe"), _text_list(value["verification"], "verification", 1), _text_list(value["dependencies"], "dependencies"), _string_map(value["languages"], "languages", {"live", "artifact"}), rationale, candidate)
+    cycle = value["review_cycle"]
+    if not isinstance(cycle, int) or isinstance(cycle, bool) or cycle < 1 or cycle > 1024:
+        raise HelperError("review_cycle must be a positive bounded integer")
+    prior_review = value["prior_review"]
+    prior_fields = ("reviewer_assignment_id", "reviewer_assignment_sha256", "reviewer_handback_sha256")
+    if cycle == 1:
+        if prior_review is not None:
+            raise HelperError("prior_review must be null for review_cycle 1")
+    elif not isinstance(prior_review, dict) or set(prior_review) != set(prior_fields):
+        raise HelperError("prior_review must bind exact prior Reviewer Assignment and handback digests after cycle 1")
+    if prior_review is not None:
+        prior_review = {
+            field: _required_text(prior_review[field], f"prior_review.{field}")
+            for field in prior_fields
+        }
+        if ASSIGNMENT_ID_RE.fullmatch(prior_review["reviewer_assignment_id"]) is None or any(
+            SHA256_RE.fullmatch(prior_review[field]) is None
+            for field in ("reviewer_assignment_sha256", "reviewer_handback_sha256")
+        ):
+            raise HelperError("prior_review must use an exact Reviewer Assignment id and lowercase Assignment/handback SHA-256 digests")
+    assessment = value["convergence_assessment"]
+    if assessment is not None:
+        if not isinstance(assessment, dict) or set(assessment) != {"mechanisms", "decision", "rationale"}:
+            raise HelperError("convergence_assessment must contain exactly mechanisms, decision, and rationale")
+        mechanisms = assessment["mechanisms"]
+        if not isinstance(mechanisms, list) or not mechanisms or len(mechanisms) > 64:
+            raise HelperError("convergence_assessment.mechanisms must be a bounded nonempty array")
+        grouped_findings: list[dict[str, Any]] = []
+        for index, mechanism in enumerate(mechanisms):
+            label = f"convergence_assessment.mechanisms[{index}]"
+            if not isinstance(mechanism, dict) or set(mechanism) != {"mechanism", "findings"}:
+                raise HelperError(f"{label} must contain exactly mechanism and findings")
+            grouped_findings.append({
+                "mechanism": _required_text(mechanism["mechanism"], f"{label}.mechanism"),
+                "findings": list(_text_list(mechanism["findings"], f"{label}.findings", 1)),
+            })
+        decision = _required_text(assessment["decision"], "convergence_assessment.decision")
+        if decision not in CONVERGENCE_DECISIONS:
+            raise HelperError("convergence_assessment.decision must be continue, re-architect, escalate, or block")
+        assessment = {
+            "mechanisms": grouped_findings,
+            "decision": decision,
+            "rationale": _required_text(assessment["rationale"], "convergence_assessment.rationale"),
+        }
+    cost_approval = value["cost_approval"]
+    if cost_approval is not None:
+        cost_approval = _required_text(cost_approval, "cost_approval")
+    return Assignment(assignment_id, role, parent, owner, project_root, worktree, _required_text(value["objective"], "objective"), scope, _text_list(value["exclusions"], "exclusions"), authority, disposition, recipe, _text_list(value["verification"], "verification", 1), _text_list(value["dependencies"], "dependencies"), _string_map(value["languages"], "languages", {"live", "artifact"}), rationale, candidate, cycle, prior_review, assessment, cost_approval)
 
 
 def _assignment_document(assignment: Assignment) -> dict[str, Any]:
-    return {"schema_version": ASSIGNMENT_SCHEMA_VERSION, "assignment_id": assignment.assignment_id, "role": assignment.role, "parent": assignment.parent, "owner": assignment.owner, "project_root": assignment.project_root, "worktree": assignment.worktree, "objective": assignment.objective, "owned_scope": list(assignment.owned_scope), "exclusions": list(assignment.exclusions), "authority": assignment.authority, "disposition": assignment.disposition, "recipe": assignment.recipe, "verification": list(assignment.verification), "dependencies": list(assignment.dependencies), "languages": assignment.languages, "topology_rationale": assignment.topology_rationale, "candidate": assignment.candidate}
+    return {"schema_version": ASSIGNMENT_SCHEMA_VERSION, "assignment_id": assignment.assignment_id, "role": assignment.role, "parent": assignment.parent, "owner": assignment.owner, "project_root": assignment.project_root, "worktree": assignment.worktree, "objective": assignment.objective, "owned_scope": list(assignment.owned_scope), "exclusions": list(assignment.exclusions), "authority": assignment.authority, "disposition": assignment.disposition, "recipe": assignment.recipe, "verification": list(assignment.verification), "dependencies": list(assignment.dependencies), "languages": assignment.languages, "topology_rationale": assignment.topology_rationale, "candidate": assignment.candidate, "review_cycle": assignment.review_cycle, "prior_review": assignment.prior_review, "convergence_assessment": assignment.convergence_assessment, "cost_approval": assignment.cost_approval}
 
 
 def command_validate_assignment(args: argparse.Namespace) -> dict[str, Any]:
-    return _assignment_document(_assignment_from_document(_json_document(Path(args.assignment), "assignment")))
+    assignment = _assignment_from_document(_json_document(Path(args.assignment), "assignment"))
+    if args.structural_only:
+        if args.project_root:
+            raise HelperError("--structural-only cannot be combined with --project-root")
+        return _assignment_document(assignment)
+    root = _require_directory(Path(args.project_root), "project root") if args.project_root else _require_directory(
+        Path(assignment.project_root), "assignment project root"
+    )
+    if str(root) != assignment.project_root:
+        raise HelperError("assignment project_root does not match validation project root")
+    config = _parse_project_config(
+        _read(root / ".orchestration/herdr-orchestrator.toml", "project config"), "project config"
+    )
+    _route_for_assignment(config, assignment)
+    return _assignment_document(assignment)
+
+
+def command_validate_control_role_launch(args: argparse.Namespace) -> dict[str, Any]:
+    """Validate the Human cost decision before a Lead/Supervisor native launch."""
+    root = _require_directory(Path(args.project_root), "project root")
+    config = _parse_project_config(
+        _read(root / ".orchestration/herdr-orchestrator.toml", "project config"), "project config"
+    )
+    role = _required_text(args.role, "role")
+    recipe = config["roles"].get(role)
+    if recipe is None:
+        raise HelperError("control role must name a configured lead or supervisor")
+    approval = _required_text(args.cost_approval, "cost approval") if args.cost_approval else None
+    if recipe["cost_class"] == "elevated" and approval is None:
+        raise HelperError("elevated control-role recipe requires verbatim Human cost approval")
+    if recipe["cost_class"] == "standard" and approval is not None:
+        raise HelperError("standard control-role recipe must not carry elevated-cost approval")
+    return {"command": "validate-control-role-launch", "project_root": str(root), "role": role, "recipe": recipe, "cost_approval": approval}
 
 
 def command_render_assignment(args: argparse.Namespace) -> dict[str, Any]:
@@ -725,7 +915,14 @@ def command_render_assignment(args: argparse.Namespace) -> dict[str, Any]:
     if headings == list(range(1, 13)):
         raise HelperError("Peer applicable protocol projection must not be the full Workspace Protocol")
     rendered = f"# Role Profile\n\n{profile}\n\n# Applicable Protocol Constraints\n\n{protocol}\n\n# Assignment\n\n```json\n{json.dumps(_assignment_document(assignment), ensure_ascii=False, indent=2)}\n```\n\nReturn a structured handback with this exact assignment_id. Its JSON object has exactly assignment_id, outcome, evidence, impact, and need; every value is a non-empty string; prompt delivery and Herdr lifecycle are not assignment completion.\n"
-    _atomic_write(Path(args.output), rendered.encode(), args.replace)
+    output = Path(args.output).expanduser()
+    expected_parent = Path(assignment.project_root) / ".orchestration" / "prompts"
+    if not output.is_absolute():
+        output = output.resolve()
+    if output.parent != expected_parent:
+        raise HelperError("rendered Assignment output must be directly inside <project_root>/.orchestration/prompts")
+    expected_parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    _atomic_write(output, rendered.encode(), args.replace)
     return {"schema_version": ASSIGNMENT_SCHEMA_VERSION, "command": "render-assignment", "assignment_id": assignment.assignment_id, "path": str(Path(args.output).resolve()), "sha256": _sha256(rendered.encode())}
 
 
@@ -955,6 +1152,13 @@ def _git_commit_exists(project_root: Path, commit: str) -> bool:
     ).returncode == 0
 
 
+def _git_commit_exists_in_environment(project_root: Path, commit: str, environment: dict[str, str]) -> bool:
+    return subprocess.run(
+        ["git", "-C", str(project_root), "cat-file", "-e", f"{commit}^{{commit}}"],
+        check=False, capture_output=True, env=environment,
+    ).returncode == 0
+
+
 def _git_tree_exists(project_root: Path, tree: str, *, environment: dict[str, str] | None = None) -> bool:
     return subprocess.run(
         ["git", "-C", str(project_root), "cat-file", "-e", f"{tree}^{{tree}}"],
@@ -975,6 +1179,22 @@ def _verify_candidate(project_root: Path, candidate: dict[str, str], label: str)
         )
     if not _git_tree_exists(project_root, candidate["tree"], environment=_candidate_git_environment(project_root, create=False)):
         raise HelperError(f"{label} Git tree is unreadable from candidate object storage")
+
+
+def _verify_candidate_document(project_root: Path, candidate: dict[str, str], document: dict[str, Any], label: str) -> bytes:
+    _verify_candidate(project_root, candidate, label)
+    _verify_synthetic_candidate_commit(project_root, candidate, document["synthetic_commit"], label)
+    diff_path = _require_file(project_root / document["diff"]["path"], f"{label} immutable diff")
+    try:
+        diff_path.relative_to(project_root / ".orchestration" / "candidates")
+    except ValueError as exc:
+        raise HelperError(f"{label} immutable diff escapes candidate storage") from exc
+    diff = _read(diff_path, f"{label} immutable diff")
+    if len(diff) != document["diff"]["bytes"] or _sha256(diff) != document["diff"]["sha256"]:
+        raise HelperError(f"{label} immutable diff digest is corrupt")
+    if diff != _candidate_diff(project_root, candidate):
+        raise HelperError(f"{label} immutable diff does not match the exact candidate")
+    return diff
 
 
 def _candidate_diff(project_root: Path, candidate: dict[str, str]) -> bytes:
@@ -1012,13 +1232,22 @@ def _candidate_changed_paths(project_root: Path, candidate: dict[str, str]) -> l
     return paths
 
 
-def _candidate_document(candidate: dict[str, str]) -> dict[str, Any]:
+def _candidate_document(candidate: dict[str, str], synthetic_commit: str, diff_path: str, diff: bytes) -> dict[str, Any]:
     return {
         "schema_version": CANDIDATE_SCHEMA_VERSION,
         "candidate": candidate,
+        "synthetic_commit": synthetic_commit,
         "artifact_scope": "project-worktree-excluding-project-control",
         "excluded_path_prefixes": list(CANDIDATE_EXCLUDED_PREFIXES),
+        "diff": {"path": diff_path, "sha256": _sha256(diff), "bytes": len(diff)},
     }
+
+
+def _candidate_path_is_excluded(path: bytes) -> bool:
+    return any(
+        path == prefix.encode("utf-8") or path.startswith(prefix.encode("utf-8") + b"/")
+        for prefix in CANDIDATE_EXCLUDED_PREFIXES
+    )
 
 
 def _freeze_application_tree(project_root: Path, base_commit: str) -> str:
@@ -1031,11 +1260,25 @@ def _freeze_application_tree(project_root: Path, base_commit: str) -> str:
         _git(project_root, ["read-tree", f"{base_commit}^{{tree}}"], "candidate temporary index initialization", environment=environment)
         _git(
             project_root,
-            ["add", "-A", "--", ".", *(f":(exclude){path}" for path in CANDIDATE_EXCLUDED_PREFIXES)],
-            "candidate temporary index population",
+            ["add", "-u", "--", ".", *(f":(exclude){path}" for path in CANDIDATE_EXCLUDED_PREFIXES)],
+            "candidate tracked-path update",
             environment=environment,
         )
-        _git(project_root, ["reset", "-q", base_commit, "--", *CANDIDATE_EXCLUDED_PREFIXES], "candidate project-control exclusion", environment=environment)
+        untracked = _git(
+            project_root,
+            ["ls-files", "--others", "--exclude-standard", "-z"],
+            "candidate untracked-path traversal",
+            environment=environment,
+        ).stdout
+        application_paths = [path for path in untracked.split(b"\0") if path and not _candidate_path_is_excluded(path)]
+        if application_paths:
+            _git(
+                project_root,
+                ["add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul"],
+                "candidate untracked-path update",
+                environment=environment,
+                input_data=b"\0".join(application_paths) + b"\0",
+            )
         tree = _git_text(project_root, ["write-tree"], "candidate tree freeze", environment=environment)
     if GIT_COMMIT_RE.fullmatch(tree) is not None:
         _ensure_candidate_tree_stored(project_root, tree)
@@ -1044,65 +1287,226 @@ def _freeze_application_tree(project_root: Path, base_commit: str) -> str:
     return tree
 
 
+def _synthetic_candidate_commit(project_root: Path, candidate: dict[str, str]) -> str:
+    """Create a reproducible review commit entirely in the candidate object store."""
+    base_time = _git_text(project_root, ["show", "-s", "--format=%aI", candidate["base_commit"]], "candidate base timestamp")
+    environment = _candidate_git_environment(project_root, create=True)
+    environment.update({
+        "GIT_AUTHOR_NAME": "Herdr Candidate",
+        "GIT_AUTHOR_EMAIL": "herdr-candidate@invalid",
+        "GIT_COMMITTER_NAME": "Herdr Candidate",
+        "GIT_COMMITTER_EMAIL": "herdr-candidate@invalid",
+        "GIT_AUTHOR_DATE": base_time,
+        "GIT_COMMITTER_DATE": base_time,
+    })
+    message = f"Herdr candidate {candidate['tree']}\n".encode()
+    commit = _git_text(
+        project_root,
+        ["commit-tree", candidate["tree"], "-p", candidate["base_commit"]],
+        "candidate synthetic commit",
+        environment=environment,
+        input_data=message,
+    )
+    if GIT_COMMIT_RE.fullmatch(commit) is None:
+        raise HelperError("candidate synthetic commit did not produce an exact Git commit")
+    return commit
+
+
+def _verify_synthetic_candidate_commit(project_root: Path, candidate: dict[str, str], commit: str, label: str) -> None:
+    environment = _candidate_git_environment(project_root, create=False)
+    if not _git_commit_exists_in_environment(project_root, commit, environment):
+        raise HelperError(f"{label} synthetic commit is absent from candidate object storage")
+    parent = _git_text(project_root, ["show", "-s", "--format=%P", commit], f"{label} synthetic commit", environment=environment)
+    tree = _git_text(project_root, ["show", "-s", "--format=%T", commit], f"{label} synthetic commit", environment=environment)
+    if parent != candidate["base_commit"] or tree != candidate["tree"]:
+        raise HelperError(f"{label} synthetic commit does not bind the exact base and candidate tree")
+
+
 def command_freeze_candidate(args: argparse.Namespace) -> dict[str, Any]:
-    """Freeze the current application artifact as an immutable Git tree, never the real index."""
+    """Atomically freeze a tree, synthetic review commit, immutable diff, and projection."""
     project_root = _repository_root(Path(args.project_root))
+    _require_capability(frozenset({"lead"}), project_root=project_root)
     base_commit = _git_text(project_root, ["rev-parse", "HEAD"], "candidate base commit")
     tree = _freeze_application_tree(project_root, base_commit)
     candidate = {"kind": "git_tree", "base_commit": base_commit, "tree": tree}
-    _candidate_diff(project_root, candidate)
-    document = _candidate_document(candidate)
-    target = project_root / ".orchestration/current-candidate.json"
-    _atomic_write(target, (json.dumps(document, ensure_ascii=False, sort_keys=True) + "\n").encode(), replace=True)
+    synthetic_commit = _synthetic_candidate_commit(project_root, candidate)
+    _verify_synthetic_candidate_commit(project_root, candidate, synthetic_commit, "candidate")
+    diff = _candidate_diff(project_root, candidate)
+    diff_relative = f".orchestration/candidates/{synthetic_commit}.diff"
+    diff_path = project_root / diff_relative
+    if diff_path.exists():
+        existing = _read(diff_path, "candidate-specific immutable diff")
+        if existing != diff:
+            raise HelperError("candidate-specific immutable diff path already exists with different content")
+    else:
+        diff_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _atomic_write(diff_path, diff)
+    document = _candidate_document(candidate, synthetic_commit, diff_relative, diff)
+    document_data = (json.dumps(document, ensure_ascii=False, sort_keys=True) + "\n").encode()
+    target = _check_output(project_root / ".orchestration/current-candidate.json", replace=True)
+    temporary: Path | None = None
+    try:
+        descriptor, raw = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
+        temporary = Path(raw)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(document_data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        persisted_candidate, persisted_document = _candidate_document_from_value(
+            _json_document(temporary, "staged candidate publication"),
+            "staged candidate publication",
+        )
+        assert persisted_document is not None
+        _verify_candidate_document(project_root, persisted_candidate, persisted_document, "staged candidate publication")
+        os.replace(temporary, target)
+        temporary = None
+    except OSError as exc:
+        raise HelperError(f"could not publish current candidate: {exc}") from exc
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return {
         "schema_version": CANDIDATE_SCHEMA_VERSION,
         "command": "freeze-candidate",
         "path": str(target),
-        "document_sha256": _sha256(_read(target, "current candidate document")),
+        "document_sha256": _sha256(document_data),
         "candidate": candidate,
+        "synthetic_commit": synthetic_commit,
+        "diff_path": str(diff_path),
+        "diff_sha256": _sha256(diff),
         "head_unchanged": base_commit,
         "real_index": "not used",
         "object_store": str(_candidate_object_directory(project_root, create=False)),
     }
 
 
-def command_inspect_candidate(args: argparse.Namespace) -> dict[str, Any]:
-    project_root = _repository_root(Path(args.project_root))
-    path = project_root / ".orchestration/current-candidate.json"
-    candidate, document = _candidate_document_from_value(_json_document(path, "current candidate"), "current candidate")
-    _verify_candidate(project_root, candidate, "current candidate")
-    diff = _candidate_diff(project_root, candidate)
-    changed_paths = _candidate_changed_paths(project_root, candidate)
-    diff_path = project_root / ".orchestration/current-candidate.diff"
-    _atomic_write(diff_path, diff, replace=True)
+def _new_absolute_directory(path: str, label: str) -> Path:
+    requested = Path(path)
+    if not requested.is_absolute():
+        raise HelperError(f"{label} must be a new canonical absolute path")
+    parent = _require_directory(requested.parent, f"{label} parent")
+    target = parent / requested.name
+    if str(target) != str(requested) or target.exists():
+        raise HelperError(f"{label} must be a new canonical absolute path")
+    return target
+
+
+def _git_worktree_roots(project_root: Path) -> tuple[Path, ...]:
+    """List every worktree of this repository so a projection cannot pollute one."""
+    raw = _git_text(project_root, ["worktree", "list", "--porcelain"], "candidate materialization worktree list")
+    roots: list[Path] = []
+    for line in raw.splitlines():
+        if line.startswith("worktree "):
+            try:
+                roots.append(Path(line.removeprefix("worktree ")).resolve(strict=True))
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise HelperError("candidate materialization worktree list has an unresolved path") from exc
+    if not roots:
+        raise HelperError("candidate materialization worktree list has no worktree roots")
+    return tuple(roots)
+
+
+def _require_reviewer_peer_binding(role: str, assignment: Assignment) -> None:
+    if role != "peer":
+        return
+    if os.environ.get("HERDR_ORCHESTRATOR_ASSIGNMENT_ID") != assignment.assignment_id:
+        raise HelperError("Reviewer materialization requires the pane-bound exact Assignment id")
+    if os.environ.get("HERDR_ORCHESTRATOR_OWNER") != assignment.owner:
+        raise HelperError("Reviewer materialization requires the pane-bound exact Assignment owner")
+
+
+def command_materialize_candidate(args: argparse.Namespace) -> dict[str, Any]:
+    assignment = _assignment_from_document(_json_document(Path(args.assignment), "review assignment"))
+    project_root = _repository_root(Path(assignment.project_root))
+    role = _require_capability(frozenset({"lead", "peer"}), project_root=project_root)
+    if assignment.disposition.lower() != "reviewer" or assignment.authority != "read-only":
+        raise HelperError("materialization requires a read-only Reviewer Assignment")
+    _require_reviewer_peer_binding(role, assignment)
+    current_path = project_root / ".orchestration/current-candidate.json"
+    current, document = _candidate_document_from_value(_json_document(current_path, "current candidate"), "current candidate")
+    if assignment.candidate != current:
+        raise HelperError("review assignment candidate is stale; materialization requires the exact current candidate")
+    assert document is not None
+    diff = _verify_candidate_document(project_root, current, document, "current candidate")
+    target = _new_absolute_directory(args.output, "materialized candidate output")
+    for worktree_root in _git_worktree_roots(project_root):
+        try:
+            target.relative_to(worktree_root)
+        except ValueError:
+            continue
+        raise HelperError("materialized candidate output must be outside every project worktree")
+    try:
+        initialized = subprocess.run(["git", "init", "-q", str(target)], check=False, capture_output=True)
+    except OSError as exc:
+        raise HelperError(f"materialized candidate repository initialization could not invoke Git: {exc}") from exc
+    if initialized.returncode:
+        raise HelperError("materialized candidate repository initialization failed")
+    try:
+        packed = _git(
+            project_root,
+            ["pack-objects", "--stdout", "--revs"],
+            "candidate materialization pack",
+            environment=_candidate_git_environment(project_root, create=False),
+            input_data=(document["synthetic_commit"] + "\n").encode(),
+        ).stdout
+        _git(target, ["index-pack", "--stdin", "--fix-thin"], "candidate materialization object import", input_data=packed)
+        _git(target, ["checkout", "-q", "--detach", document["synthetic_commit"]], "candidate materialization checkout")
+        if _git_text(target, ["status", "--porcelain"], "candidate materialization cleanliness"):
+            raise HelperError("candidate materialization checkout is not clean")
+        if _git_text(target, ["rev-parse", "HEAD"], "candidate materialization HEAD") != document["synthetic_commit"]:
+            raise HelperError("candidate materialization HEAD does not bind the synthetic candidate commit")
+    except Exception:
+        # The destination remains diagnosable; do not delete user-visible paths
+        # that may have captured evidence from a failed filesystem operation.
+        raise
+    git_metadata = target / ".git"
+    for root, directories, files in os.walk(target):
+        directory = Path(root)
+        if directory == git_metadata or git_metadata in directory.parents:
+            continue
+        for name in files:
+            (directory / name).chmod(0o444)
+        # Leave directories writable: tests/builds need cache and output paths,
+        # and normal recursive cleanup needs writable parents. Source blobs stay
+        # read-only; the receipt plus synthetic commit remain the authority.
     return {
         "schema_version": CANDIDATE_SCHEMA_VERSION,
-        "command": "inspect-candidate",
-        "path": str(_require_file(path, "current candidate")),
-        "candidate": candidate,
-        "candidate_document_sha256": _sha256(_read(path, "current candidate")),
-        "artifact_scope": document["artifact_scope"],
-        "excluded_path_prefixes": document["excluded_path_prefixes"],
-        "object_store": str(_candidate_object_directory(project_root, create=False)),
-        "diff_path": str(diff_path),
+        "command": "materialize-candidate",
+        "assignment_id": assignment.assignment_id,
+        "base_commit": current["base_commit"],
+        "synthetic_commit": document["synthetic_commit"],
+        "tree": current["tree"],
+        "path": str(target),
+        "candidate_document_sha256": _sha256(_read(current_path, "current candidate")),
         "diff_sha256": _sha256(diff),
         "diff_bytes": len(diff),
-        "changed_paths": changed_paths,
+        "read_only": True,
+        "filesystem_permissions": "application-files-read-only-directories-writable-git-metadata-writable",
     }
 
 
 def command_validate_review(args: argparse.Namespace) -> dict[str, Any]:
     assignment = _assignment_from_document(_json_document(Path(args.assignment), "review assignment"))
-    project_root = _require_directory(Path(args.project_root), "project root")
-    current, _ = _candidate_document_from_value(
-        _json_document(Path(args.current_candidate), "current candidate"), "current candidate", allow_identity=True
+    project_root = _repository_root(Path(args.project_root))
+    current, document = _candidate_document_from_value(
+        _json_document(Path(args.current_candidate), "current candidate"), "current candidate"
     )
+    assert document is not None
+    if assignment.project_root != str(project_root):
+        raise HelperError("review Assignment project_root does not match the validation project root")
+    _verify_candidate_document(project_root, current, document, "current candidate")
     return _validate_review_assignment(assignment, project_root, current)
 
 
 def _validate_review_assignment(assignment: Assignment, project_root: Path, current: dict[str, str]) -> dict[str, Any]:
     if assignment.role != "peer" or assignment.authority != "read-only" or assignment.disposition.lower() != "reviewer" or assignment.candidate is None:
         raise HelperError("review requires a read-only Reviewer assignment with an immutable candidate")
+    if assignment.project_root != str(project_root):
+        raise HelperError("review Assignment project_root does not match the candidate project root")
+    config = _parse_project_config(
+        _read(project_root / ".orchestration/herdr-orchestrator.toml", "project config"), "project config"
+    )
+    _route_for_assignment(config, assignment)
     candidate = assignment.candidate
     _verify_candidate(project_root, candidate, "review candidate")
     _verify_candidate(project_root, current, "current candidate")
@@ -1226,11 +1630,13 @@ def _acceptance_from_document(value: Any) -> dict[str, Any]:
 
 def command_validate_acceptance(args: argparse.Namespace) -> dict[str, Any]:
     project_root = _repository_root(Path(args.project_root))
+    _require_capability(frozenset({"lead", "launcher"}), project_root=project_root)
     candidate_path = project_root / ".orchestration/current-candidate.json"
-    current_candidate, _ = _candidate_document_from_value(
+    current_candidate, candidate_document = _candidate_document_from_value(
         _json_document(candidate_path, "current candidate"), "current candidate"
     )
-    _verify_candidate(project_root, current_candidate, "current candidate")
+    assert candidate_document is not None
+    _verify_candidate_document(project_root, current_candidate, candidate_document, "current candidate")
     acceptance_path = project_root / ".orchestration/current-acceptance.json"
     acceptance = _acceptance_from_document(_json_document(acceptance_path, "acceptance"))
     if acceptance["candidate"] != current_candidate:
@@ -1311,25 +1717,30 @@ def build_parser() -> argparse.ArgumentParser:
     pane_binding.add_argument("--binding", required=True)
     pane_binding.add_argument("--kind", required=True)
     pane_binding.add_argument("--role", required=True)
+    pane_binding.add_argument("--assignment")
     pane_binding.add_argument("--output", required=True)
     pane_binding.add_argument("--replace", action="store_true")
     pane_binding.set_defaults(handler=command_render_runtime_binding_pane)
     peer_start = commands.add_parser("start-peer")
-    peer_start.add_argument("--project-root", required=True)
-    peer_start.add_argument("--config")
-    peer_start.add_argument("--protocol")
-    peer_start.add_argument("--recipe", required=True)
-    peer_start.add_argument("--name", required=True)
+    peer_start.add_argument("--assignment", required=True)
     peer_start.add_argument("--pane", required=True)
     peer_start.add_argument("--dry-run", action="store_true")
     peer_start.set_defaults(handler=command_start_peer)
     prompt = commands.add_parser("submit-prompt")
     prompt.add_argument("--agent", required=True)
     prompt.add_argument("--prompt-file", required=True)
+    prompt.add_argument("--project-root", required=True)
     prompt.set_defaults(handler=command_submit_prompt)
     assignment = commands.add_parser("validate-assignment")
     assignment.add_argument("--assignment", required=True)
+    assignment.add_argument("--project-root")
+    assignment.add_argument("--structural-only", action="store_true")
     assignment.set_defaults(handler=command_validate_assignment)
+    control = commands.add_parser("validate-control-role-launch")
+    control.add_argument("--project-root", required=True)
+    control.add_argument("--role", required=True)
+    control.add_argument("--cost-approval")
+    control.set_defaults(handler=command_validate_control_role_launch)
     render = commands.add_parser("render-assignment")
     render.add_argument("--assignment", required=True); render.add_argument("--role-profile", required=True); render.add_argument("--applicable-protocol", required=True); render.add_argument("--output", required=True); render.add_argument("--replace", action="store_true")
     render.set_defaults(handler=command_render_assignment)
@@ -1340,9 +1751,10 @@ def build_parser() -> argparse.ArgumentParser:
     freeze = commands.add_parser("freeze-candidate")
     freeze.add_argument("--project-root", default=".")
     freeze.set_defaults(handler=command_freeze_candidate)
-    inspect = commands.add_parser("inspect-candidate")
-    inspect.add_argument("--project-root", default=".")
-    inspect.set_defaults(handler=command_inspect_candidate)
+    materialize = commands.add_parser("materialize-candidate")
+    materialize.add_argument("--assignment", required=True)
+    materialize.add_argument("--output", required=True)
+    materialize.set_defaults(handler=command_materialize_candidate)
     review = commands.add_parser("validate-review")
     review.add_argument("--assignment", required=True); review.add_argument("--current-candidate", required=True); review.add_argument("--project-root", default=".")
     review.set_defaults(handler=command_validate_review)

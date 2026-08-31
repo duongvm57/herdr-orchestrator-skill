@@ -46,19 +46,20 @@ Automation: 5 validated selector(s).
 Run on one supported agent kind; record pane IDs, no-focus result, start state,
 prompt/read evidence, handback, and cleanup only for the newly-owned pane.
 
-### Supervisor and topology dogfood
+### On-demand Supervisor and topology dogfood
 
 - Verification: **live/dogfood**
 - Invariants: `supervisor-routing`, `ownership-retention`, `approval-capability`, `decomposition`
 
-Record governance attachment context, bounded Supervisor question, Lead response,
-topology rationale, ownership reconciliation, and provider approval-policy behavior
-without a wake bridge, router, plugin, or shared state service.
+Record governance attachment context, bounded on-demand Supervisor question, Lead
+response, topology rationale, ownership reconciliation, provider approval-policy
+behavior, and the DEPENDENCY_REQUEST for any continuous request; do not claim a wake
+bridge, router, plugin, or shared state service.
 
 ### Repeatable live-eval regression suite
 
 - Verification: **live/eval**
-- Invariants: `live-eval-isolation`
+- Invariants: `live-eval-isolation`, `ocr-materialized-review`
 
 Use tests/evals/orchestration-evals.json and scripts/run_evals.py to exercise real
 supported agents with explicit per-invariant graders and repetitions. Results are

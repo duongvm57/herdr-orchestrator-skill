@@ -12,9 +12,9 @@ Choose the disposition independently from the profile:
   verifies changes, and does not self-accept difficult work.
 - **Architect:** read-only; analyzes ownership, lifecycle, alternatives,
   counterarguments, and reversal conditions.
-- **Reviewer:** fresh and read-only; attempts to falsify one exact candidate and
-  returns severity findings plus `APPROVE` or `FINDINGS`. OCR is optional; direct
-  review remains the fallback.
+- **Reviewer:** fresh and read-only; attempts to falsify one exact candidate.
+  Findings and OCR coverage are evidence; the semantic handback vocabulary is
+  shared with every Peer. OCR is optional; direct review remains the fallback.
 - **Other bounded Peer:** receives only the question, evidence boundary,
   exclusions, and decision it informs.
 
@@ -28,12 +28,13 @@ collection inspects output and accepts only a structured handback with the
 matching `assignment_id`. The outcome is exactly `COMPLETE`, `REOPEN_REQUEST`,
 `DEPENDENCY_REQUEST`, or `BLOCKED`. A detached Lead is not automatically woken.
 
-Send the rendered Assignment prompt once. On a stall, perform one bounded
-native `agent get` or `agent read` observation. Only when that observation
-shows the exact Assignment is visible and attributable to that same Peer, but
-the Peer has not advanced, send one explicit activation follow-up to that same
-Peer. Do not resend the Assignment blindly, create another Peer, alter the
-Assignment or topology, or loop retries. This is a bounded recovery, not a
+Send the rendered Assignment prompt once, then use one native `agent wait`
+without a short default timeout. If a Human-selected bounded wait expires, do
+one bounded native `agent get` or `agent read` observation. Do not repeat that
+wait or send another prompt until new state or evidence appears. Only when the
+observation shows the exact Assignment is visible but stalled, send one explicit
+activation follow-up to that same Peer. Do not resend the Assignment blindly,
+alter Assignment/topology, or loop retries; this is bounded recovery, not a
 prompt-wait subsystem or exact-turn tracker.
 
 Choose the distinct Peer name before constructing its Assignment. Preserve that
@@ -49,7 +50,7 @@ Use the canonical helper for these contract boundaries and the one recipe-bound
 Peer start below; it has no generic Herdr lifecycle control:
 
 ```text
-python3 "$HERDR_ORCHESTRATOR_HELPER" validate-assignment --assignment <assignment.json>
+python3 "$HERDR_ORCHESTRATOR_HELPER" validate-assignment --assignment <assignment.json> --project-root <root>
 python3 "$HERDR_ORCHESTRATOR_HELPER" render-assignment --assignment <assignment.json> \
   --role-profile <peer-profile.md> --applicable-protocol <bounded-constraints.md> \
   --output <rendered-prompt.md>
@@ -69,7 +70,7 @@ projection and include it in the rendered Peer prompt. The adapter owns how its
 native process consumes that binding; do not assume that a different harness
 needs inherited shell values or another harness's command syntax.
 
-## Concurrent writer worktrees
+## Herdr worktree allocation for concurrent writers
 
 Before dispatch, validate the entire active Assignment map. Every Assignment
 has a canonical absolute `project_root`. One writer may use the assigned
@@ -85,11 +86,17 @@ herdr worktree create --cwd <canonical-integration-root> --branch <new-owned-bra
   --label <writer-label> --no-focus
 ```
 
+`<canonical-integration-root>` comes from the validated consumer project
+identity, never from an ambient workspace or a workspace ID. Do not use
+`--workspace` as a repository selector for creation: it is an allocation handle
+only after Herdr has returned it. This exact-root rule also applies when a
+protocol chooses an isolated checkout for one writer.
+
 Read `workspace.workspace_id`, `workspace.worktree.checkout_path`, and
 `root_pane.pane_id` from the native JSON response. Put that exact checkout path
 in the writer Assignment's `project_root`, and record the returned workspace ID
-plus canonical integration root in its `worktree`; use that checkout as `--cwd` and
-`start-peer --project-root`. Build the temporary peer launch binding from those
+plus canonical integration root in its `worktree`; use that checkout as `--cwd`.
+Build the temporary peer launch binding from those
 same facts (role `peer`, checkout path, returned root pane ID), render its pane
 projection, then split its returned root pane to create the Peer pane. Build the
 fresh Peer binding from the resulting Peer pane ID before rendering the prompt.
@@ -129,6 +136,7 @@ Before creating the pane, render the same binding's pane projection:
 ```text
 python3 "$HERDR_ORCHESTRATOR_HELPER" render-runtime-binding-pane \
   --binding <lead-runtime-binding.json> --kind <configured-peer-kind> --role peer \
+  --assignment <assignment.json> \
   --output <peer-pane-binding.json>
 ```
 
@@ -151,17 +159,18 @@ Read the returned pane ID from native JSON. Never set or copy Herdr-managed
 `HERDR_WORKSPACE_ID`; Herdr injects those values for the new managed pane.
 This applies unchanged to a Reviewer, which remains a Peer with disposition
 `Reviewer`, not a separate runtime role.
+The Reviewer pane projection also binds the exact Assignment id and owner; only
+that pane may materialize the assigned candidate.
 
 Start the named Peer through the recipe-bound helper, then pass the rendered
 prompt as one direct Herdr prompt value. The helper is the only canonical Peer
-start path: it validates the selected configured recipe and sends its native
-arguments unchanged after `--`; `name` and `pane` are its only runtime launch
-inputs. Never freehand a `herdr agent start` command or add/translate a native
+start path: it validates the Assignment route and sends its configured native
+arguments unchanged after `--`; the Assignment supplies the name and only the
+target pane is a runtime launch input. Never freehand a `herdr agent start` command or add/translate a native
 argument, including for a Reviewer:
 
 ```text
-python3 "$HERDR_ORCHESTRATOR_HELPER" start-peer --project-root <root> \
-  --recipe <configured-peer-recipe> --name <exact-peer-owner> --pane <pane-id>
+<adapter-runtime-bound-helper> start-peer --assignment <assignment.json> --pane <pane-id>
 ```
 
 Keep the Assignment as the inspectable source; do not reconstruct it from
@@ -170,7 +179,7 @@ It is a Peer-only handoff contract, with this directly usable shape:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "assignment_id": "<stable-id>",
   "role": "peer",
   "parent": {"role": "lead", "id": "<lead-id>"},
@@ -182,12 +191,16 @@ It is a Peer-only handoff contract, with this directly usable shape:
   "exclusions": ["<out-of-scope constraint>"],
   "authority": "write|read-only",
   "disposition": "Engineer|Reviewer|Architect|<bounded role>",
-  "recipe": "<configured-peer-recipe>",
+  "recipe": null,
   "verification": ["<required check>"],
   "dependencies": ["<known dependency>"],
   "languages": {"live": "<configured>", "artifact": "<configured>"},
   "topology_rationale": null,
-  "candidate": null
+  "candidate": null,
+  "review_cycle": 1,
+  "prior_review": null,
+  "convergence_assessment": null,
+  "cost_approval": null
 }
 ```
 
@@ -212,7 +225,22 @@ or compare a candidate only to its base commit.
 Before a new writer launch, use `validate-delegation` against the active Peer
 Assignments. Before accepting a review, use `validate-review` against that full
 current-candidate document. Before routing any Peer result, use
-`validate-handback` and then make the semantic decision yourself.
+`validate-handback`, retain its evidence, and make the semantic decision.
+Then close only that task's exact Reviewer or Architect pane; retain an
+Engineer for correction. After valid acceptance, close task-owned Engineer and
+remaining Peer panes. Never close a Launcher, Supervisor, or pre-existing
+topology.
+
+The project routing table chooses `engineer`, `reviewer`, `architect`, or
+`default` for a custom disposition. `recipe: null` resolves that route's exact
+`default_recipe`; a named recipe must be in its allowlist. Record the selected
+recipe's harness/model/effort, native priority flags, and `cost_class` in
+preflight. An `elevated` recipe needs Human approval before launch, copied
+verbatim into the Lead prompt and `cost_approval`. At review cycle 2 or later,
+`prior_review` binds `reviewer_assignment_id`, its SHA-256, and its handback
+SHA-256. At review cycle 3 or later (the initial `assessment_after_cycles = 2`
+guard), `convergence_assessment` groups nonempty findings by `mechanism` and
+uses exactly one `decision`: `continue`, `re-architect`, `escalate`, or `block`.
 
 Keep inline handback bounded. A durable evidence file is required only when the
 task needs one or normal read cannot recover large evidence; resolve/read any

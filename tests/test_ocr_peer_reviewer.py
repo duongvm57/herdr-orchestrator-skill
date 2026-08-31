@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -11,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OCR_SKILL_ROOT = ROOT / "skills/ocr-peer-reviewer"
 ORCHESTRATOR_SKILL_ROOT = ROOT / "skills/herdr-orchestrator"
+ORCHESTRATOR_HELPER = ORCHESTRATOR_SKILL_ROOT / "scripts/herdr_orchestrator.py"
 OCR_BINARY = shutil.which("ocr")
 
 
@@ -100,7 +102,7 @@ class OCRPeerReviewerContractTests(unittest.TestCase):
 
         self.assertIn("Project acceptance remains with the surrounding Lead", normalized_skill)
         self.assertIn(
-            "Use only the existing Reviewer outcome `APPROVE` or `FINDINGS`",
+            "Return the normal semantic handback: `COMPLETE`, `REOPEN_REQUEST`",
             normalized_skill,
         )
         self.assertIn("never output project-level `ACCEPTED`, `MERGE`", normalized_skill)
@@ -144,7 +146,7 @@ class OCRPeerReviewerContractTests(unittest.TestCase):
         self.assertIn("NO_REVIEWABLE_FILES", skill)
         self.assertIn("never from zero-of-zero OCR coverage", normalized_skill)
         self.assertIn("directly inspects the exact candidate", normalized_skill)
-        self.assertIn("Only complete coverage supports `APPROVE`", peer)
+        self.assertIn("same semantic handback outcomes as every other Peer", peer)
 
     def test_ocr_skill_is_valid_packaged_skill(self) -> None:
         skill_path = OCR_SKILL_ROOT / "SKILL.md"
@@ -258,6 +260,122 @@ class OCRPeerReviewerContractTests(unittest.TestCase):
             self.assertCountEqual(mapped, selected)
             self.assertEqual(run("git", "rev-parse", "HEAD").stdout.strip(), candidate)
             self.assertEqual(run("git", "status", "--porcelain").stdout, "")
+
+    @unittest.skipUnless(OCR_BINARY, "ocr CLI is not installed")
+    def test_reviewer_bound_materialization_runs_ocr_and_validates_handback(self) -> None:
+        assert OCR_BINARY is not None
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / "project"
+            project.mkdir()
+            (project / ".orchestration").mkdir()
+
+            def run(*args: str, cwd: Path = project, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+                completed = subprocess.run(
+                    list(args), cwd=cwd, env=env, check=False, capture_output=True, text=True,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                return completed
+
+            run("git", "init", "--quiet")
+            run("git", "config", "user.name", "OCR Materialization")
+            run("git", "config", "user.email", "ocr-materialization@example.invalid")
+            source = project / "app.py"
+            source.write_text("def value():\n    return 1\n", encoding="utf-8")
+            run("git", "add", "app.py")
+            run("git", "commit", "--quiet", "-m", "base")
+            source.write_text("def value():\n    return 2\n", encoding="utf-8")
+
+            lead_binding = {
+                **os.environ,
+                "HERDR_ORCHESTRATOR_ROLE": "lead",
+                "HERDR_PANE_ID": "wocr:pLead",
+                "HERDR_ORCHESTRATOR_PANE_ID": "wocr:pLead",
+                "HERDR_ORCHESTRATOR_HELPER": str(ORCHESTRATOR_HELPER.resolve()),
+                "HERDR_ORCHESTRATOR_PROJECT_ROOT": str(project.resolve()),
+            }
+            reviewer_binding = {
+                **lead_binding,
+                "HERDR_ORCHESTRATOR_ROLE": "peer",
+                "HERDR_PANE_ID": "wocr:pReviewer",
+                "HERDR_ORCHESTRATOR_PANE_ID": "wocr:pReviewer",
+            }
+            run(
+                "python3", str(ORCHESTRATOR_HELPER), "freeze-candidate", "--project-root", str(project),
+                env=lead_binding,
+            )
+            document = json.loads((project / ".orchestration/current-candidate.json").read_text(encoding="utf-8"))
+            candidate = document["candidate"]
+            assignment = {
+                "schema_version": 2, "assignment_id": "lead-ocr:review-01", "role": "peer",
+                "parent": {"role": "lead", "id": "lead-ocr"}, "owner": "ocr-reviewer",
+                "project_root": str(project.resolve()), "worktree": None,
+                "objective": "Review the exact materialized candidate.", "owned_scope": [],
+                "exclusions": ["Do not modify project files."], "authority": "read-only",
+                "disposition": "Reviewer", "recipe": "ocr-review", "verification": ["Run OCR."],
+                "dependencies": [], "languages": {"live": "English", "artifact": "English"},
+                "topology_rationale": None, "candidate": candidate, "review_cycle": 1,
+                "prior_review": None, "convergence_assessment": None, "cost_approval": None,
+            }
+            assignment_path = project / ".orchestration/ocr-reviewer.json"
+            assignment_path.write_text(json.dumps(assignment), encoding="utf-8")
+            reviewer_binding.update({
+                "HERDR_ORCHESTRATOR_ASSIGNMENT_ID": assignment["assignment_id"],
+                "HERDR_ORCHESTRATOR_OWNER": assignment["owner"],
+            })
+            materialized = root / "materialized-candidate"
+            receipt = json.loads(run(
+                "python3", str(ORCHESTRATOR_HELPER), "materialize-candidate", "--assignment", str(assignment_path),
+                "--output", str(materialized), env=reviewer_binding,
+            ).stdout)
+            rules = root / "ocr-rules.json"
+            rules.write_text(json.dumps({"include": ["**/*.py"], "rules": [{"path": "**/*.py", "rule": "Check observable behavior."}]}), encoding="utf-8")
+            preview = json.loads(run(
+                OCR_BINARY, "delegate", "preview", "--format", "json", "--repo", str(materialized),
+                "--rule", str(rules), "--from", receipt["base_commit"], "--to", receipt["synthetic_commit"], cwd=materialized,
+            ).stdout)
+            selected = [entry["path"] for entry in preview["reviewable_files"]]
+            rule_result = json.loads(run(
+                OCR_BINARY, "delegate", "rule", "--format", "json", "--repo", str(materialized),
+                "--rule", str(rules), "--", *selected, cwd=materialized,
+            ).stdout)
+
+            self.assertEqual(preview["mode"], "range")
+            self.assertEqual(preview["from"], receipt["base_commit"])
+            self.assertEqual(preview["to"], receipt["synthetic_commit"])
+            self.assertEqual(selected, ["app.py"])
+            self.assertEqual(rule_result["schema_version"], "1")
+            self.assertCountEqual(
+                [path for group in rule_result["groups"] for path in group["files"]], selected,
+            )
+            self.assertEqual(run("git", "status", "--porcelain", cwd=materialized).stdout, "")
+
+            # The test has invoked the installed OCR binary against the exact
+            # Reviewer materialization. Record the observed successful use in
+            # the same semantic handback shape a Reviewer returns; acceptance
+            # still requires a real Reviewer/Lead workflow and is not inferred
+            # from this integration test.
+            handback_path = project / ".orchestration/ocr-reviewer-handback.json"
+            handback_path.write_text(json.dumps({
+                "assignment_id": assignment["assignment_id"],
+                "outcome": "COMPLETE",
+                "evidence": (
+                    "Review procedure: ocr-delegate\\n"
+                    "OCR status: USED\\n"
+                    f"Candidate range: {receipt['base_commit']}..{receipt['synthetic_commit']}\\n"
+                    f"Reviewable files: {', '.join(selected)}\\n"
+                    f"Rule-mapped files: {', '.join(sorted(path for group in rule_result['groups'] for path in group['files']))}"
+                ),
+                "impact": "OCR delegated selection and rule mapping over the exact candidate.",
+                "need": "none",
+            }), encoding="utf-8")
+            validated = json.loads(run(
+                "python3", str(ORCHESTRATOR_HELPER), "validate-handback", "--assignment", str(assignment_path),
+                "--handback", str(handback_path),
+            ).stdout)
+            self.assertEqual(validated["completion"], "semantic_handback")
+            self.assertEqual(validated["handback"]["outcome"], "COMPLETE")
+            self.assertIn("OCR status: USED", validated["handback"]["evidence"])
 
 
 if __name__ == "__main__":

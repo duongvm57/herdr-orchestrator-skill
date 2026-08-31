@@ -19,8 +19,9 @@ TASK_LAUNCH = ROOT / "skills/herdr-orchestrator/references/launcher/task-launch.
 
 class ProductionOperabilityTests(unittest.TestCase):
     def run_cli(self, project: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+        environment = {**os.environ, "HERDR_ORCHESTRATOR_ROLE": "lead", "HERDR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_HELPER": str(HELPER.resolve()), "HERDR_ORCHESTRATOR_PROJECT_ROOT": str(project.resolve())}
         return subprocess.run(
-            [sys.executable, str(HELPER), *arguments], cwd=project, check=False, capture_output=True, text=True
+            [sys.executable, str(HELPER), *arguments], cwd=project, check=False, capture_output=True, text=True, env=environment
         )
 
     def git(self, project: Path, *arguments: str) -> str:
@@ -33,6 +34,14 @@ class ProductionOperabilityTests(unittest.TestCase):
         (project / ".orchestration").mkdir(parents=True)
         (project / "app.txt").write_text("base\n", encoding="utf-8")
         (project / ".orchestration/control.txt").write_text("base control\n", encoding="utf-8")
+        (project / ".orchestration/herdr-orchestrator.toml").write_text(
+            "\n".join((
+                "version = 4", "assessment_after_cycles = 2", "",
+                "[roles.lead]", 'kind = "claude"', 'args = ["--model", "test"]', 'cost_class = "standard"', "",
+                "[peer_recipes.review]", 'description = "read-only review"', 'kind = "claude"', 'args = ["--model", "test"]', 'cost_class = "standard"', "",
+                "[routing.engineer]", 'default_recipe = "review"', 'allowed_recipes = ["review"]', "[routing.reviewer]", 'default_recipe = "review"', 'allowed_recipes = ["review"]', "[routing.architect]", 'default_recipe = "review"', 'allowed_recipes = ["review"]', "[routing.default]", 'default_recipe = "review"', 'allowed_recipes = ["review"]', "",
+            )), encoding="utf-8"
+        )
         self.git(project, "init", "--quiet")
         self.git(project, "config", "user.email", "test@example.invalid")
         self.git(project, "config", "user.name", "Test")
@@ -74,7 +83,7 @@ class ProductionOperabilityTests(unittest.TestCase):
             "lead": {"role": "lead", "id": "lead-01"},
             "inspection": {
                 "candidate": candidate,
-                "command": "python3 \"$HERDR_ORCHESTRATOR_HELPER\" inspect-candidate --project-root .",
+                "command": "Read the immutable diff path and digest returned by freeze-candidate.",
                 "result": "Inspected the exact base-to-tree diff.",
             },
             "verification": [{
@@ -94,7 +103,7 @@ class ProductionOperabilityTests(unittest.TestCase):
 
     def reviewer_assignment(self, project: Path, candidate: dict[str, str]) -> dict[str, object]:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "assignment_id": "lead-01:review-01",
             "role": "peer",
             "parent": {"role": "lead", "id": "lead-01"},
@@ -112,7 +121,18 @@ class ProductionOperabilityTests(unittest.TestCase):
             "languages": {"live": "English", "artifact": "English"},
             "topology_rationale": "Independent falsification is required by risk.",
             "candidate": candidate,
+            "review_cycle": 1,
+            "prior_review": None,
+            "convergence_assessment": None,
+            "cost_approval": None,
         }
+
+    def validate_current_candidate(self, project: Path, document: dict[str, object]) -> subprocess.CompletedProcess[str]:
+        candidate = document["candidate"]
+        assert isinstance(candidate, dict)
+        assignment = project / ".orchestration" / "candidate-validation-reviewer.json"
+        assignment.write_text(json.dumps(self.reviewer_assignment(project, candidate)), encoding="utf-8")
+        return self.run_cli(project, "validate-review", "--assignment", str(assignment), "--current-candidate", str(project / ".orchestration/current-candidate.json"), "--project-root", str(project))
 
     def test_freeze_uses_candidate_object_store_when_real_git_is_read_only(self) -> None:
         project = self.project()
@@ -145,7 +165,7 @@ class ProductionOperabilityTests(unittest.TestCase):
             for path, mode in original_modes.items():
                 os.chmod(path, mode)
 
-        inspected = self.run_cli(project, "inspect-candidate", "--project-root", str(project))
+        inspected = self.validate_current_candidate(project, document)
 
         self.assertEqual(self.git(project, "rev-parse", "HEAD"), head_before)
         self.assertEqual(self.git(project, "ls-files", "-s"), index_before)
@@ -160,11 +180,12 @@ class ProductionOperabilityTests(unittest.TestCase):
         self.assertFalse((objects_path / candidate["tree"][:2] / candidate["tree"][2:]).exists())
         self.assertTrue((project / ".orchestration/candidate-objects" / candidate["tree"][:2] / candidate["tree"][2:]).is_file())
         self.assertEqual(inspected.returncode, 0, inspected.stderr)
-        changed = json.loads(inspected.stdout)["changed_paths"]
-        self.assertEqual(changed, ["app.txt", "control-delete.txt", "new.txt"])
-        self.assertNotIn("skills-lock.json", changed)
+        frozen_diff = (project / str(document["diff"]["path"])).read_text(encoding="utf-8")  # type: ignore[index]
+        self.assertIn("app.txt", frozen_diff)
+        self.assertIn("new.txt", frozen_diff)
+        self.assertNotIn("skills-lock.json", frozen_diff)
         (project / "app.txt").write_text("later mutation\n", encoding="utf-8")
-        self.assertEqual(self.run_cli(project, "inspect-candidate", "--project-root", str(project)).returncode, 0)
+        self.assertEqual(self.validate_current_candidate(project, document).returncode, 0)
 
         (project / "app.txt").write_text("candidate\n", encoding="utf-8")
         second, _ = self.freeze(project)
@@ -181,7 +202,7 @@ class ProductionOperabilityTests(unittest.TestCase):
         self.assertEqual(review.returncode, 0, review.stderr)
 
         shutil.rmtree(project / ".orchestration/candidate-objects")
-        missing_store = self.run_cli(project, "inspect-candidate", "--project-root", str(project))
+        missing_store = self.validate_current_candidate(project, document)
         self.assertEqual(missing_store.returncode, 2)
         self.assertIn("candidate object storage is missing", missing_store.stderr)
 
@@ -190,7 +211,7 @@ class ProductionOperabilityTests(unittest.TestCase):
         assert isinstance(restored_candidate, dict)
         candidate_tree = project / ".orchestration/candidate-objects" / restored_candidate["tree"][:2] / restored_candidate["tree"][2:]
         candidate_tree.unlink()
-        missing_tree = self.run_cli(project, "inspect-candidate", "--project-root", str(project))
+        missing_tree = self.validate_current_candidate(project, restored)
         self.assertEqual(missing_tree.returncode, 2)
         self.assertIn("Git tree is absent from candidate object storage", missing_tree.stderr)
 
@@ -200,9 +221,38 @@ class ProductionOperabilityTests(unittest.TestCase):
         candidate_tree = project / ".orchestration/candidate-objects" / restored_candidate["tree"][:2] / restored_candidate["tree"][2:]
         os.chmod(candidate_tree, 0o600)
         candidate_tree.write_bytes(b"corrupt candidate object")
-        corrupt_store = self.run_cli(project, "inspect-candidate", "--project-root", str(project))
+        corrupt_store = self.validate_current_candidate(project, restored)
         self.assertEqual(corrupt_store.returncode, 2)
         self.assertIn("unreadable from candidate object storage", corrupt_store.stderr)
+
+    def test_freeze_excludes_an_ignored_untracked_install_path(self) -> None:
+        project = self.project()
+        (project / ".gitignore").write_text(".agents/\n", encoding="utf-8")
+        self.git(project, "add", ".gitignore")
+        self.git(project, "commit", "--quiet", "-m", "ignore installed skills")
+        (project / ".agents").mkdir()
+        (project / ".agents" / "installed-skill.txt").write_text("control install\n", encoding="utf-8")
+        (project / "app.txt").write_text("candidate application change\n", encoding="utf-8")
+
+        first, document = self.freeze(project)
+        candidate = document["candidate"]
+        assert isinstance(candidate, dict)
+        inspected = self.validate_current_candidate(project, document)
+
+        self.assertEqual(inspected.returncode, 0, inspected.stderr)
+        self.assertIn("app.txt", (project / str(document["diff"]["path"])).read_text(encoding="utf-8"))  # type: ignore[index]
+        self.assertTrue((project / ".orchestration/candidate-objects" / candidate["tree"][:2] / candidate["tree"][2:]).is_file())
+        second, second_document = self.freeze(project)
+        self.assertEqual(second["candidate"], first["candidate"])
+        reviewer_assignment = project / ".orchestration/reviewer-assignment.json"
+        reviewer_assignment.write_text(json.dumps(self.reviewer_assignment(project, candidate)), encoding="utf-8")
+        review = self.run_cli(
+            project, "validate-review", "--assignment", str(reviewer_assignment),
+            "--current-candidate", str(project / ".orchestration/current-candidate.json"),
+            "--project-root", str(project),
+        )
+        self.assertEqual(second_document["candidate"], candidate)
+        self.assertEqual(review.returncode, 0, review.stderr)
 
     def test_candidate_control_paths_never_self_ingest_or_grow_object_storage(self) -> None:
         project = self.project()
@@ -228,24 +278,81 @@ class ProductionOperabilityTests(unittest.TestCase):
         self.assertNotEqual(third["candidate"], first_candidate)
         self.assertNotEqual(self.candidate_object_paths(project), first_objects)
 
+    def test_materialize_candidate_projects_a_clean_read_only_synthetic_commit(self) -> None:
+        project = self.project()
+        (project / "app.txt").write_text("candidate materialization\n", encoding="utf-8")
+        frozen, document = self.freeze(project)
+        candidate = document["candidate"]
+        assert isinstance(candidate, dict)
+        assignment_path = project / ".orchestration/reviewer-materialize.json"
+        assignment_path.write_text(json.dumps(self.reviewer_assignment(project, candidate)), encoding="utf-8")
+        output = project.parent / "materialized-candidate"
+        completed = self.run_cli(project, "materialize-candidate", "--assignment", str(assignment_path), "--output", str(output))
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        receipt = json.loads(completed.stdout)
+        self.assertEqual(receipt["synthetic_commit"], frozen["synthetic_commit"])
+        self.assertEqual(self.git(output, "rev-parse", "HEAD"), frozen["synthetic_commit"])
+        self.assertEqual(self.git(output, "status", "--porcelain"), "")
+        self.assertTrue(receipt["read_only"])
+        self.assertEqual(receipt["filesystem_permissions"], "application-files-read-only-directories-writable-git-metadata-writable")
+        self.assertEqual((output / "app.txt").stat().st_mode & 0o222, 0)
+        self.assertNotEqual((output / "build").parent.stat().st_mode & 0o222, 0)
+        self.assertNotEqual((output / ".git").stat().st_mode & 0o222, 0)
+
+    def test_materialize_candidate_rejects_output_inside_project(self) -> None:
+        project = self.project()
+        (project / "app.txt").write_text("candidate materialization\n", encoding="utf-8")
+        _, document = self.freeze(project)
+        candidate = document["candidate"]
+        assert isinstance(candidate, dict)
+        assignment_path = project / ".orchestration/reviewer-inside-project.json"
+        assignment_path.write_text(json.dumps(self.reviewer_assignment(project, candidate)), encoding="utf-8")
+
+        completed = self.run_cli(
+            project, "materialize-candidate", "--assignment", str(assignment_path),
+            "--output", str(project / "materialized-candidate"),
+        )
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("outside every project worktree", completed.stderr)
+
+    def test_materialize_candidate_rejects_non_reviewer_assignment_for_lead(self) -> None:
+        project = self.project()
+        (project / "app.txt").write_text("candidate materialization\n", encoding="utf-8")
+        _, document = self.freeze(project)
+        candidate = document["candidate"]
+        assert isinstance(candidate, dict)
+        assignment = self.reviewer_assignment(project, candidate)
+        assignment.update({"authority": "write", "disposition": "Engineer", "owned_scope": ["path:app.txt"]})
+        assignment_path = project / ".orchestration/non-reviewer-materialize.json"
+        assignment_path.write_text(json.dumps(assignment), encoding="utf-8")
+
+        completed = self.run_cli(
+            project, "materialize-candidate", "--assignment", str(assignment_path),
+            "--output", str(project.parent / "non-reviewer-materialized-candidate"),
+        )
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("requires a read-only Reviewer Assignment", completed.stderr)
+
     def test_candidate_inspection_reads_immutable_diff_and_rejects_changed_blob_damage(self) -> None:
         project = self.project()
         (project / "app.txt").write_text("candidate bytes\n", encoding="utf-8")
         _, document = self.freeze(project)
         candidate = document["candidate"]
         assert isinstance(candidate, dict)
-        inspected = self.run_cli(project, "inspect-candidate", "--project-root", str(project))
+        inspected = self.validate_current_candidate(project, document)
         self.assertEqual(inspected.returncode, 0, inspected.stderr)
-        first_inspection = json.loads(inspected.stdout)
-        diff_path = Path(first_inspection["diff_path"])
+        diff = document["diff"]
+        assert isinstance(diff, dict)
+        diff_path = project / str(diff["path"])
         diff_before = diff_path.read_bytes()
-        self.assertEqual(first_inspection["diff_sha256"], hashlib.sha256(diff_before).hexdigest())
+        self.assertEqual(diff["sha256"], hashlib.sha256(diff_before).hexdigest())
         self.assertIn(b"+candidate bytes", diff_before)
 
         (project / "app.txt").write_text("mutable worktree bytes\n", encoding="utf-8")
-        after_mutation = self.run_cli(project, "inspect-candidate", "--project-root", str(project))
+        after_mutation = self.validate_current_candidate(project, document)
         self.assertEqual(after_mutation.returncode, 0, after_mutation.stderr)
-        self.assertEqual(json.loads(after_mutation.stdout)["diff_sha256"], first_inspection["diff_sha256"])
         self.assertEqual(diff_path.read_bytes(), diff_before)
         self.assertNotIn(b"mutable worktree bytes", diff_before)
 
@@ -257,7 +364,7 @@ class ProductionOperabilityTests(unittest.TestCase):
         blob_path = project / ".orchestration/candidate-objects" / changed_blob
         os.chmod(blob_path, 0o600)
         blob_path.write_bytes(b"corrupt changed candidate blob")
-        corrupt = self.run_cli(project, "inspect-candidate", "--project-root", str(project))
+        corrupt = self.validate_current_candidate(project, document)
         self.assertEqual(corrupt.returncode, 2)
         self.assertIn("candidate immutable diff failed", corrupt.stderr)
 
@@ -272,7 +379,7 @@ class ProductionOperabilityTests(unittest.TestCase):
             and self.candidate_object_type(missing_project, object_path.replace("/", "")) == "blob"
         )
         (missing_project / ".orchestration/candidate-objects" / missing_blob).unlink()
-        missing = self.run_cli(missing_project, "inspect-candidate", "--project-root", str(missing_project))
+        missing = self.validate_current_candidate(missing_project, missing_document)
         self.assertEqual(missing.returncode, 2)
         self.assertIn("candidate immutable diff failed", missing.stderr)
 
@@ -281,12 +388,12 @@ class ProductionOperabilityTests(unittest.TestCase):
         _, document = self.freeze(project)
         document["candidate"] = {"kind": "git_tree", "base_commit": self.git(project, "rev-parse", "HEAD"), "tree": "a" * 40}
         (project / ".orchestration/current-candidate.json").write_text(json.dumps(document), encoding="utf-8")
-        missing = self.run_cli(project, "inspect-candidate", "--project-root", str(project))
+        missing = self.validate_current_candidate(project, document)
         self.assertEqual(missing.returncode, 2)
         self.assertIn("candidate object storage", missing.stderr)
         document["excluded_path_prefixes"] = [".orchestration"]
         (project / ".orchestration/current-candidate.json").write_text(json.dumps(document), encoding="utf-8")
-        malformed = self.run_cli(project, "inspect-candidate", "--project-root", str(project))
+        malformed = self.validate_current_candidate(project, document)
         self.assertEqual(malformed.returncode, 2)
         self.assertIn("canonical project-control exclusions", malformed.stderr)
 

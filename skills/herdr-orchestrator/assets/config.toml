@@ -1,28 +1,52 @@
-version = 3
-fallback_peer_recipe = "<fallback-recipe-name>"
+version = 4
+# The initial guard: review cycles 1–2 proceed normally; cycle 3+ requires a
+# Lead convergence assessment. Human review sets any eventual hard stop.
+assessment_after_cycles = 2
 
-# Setup replaces every placeholder with a recipe validated on this machine.
-# Keep any adapter-required native compatibility policy in that adapter's exact
-# recipe argv; do not depend on a user's global harness defaults.
+# Replace every placeholder with a recipe validated on this machine.
+# Native args are provider-specific; do not use global harness defaults.
+# Approval and sandbox are provider-native recipe policy, not SLP authority.
+# Codex "on-request" may pause; trusted local runs may choose "never".
+# `never` removes prompts only; it does not expand `workspace-write`.
+# Linked worktrees may need provider-native writable roots for Git common metadata.
+# Set approval_required=true only for an approval-gated capability; it conflicts
+# with Codex `--ask-for-approval never`. Other providers keep native args here;
+# do not translate them into a generic SLP permission model.
 [roles.lead]
 kind = "<lead-kind>"
 args = ["<lead-native-arg>"]
-# Set true only when this route must use an approval-gated MCP or tool.
-# A recipe with this field cannot use `--ask-for-approval never`.
+cost_class = "standard"
 # approval_required = true
 
-# Optional. Its presence never authorizes or automatically launches a Supervisor.
+# Optional; it never authorizes or auto-launches a Supervisor.
 [roles.supervisor]
 kind = "<supervisor-kind>"
 args = ["<supervisor-native-arg>"]
+cost_class = "standard"
 # approval_required = true
 
-# Repeat independently for each Human-approved capability route; kinds may differ.
-# The description includes its project and report-return write boundaries.
-# Recipes are launch capabilities; the assignment supplies Peer disposition.
-# One recipe is the Human-approved fallback for an otherwise unmatched case.
+# Recipes are Human-approved capabilities; Assignment supplies disposition.
 [peer_recipes."<recipe-name>"]
 description = "<capability-cost-independence-and-access-summary>"
 kind = "<peer-kind>"
 args = ["<peer-native-arg>"]
+cost_class = "standard" # or "elevated"; elevated launch needs Human approval
 # approval_required = true
+
+# Route every disposition through an explicit allowlist. There is no implicit
+# fallback: custom dispositions use routing.default.
+[routing.engineer]
+default_recipe = "<recipe-name>"
+allowed_recipes = ["<recipe-name>"]
+
+[routing.reviewer]
+default_recipe = "<recipe-name>"
+allowed_recipes = ["<recipe-name>"]
+
+[routing.architect]
+default_recipe = "<recipe-name>"
+allowed_recipes = ["<recipe-name>"]
+
+[routing.default]
+default_recipe = "<recipe-name>"
+allowed_recipes = ["<recipe-name>"]

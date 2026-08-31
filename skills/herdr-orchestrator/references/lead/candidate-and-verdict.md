@@ -1,26 +1,31 @@
 # Candidate, review, and verdict
 
-## Freeze and inspect the exact candidate
+## Freeze the exact candidate
 
 Do not hand-construct a candidate identity and never use a working-tree hash,
 `git diff` digest, file-hash list, or mutable path as one. Freeze the current
 application artifact with the canonical helper:
 
 ```text
-python3 "$HERDR_ORCHESTRATOR_HELPER" freeze-candidate --project-root <root>
-python3 "$HERDR_ORCHESTRATOR_HELPER" inspect-candidate --project-root <root>
+<adapter-runtime-bound-helper> freeze-candidate --project-root <root>
 ```
 
-`freeze-candidate` writes `.orchestration/current-candidate.json`. Its identity
-is an immutable Git tree plus the exact base commit; it uses a temporary Git
+`<adapter-runtime-bound-helper>` is the exact command form in this Lead's
+runtime-binding projection. Do not replace it with a bare helper invocation:
+the form binds the observed Lead pane and the helper rejects a mismatched pane.
+
+`freeze-candidate` atomically writes `.orchestration/current-candidate.json`, a
+candidate-specific immutable diff, and a deterministic synthetic Git commit
+whose parent is the exact base and whose tree is the candidate. Its identity is
+the immutable Git tree plus the exact base commit; it uses a temporary Git
 index and the candidate-owned `.orchestration/candidate-objects` Git object
 directory. The real repository object directory is a read-only Git alternate:
 new blobs and trees never require a write to `.git`. Every helper candidate
 operation resolves through that same object-store environment. It never moves
 `HEAD`, never stages the user's index, and restores known project-control paths
 to their base state. The document records the bounded application scope and
-exclusions. `inspect-candidate` writes a bounded exact base-to-tree diff control
-artifact with its digest; inspect that artifact before verification, review, or
+exclusions. The freeze receipt contains the bounded exact base-to-tree diff path
+and digest; inspect that artifact before verification, review, or
 verdict. Missing or corrupt candidate object storage is a clear
 candidate failure, never permission to inspect mutable worktree state. Any
 application mutation requires a new freeze and invalidates earlier verification
@@ -71,7 +76,7 @@ The no-review form is:
 Before a Human-facing verdict, run:
 
 ```text
-python3 "$HERDR_ORCHESTRATOR_HELPER" validate-acceptance --project-root <root> \
+<adapter-runtime-bound-helper> validate-acceptance --project-root <root> \
   --lead-id <exact-lead-name>
 ```
 

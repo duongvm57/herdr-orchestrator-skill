@@ -6,8 +6,8 @@ socket endpoint, pane identity, canonical helper, project root, and SLP role.
 It does not select a harness, change a recipe, confer Assignment authority,
 infer topology, or retain lifecycle state.
 
-The Launcher builds one fresh JSON document for each launched role from the
-active native session and canonical installed paths. Read each pane ID from
+The Launcher builds one fresh JSON document for itself before a guarded helper
+call and for each launched role from active native session facts. Read each pane ID from
 native Herdr JSON; do not guess paths, socket endpoints, pane IDs, or home
 directories, and do not persist this document in the consumer project. Its
 exact version-2 shape is:
@@ -38,12 +38,13 @@ python3 <canonical-helper> render-runtime-binding --binding <binding.json> \
   --kind <configured-kind> --output <runtime-projection.md>
 ```
 
-Include the returned fragment in the initial role prompt. The adapter owns its
-native command or tool syntax. A kind with no verified projection fails closed;
-do not borrow another harness's configuration, command syntax, or environment
-assumptions. The generic binding remains the same data contract even when an
-adapter proves that its native execution preserves it without a literal command
-projection.
+Include the returned fragment in the initial role prompt and use its exact
+helper command form for every guarded helper call. That form supplies the
+binding's `HERDR_ORCHESTRATOR_PANE_ID`; the helper compares it to native
+`HERDR_PANE_ID`. The pane-start environment is not this binding and must not
+invent a child pane ID. A kind with no verified projection fails closed; do not
+borrow another harness's configuration, command syntax, or environment
+assumptions.
 
 For a Peer or Reviewer pane, render a separate launch projection from the
 bound Lead binding before native pane creation:
