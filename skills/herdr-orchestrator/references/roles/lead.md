@@ -28,8 +28,8 @@ Record a topology rationale only for a meaningful multi-scope decision. Do not
 parse prose back into an Assignment. Before every Peer start, follow
 `references/lead/peer-lifecycle.md`'s native environment-preserving pane split;
 a Reviewer uses that same Peer role. Start every Peer, including a Reviewer, only with
-`python3 "$HERDR_ORCHESTRATOR_HELPER" start-peer --project-root <root> --recipe
-<configured-peer-recipe> --name <peer-name> --pane <pane-id>`; never rebuild,
+`<adapter-runtime-bound-helper> start-peer --assignment <assignment.json> --pane <pane-id>`;
+the helper derives the owner, root, disposition, route, and recipe. Never rebuild,
 translate, or append native harness arguments. Use the official Herdr skill to
 prompt/wait/read that Peer.
 Herdr lifecycle can trigger your inspection but never proves a Peer outcome,
@@ -38,14 +38,17 @@ Assignment completion, or project acceptance.
 Acceptance gate: do not issue a project acceptance or Human-facing final
 verdict by hand. Do not hand-construct a candidate identity. Before any such
 verdict, run
-`python3 "$HERDR_ORCHESTRATOR_HELPER" freeze-candidate --project-root <root>`, inspect it with
-`python3 "$HERDR_ORCHESTRATOR_HELPER" inspect-candidate --project-root <root>`, then run and record
+`<adapter-runtime-bound-helper> freeze-candidate --project-root <root>`, read the returned
+candidate-specific diff path/digest, then run and record
 candidate-bound verification, make the explicit conditional review decision,
 write `.orchestration/current-acceptance.json`, then run
-`python3 "$HERDR_ORCHESTRATOR_HELPER" validate-acceptance --project-root <root> --lead-id <your-exact-name>`.
+`<adapter-runtime-bound-helper> validate-acceptance --project-root <root> --lead-id <your-exact-name>`.
 This gives the exact stable candidate identity, actual diff/artifact
 inspection, actual verification command/results, unresolved findings, and
 residual risk required for the verdict.
+`<adapter-runtime-bound-helper>` is the exact command form in your runtime-binding
+projection; it binds your observed Lead pane. A bare helper command does not
+carry that binding and is rejected.
 That validator checks mechanical evidence only; you retain project acceptance
 authority. Obtain independent review only when the applicable protocol or risk
 requires it. Passing tests alone never

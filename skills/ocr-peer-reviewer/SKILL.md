@@ -1,6 +1,6 @@
 ---
 name: ocr-peer-reviewer
-description: Run a read-only peer review of an exact Git commit with OpenCodeReview delegation. Use when a Reviewer Assignment identifies an accepted Git base and exact Git candidate; OCR selects files and resolves rules while the host agent performs the reasoning.
+description: Run a read-only peer review of a materialized exact Git candidate with OpenCodeReview delegation. OCR selects files and resolves rules while the host agent performs the reasoning.
 license: Apache-2.0
 ---
 
@@ -19,13 +19,28 @@ with the surrounding Lead.
 
 ## Bind the candidate and evidence root
 
-Read the repository, accepted base, exact candidate, and report contract from the
-Herdr Assignment. An `<evidence-root>` is writable only when the Assignment
+Materialize the canonical candidate from the assigned Reviewer pane before OCR:
+
+```text
+<adapter-runtime-bound-helper> materialize-candidate --assignment <reviewer.json> \
+  --output <new-absolute-read-only-checkout>
+```
+
+`<adapter-runtime-bound-helper>` is the exact Reviewer command form from the
+Reviewer runtime-binding projection. It binds the observed Reviewer pane; do
+not replace it with a bare helper invocation.
+
+Use the receipt's `base_commit` and `synthetic_commit` in that detached,
+application-read-only checkout. Git metadata remains writable for normal Git
+inspection; keep tool scratch outside it, finish clean, and never treat scratch
+output as candidate evidence. An orchestrator tree candidate is always
+projectable this way; report `NON_GIT_CANDIDATE` only when an external candidate genuinely cannot
+be projected to Git. An `<evidence-root>` is writable only when the Assignment
 explicitly grants one; otherwise keep OCR output in the normal Reviewer response.
 When granted, `<evidence-root>/ocr/` is the only writable OCR evidence directory;
 the candidate remains read-only.
 
-OCR applies only when both identities resolve to Git commits. Resolve full SHAs
+OCR applies only when both receipt identities resolve to Git commits. Resolve full SHAs
 and verify:
 
 ```text
@@ -41,7 +56,7 @@ clean. Preserve the candidate: write only evidence under `<evidence-root>/ocr/`
 when that root is assigned; do not
 edit, apply fixes, checkout, reset, rebase, commit, push, merge, or deploy.
 
-If either Assignment identity is absent or is not a Git commit, return
+If either externally supplied identity is absent or cannot be projected to a Git commit, return
 `OCR_SKILL_SKIPPED: NON_GIT_CANDIDATE`. If `ocr` or either delegation command is
 unavailable, return `OCR_SKILL_SKIPPED: OCR_UNAVAILABLE`. Both statuses require
 the surrounding Reviewer to continue with direct exact-candidate review.
@@ -91,7 +106,7 @@ If `reviewable_files` is empty, preserve and hash `preview.json`, do not invoke
 `rule`, and return `OCR_SKILL_SKIPPED: NO_REVIEWABLE_FILES`. The surrounding
 Reviewer directly inspects the exact candidate and every exclusion rationale
 when feasible, and records the preview path, digest, and exclusions. It may
-`APPROVE` only from a complete direct review, never from zero-of-zero OCR
+`COMPLETE` only after a complete direct review, never from zero-of-zero OCR
 coverage; otherwise it returns the limitation to the Lead.
 
 ## Review every selected file
@@ -110,7 +125,7 @@ Discard speculative findings and style noise.
 
 Before reporting, rerun `git rev-parse HEAD` and `git status --porcelain`. A
 changed candidate or dirty workspace invalidates the review: report `BLOCKED`
-with `OCR status: CANDIDATE_CHANGED` instead of an approval disposition.
+with `OCR status: CANDIDATE_CHANGED`.
 
 ## Return evidence
 
@@ -135,9 +150,10 @@ OCR status: USED
 - Under **Findings, assumptions, and residual risks**, record discovered,
   reviewable, excluded, reviewed, and skipped counts; coverage rate; excluded
   and skipped paths with reasons; findings; and review limitations.
-- Use only the existing Reviewer outcome `APPROVE` or `FINDINGS` and the existing
-  **Decision needed from Lead** section.
+- Return the normal semantic handback: `COMPLETE`, `REOPEN_REQUEST`,
+  `DEPENDENCY_REQUEST`, or `BLOCKED`. Put findings, coverage, and the decision
+  needed from Lead in `evidence`; OCR creates no second verdict ontology.
 
-Any skipped selected file makes coverage incomplete and prevents `APPROVE`.
+Any skipped selected file makes coverage incomplete and prevents `COMPLETE`.
 The review informs the Lead; never output project-level `ACCEPTED`, `MERGE`, or
 `READY TO MERGE` authority.

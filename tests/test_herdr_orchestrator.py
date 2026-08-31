@@ -49,8 +49,14 @@ class ProjectValidationTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
 
     def run_cli(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        environment = {**os.environ, "HERDR_ORCHESTRATOR_ROLE": "lead", "HERDR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_HELPER": str(HELPER.resolve())}
+        if "--project-root" in arguments:
+            environment["HERDR_ORCHESTRATOR_PROJECT_ROOT"] = str(Path(arguments[arguments.index("--project-root") + 1]).resolve())
+        if "--assignment" in arguments:
+            assignment = json.loads(Path(arguments[arguments.index("--assignment") + 1]).read_text(encoding="utf-8"))
+            environment["HERDR_ORCHESTRATOR_PROJECT_ROOT"] = assignment["project_root"]
         return subprocess.run(
-            [sys.executable, str(HELPER), *arguments], check=False, capture_output=True, text=True
+            [sys.executable, str(HELPER), *arguments], check=False, capture_output=True, text=True, env=environment
         )
 
     def codex_args(self, model: str, *extra: str) -> list[str]:
@@ -66,15 +72,22 @@ class ProjectValidationTests(unittest.TestCase):
         orchestration.mkdir(parents=True)
         (orchestration / "herdr-orchestrator.toml").write_text(
             "\n".join([
-                "version = 3",
-                'fallback_peer_recipe = "engineer"',
+                "version = 4",
+                "assessment_after_cycles = 2",
                 "", "[roles.lead]", 'kind = "codex"',
                 f"args = {json.dumps(self.codex_args('gpt-5.6-sol'))}",
+                'cost_class = "standard"',
                 "", "[roles.supervisor]", 'kind = "codex"',
                 f"args = {json.dumps(self.codex_args('gpt-5.6-terra'))}",
+                'cost_class = "standard"',
                 "", "[peer_recipes.engineer]",
                 'description = "Writable implementation recipe"', 'kind = "codex"',
                 f"args = {json.dumps(self.codex_args('gpt-5.6-luna', '--config', 'model_reasoning_effort=low', '--ask-for-approval', 'never', '--no-alt-screen'))}",
+                'cost_class = "standard"',
+                "", "[routing.engineer]", 'default_recipe = "engineer"', 'allowed_recipes = ["engineer"]',
+                "", "[routing.reviewer]", 'default_recipe = "engineer"', 'allowed_recipes = ["engineer"]',
+                "", "[routing.architect]", 'default_recipe = "engineer"', 'allowed_recipes = ["engineer"]',
+                "", "[routing.default]", 'default_recipe = "engineer"', 'allowed_recipes = ["engineer"]',
                 "",
             ]),
             encoding="utf-8",
@@ -94,6 +107,22 @@ class ProjectValidationTests(unittest.TestCase):
             rendered.append(line)
         (orchestration / "workspace-protocol.md").write_text("\n".join(rendered) + "\n", encoding="utf-8")
         return project
+
+    def peer_assignment(self, project: Path, *, owner: str = "csv-engineer", recipe: str = "engineer", disposition: str = "Engineer") -> Path:
+        reviewer = disposition.lower() == "reviewer"
+        assignment = project / ".orchestration" / f"{owner}.json"
+        assignment.write_text(json.dumps({
+            "schema_version": 2, "assignment_id": f"lead-01:{owner}", "role": "peer",
+            "parent": {"role": "lead", "id": "lead-01"}, "owner": owner,
+            "project_root": str(project.resolve()), "worktree": None,
+            "objective": "Complete the bounded assigned work.", "owned_scope": [] if reviewer else ["path:app"],
+            "exclusions": ["Do not change unrelated files."], "authority": "read-only" if reviewer else "write",
+            "disposition": disposition, "recipe": recipe, "verification": ["Run focused checks."],
+            "dependencies": [], "languages": {"live": "Vietnamese", "artifact": "English"},
+            "topology_rationale": None, "candidate": None, "review_cycle": 1,
+            "prior_review": None, "convergence_assessment": None, "cost_approval": None,
+        }), encoding="utf-8")
+        return assignment
 
     def runtime_binding(self, role: str = "lead", pane: str = "wX:pE0") -> Path:
         project = self.project("runtime-project")
@@ -115,24 +144,54 @@ class ProjectValidationTests(unittest.TestCase):
         completed = self.run_cli("validate-project", "--project-root", str(project))
         self.assertEqual(completed.returncode, 0, completed.stderr)
         result = json.loads(completed.stdout)
-        self.assertEqual(result["config"]["version"], 3)
+        self.assertEqual(result["config"]["version"], 4)
         self.assertEqual(result["languages"], {"artifact": "English", "live": "Vietnamese"})
         self.assertEqual(result["recipes"]["lead"]["kind"], "codex")
-        self.assertEqual(result["recipes"]["fallback_peer"]["name"], "engineer")
+        self.assertEqual(result["recipes"]["routing"]["engineer"]["default_recipe"], "engineer")
 
     def test_validate_project_rejects_unknown_version_and_wrong_root(self) -> None:
         project = self.project()
         config = project / ".orchestration/herdr-orchestrator.toml"
-        config.write_text(config.read_text(encoding="utf-8").replace("version = 3", "version = 2"), encoding="utf-8")
+        config.write_text(config.read_text(encoding="utf-8").replace("version = 4", "version = 2"), encoding="utf-8")
         version = self.run_cli("validate-project", "--project-root", str(project))
         self.assertEqual(version.returncode, 2)
-        self.assertIn("version must be 3", version.stderr)
-        config.write_text(config.read_text(encoding="utf-8").replace("version = 2", "version = 3"), encoding="utf-8")
+        self.assertIn("version must be 4", version.stderr)
+        config.write_text(config.read_text(encoding="utf-8").replace("version = 2", "version = 4"), encoding="utf-8")
         protocol = project / ".orchestration/workspace-protocol.md"
         protocol.write_text(protocol.read_text(encoding="utf-8").replace(str(project.resolve()), str(self.root.resolve())), encoding="utf-8")
         wrong_root = self.run_cli("validate-project", "--project-root", str(project))
         self.assertEqual(wrong_root.returncode, 2)
         self.assertIn("canonical project root", wrong_root.stderr)
+
+    def test_validate_project_accepts_repository_root_wrapped_as_inline_code(self) -> None:
+        project = self.project()
+        protocol = project / ".orchestration/workspace-protocol.md"
+        protocol.write_text(
+            protocol.read_text(encoding="utf-8").replace(
+                str(project.resolve()), f"`{project.resolve()}`",
+            ),
+            encoding="utf-8",
+        )
+
+        completed = self.run_cli("validate-project", "--project-root", str(project))
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(json.loads(completed.stdout)["protocol_repository_root"], str(project.resolve()))
+
+    def test_validate_project_rejects_malformed_inline_code_repository_root(self) -> None:
+        project = self.project()
+        protocol = project / ".orchestration/workspace-protocol.md"
+        protocol.write_text(
+            protocol.read_text(encoding="utf-8").replace(
+                str(project.resolve()), f"`{project.resolve()}``",
+            ),
+            encoding="utf-8",
+        )
+
+        completed = self.run_cli("validate-project", "--project-root", str(project))
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("canonical absolute path", completed.stderr)
 
     def test_validate_project_accepts_a_linked_worktree_of_protocol_repository_root(self) -> None:
         project = self.project()
@@ -184,13 +243,13 @@ class ProjectValidationTests(unittest.TestCase):
         project = self.project()
         canonical = project / ".orchestration"
         candidate_config, candidate_protocol = self.root / "candidate.toml", self.root / "candidate.md"
-        candidate_config.write_text(canonical.joinpath("herdr-orchestrator.toml").read_text(encoding="utf-8").replace("version = 3", "version = 2"), encoding="utf-8")
+        candidate_config.write_text(canonical.joinpath("herdr-orchestrator.toml").read_text(encoding="utf-8").replace("version = 4", "version = 2"), encoding="utf-8")
         candidate_protocol.write_bytes(canonical.joinpath("workspace-protocol.md").read_bytes())
 
         completed = self.run_cli("validate-project", "--project-root", str(project), "--config", str(candidate_config), "--protocol", str(candidate_protocol))
 
         self.assertEqual(completed.returncode, 2)
-        self.assertIn("version must be 3", completed.stderr)
+        self.assertIn("version must be 4", completed.stderr)
 
     def test_validate_project_default_uses_canonical_paths(self) -> None:
         project = self.project()
@@ -321,7 +380,7 @@ class ProjectValidationTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         for command in ("init-run", "stage-assets", "pack", "deliver", "receipt"):
             self.assertNotIn(command, completed.stdout)
-        for command in ("validate-project", "render-runtime-binding", "render-runtime-binding-pane", "start-peer", "submit-prompt", "freeze-candidate", "inspect-candidate", "validate-acceptance", "render-assignment", "validate-handback", "harness-models"):
+        for command in ("validate-project", "validate-control-role-launch", "render-runtime-binding", "render-runtime-binding-pane", "start-peer", "submit-prompt", "freeze-candidate", "materialize-candidate", "validate-acceptance", "render-assignment", "validate-handback", "harness-models"):
             self.assertIn(command, completed.stdout)
 
     def test_codex_adapter_renders_literal_runtime_binding_commands(self) -> None:
@@ -483,6 +542,7 @@ class ProjectValidationTests(unittest.TestCase):
         self.assertEqual(environment["HERDR_ORCHESTRATOR_ROLE"], "peer")
         self.assertEqual(environment["HERDR_ORCHESTRATOR_PROJECT_ROOT"], str((self.root / "runtime-project").resolve()))
         self.assertEqual(environment["HERDR_ORCHESTRATOR_HELPER"], str(HELPER.resolve()))
+        self.assertEqual(environment["PYTHONDONTWRITEBYTECODE"], "1")
         self.assertTrue(set(environment).isdisjoint({
             "HOME", "CODEX_HOME", "HERDR_ENV", "HERDR_SOCKET_PATH",
             "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID",
@@ -512,15 +572,20 @@ class ProjectValidationTests(unittest.TestCase):
         config = project / ".orchestration/herdr-orchestrator.toml"
         config.write_text(
             "\n".join((
-                "version = 3",
-                'fallback_peer_recipe = "engineer"',
+                "version = 4", "assessment_after_cycles = 2",
                 "", "[roles.lead]", 'kind = "claude"',
                 'args = ["--model", "claude-test"]',
+                'cost_class = "standard"',
                 "", "[roles.supervisor]", 'kind = "claude"',
                 'args = ["--model", "claude-test"]',
+                'cost_class = "standard"',
                 "", "[peer_recipes.engineer]",
                 'description = "Verified Claude recipe"', 'kind = "claude"',
-                'args = ["--model", "claude-test"]', "",
+                'args = ["--model", "claude-test"]', 'cost_class = "standard"',
+                "", "[routing.engineer]", 'default_recipe = "engineer"', 'allowed_recipes = ["engineer"]',
+                "", "[routing.reviewer]", 'default_recipe = "engineer"', 'allowed_recipes = ["engineer"]',
+                "", "[routing.architect]", 'default_recipe = "engineer"', 'allowed_recipes = ["engineer"]',
+                "", "[routing.default]", 'default_recipe = "engineer"', 'allowed_recipes = ["engineer"]', "",
             )),
             encoding="utf-8",
         )
@@ -575,10 +640,12 @@ class ProjectValidationTests(unittest.TestCase):
             **os.environ,
             "PATH": str(command_directory) + os.pathsep + os.environ.get("PATH", ""),
             "HERDR_TEST_CAPTURE": str(capture),
+            "HERDR_ORCHESTRATOR_ROLE": "lead", "HERDR_PANE_ID": "wX:pLead",
+            "HERDR_ORCHESTRATOR_HELPER": str(HELPER.resolve()), "HERDR_ORCHESTRATOR_PROJECT_ROOT": str(project.resolve()), "HERDR_ORCHESTRATOR_PANE_ID": "wX:pLead",
         }
 
         completed = subprocess.run(
-            [sys.executable, str(HELPER), "submit-prompt", "--agent", "lead-01", "--prompt-file", str(prompt)],
+            [sys.executable, str(HELPER), "submit-prompt", "--agent", "lead-01", "--prompt-file", str(prompt), "--project-root", str(project)],
             check=False, capture_output=True, text=True, env=environment,
         )
 
@@ -606,26 +673,42 @@ class ProjectValidationTests(unittest.TestCase):
         prompt.write_text("one payload", encoding="utf-8")
 
         completed = subprocess.run(
-            [sys.executable, str(HELPER), "submit-prompt", "--agent", "lead-01", "--prompt-file", str(prompt)],
+            [sys.executable, str(HELPER), "submit-prompt", "--agent", "lead-01", "--prompt-file", str(prompt), "--project-root", str(project)],
             check=False, capture_output=True, text=True,
-            env={**os.environ, "PATH": str(command_directory) + os.pathsep + os.environ.get("PATH", "")},
+            env={**os.environ, "PATH": str(command_directory) + os.pathsep + os.environ.get("PATH", ""), "HERDR_ORCHESTRATOR_ROLE": "lead", "HERDR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_HELPER": str(HELPER.resolve()), "HERDR_ORCHESTRATOR_PROJECT_ROOT": str(project.resolve())},
         )
 
         self.assertEqual(completed.returncode, 2)
         self.assertIn("native Herdr prompt submission failed with exit status 17", completed.stderr)
         self.assertIn("native prompt rejected", completed.stderr)
 
+    def test_submit_prompt_rejects_foreign_project_root_binding(self) -> None:
+        project = self.project()
+        foreign_project = self.project("foreign-project")
+        prompt = self.root / "prompt.txt"
+        prompt.write_text("one payload", encoding="utf-8")
+
+        completed = subprocess.run(
+            [sys.executable, str(HELPER), "submit-prompt", "--agent", "lead-01", "--prompt-file", str(prompt), "--project-root", str(project)],
+            check=False, capture_output=True, text=True,
+            env={**os.environ, "HERDR_ORCHESTRATOR_ROLE": "lead", "HERDR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_HELPER": str(HELPER.resolve()), "HERDR_ORCHESTRATOR_PROJECT_ROOT": str(foreign_project.resolve())},
+        )
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("requires a bound canonical project root", completed.stderr)
+
     def test_successful_side_effects_tolerate_malformed_native_diagnostics(self) -> None:
         project = self.project()
+        assignment = self.peer_assignment(project)
         arguments = type("Arguments", (), {
-            "project_root": str(project), "config": None, "protocol": None,
-            "recipe": "engineer", "name": "csv-engineer", "pane": "wX:pED",
+            "assignment": str(assignment), "pane": "wX:pED",
             "dry_run": False,
         })()
         native_diagnostics = b"\xff\x1b[31mwarning\x00\x07\n"
         peer_completed = subprocess.CompletedProcess([], 0, native_diagnostics, native_diagnostics)
 
-        with mock.patch("subprocess.run", return_value=peer_completed):
+        environment = {"HERDR_ORCHESTRATOR_ROLE": "lead", "HERDR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_HELPER": str(HELPER.resolve()), "HERDR_ORCHESTRATOR_PROJECT_ROOT": str(project.resolve())}
+        with mock.patch.dict(os.environ, environment, clear=False), mock.patch("subprocess.run", return_value=peer_completed):
             from importlib.util import module_from_spec, spec_from_file_location
 
             specification = spec_from_file_location("herdr_orchestrator_diagnostic_test", HELPER)
@@ -657,9 +740,9 @@ class ProjectValidationTests(unittest.TestCase):
         prompt.write_text("one payload", encoding="utf-8")
 
         submitted = subprocess.run(
-            [sys.executable, str(HELPER), "submit-prompt", "--agent", "lead-01", "--prompt-file", str(prompt)],
+            [sys.executable, str(HELPER), "submit-prompt", "--agent", "lead-01", "--prompt-file", str(prompt), "--project-root", str(project)],
             check=False, capture_output=True, text=True,
-            env={**os.environ, "PATH": str(command_directory) + os.pathsep + os.environ.get("PATH", "")},
+            env={**os.environ, "PATH": str(command_directory) + os.pathsep + os.environ.get("PATH", ""), "HERDR_ORCHESTRATOR_ROLE": "lead", "HERDR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_HELPER": str(HELPER.resolve()), "HERDR_ORCHESTRATOR_PROJECT_ROOT": str(project.resolve())},
         )
 
         self.assertEqual(submitted.returncode, 0, submitted.stderr)
@@ -689,14 +772,14 @@ class ProjectValidationTests(unittest.TestCase):
 
     def test_start_peer_preserves_every_configured_recipe_argument_in_order(self) -> None:
         project = self.project()
+        assignment = self.peer_assignment(project)
         configured = self.codex_args(
             "gpt-5.6-luna", "--config", "model_reasoning_effort=low",
             "--ask-for-approval", "never", "--no-alt-screen",
         )
 
         completed = self.run_cli(
-            "start-peer", "--project-root", str(project), "--recipe", "engineer",
-            "--name", "csv-engineer", "--pane", "wX:pED", "--dry-run",
+            "start-peer", "--assignment", str(assignment), "--pane", "wX:pED", "--dry-run",
         )
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -710,15 +793,71 @@ class ProjectValidationTests(unittest.TestCase):
             ],
         )
 
-    def test_start_peer_only_accepts_runtime_name_and_pane_outside_recipe(self) -> None:
+    def test_elevated_peer_recipe_requires_assignment_cost_approval(self) -> None:
         project = self.project()
+        assignment = self.peer_assignment(project)
+        config = project / ".orchestration/herdr-orchestrator.toml"
+        peer_args = json.dumps(self.codex_args(
+            "gpt-5.6-luna", "--config", "model_reasoning_effort=low",
+            "--ask-for-approval", "never", "--no-alt-screen",
+        ))
+        config.write_text(
+            config.read_text(encoding="utf-8").replace(
+                f"args = {peer_args}\ncost_class = \"standard\"",
+                f"args = {peer_args}\ncost_class = \"elevated\"",
+            ),
+            encoding="utf-8",
+        )
+
+        rejected = self.run_cli(
+            "start-peer", "--assignment", str(assignment), "--pane", "wX:pED", "--dry-run",
+        )
+        self.assertEqual(rejected.returncode, 2)
+        self.assertIn("requires verbatim Human cost approval", rejected.stderr)
+
+        value = json.loads(assignment.read_text(encoding="utf-8"))
+        value["cost_approval"] = "Human approved elevated reviewer spend for this task."
+        assignment.write_text(json.dumps(value), encoding="utf-8")
+        accepted = self.run_cli(
+            "start-peer", "--assignment", str(assignment), "--pane", "wX:pED", "--dry-run",
+        )
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        result = json.loads(accepted.stdout)
+        self.assertEqual(result["recipe"]["cost_class"], "elevated")
+        self.assertEqual(result["cost_approval"], value["cost_approval"])
+
+    def test_elevated_control_role_requires_human_cost_approval(self) -> None:
+        project = self.project()
+        config = project / ".orchestration/herdr-orchestrator.toml"
+        config.write_text(config.read_text(encoding="utf-8").replace('cost_class = "standard"', 'cost_class = "elevated"', 1), encoding="utf-8")
+        rejected = self.run_cli("validate-control-role-launch", "--project-root", str(project), "--role", "lead")
+        self.assertEqual(rejected.returncode, 2)
+        self.assertIn("verbatim Human cost approval", rejected.stderr)
+        accepted = self.run_cli("validate-control-role-launch", "--project-root", str(project), "--role", "lead", "--cost-approval", "Human approved elevated Lead cost.")
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+
+    def test_project_recipes_require_an_explicit_cost_class(self) -> None:
+        project = self.project()
+        config = project / ".orchestration/herdr-orchestrator.toml"
+        config.write_text(
+            config.read_text(encoding="utf-8").replace('cost_class = "standard"\n', "", 1),
+            encoding="utf-8",
+        )
+
+        completed = self.run_cli("validate-project", "--project-root", str(project))
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("cost_class", completed.stderr)
+
+    def test_start_peer_derives_owner_and_recipe_from_assignment(self) -> None:
+        project = self.project()
+        first_assignment = self.peer_assignment(project, owner="csv-engineer")
+        second_assignment = self.peer_assignment(project, owner="candidate-reviewer", disposition="Reviewer")
         first = self.run_cli(
-            "start-peer", "--project-root", str(project), "--recipe", "engineer",
-            "--name", "csv-engineer", "--pane", "wX:pED", "--dry-run",
+            "start-peer", "--assignment", str(first_assignment), "--pane", "wX:pED", "--dry-run",
         )
         second = self.run_cli(
-            "start-peer", "--project-root", str(project), "--recipe", "engineer",
-            "--name", "candidate-reviewer", "--pane", "wX:pEE", "--dry-run",
+            "start-peer", "--assignment", str(second_assignment), "--pane", "wX:pEE", "--dry-run",
         )
 
         self.assertEqual(first.returncode, 0, first.stderr)
@@ -731,8 +870,33 @@ class ProjectValidationTests(unittest.TestCase):
         self.assertEqual(first_result["pane"], "wX:pED")
         self.assertEqual(second_result["pane"], "wX:pEE")
 
+    def test_start_peer_uses_route_default_when_assignment_omits_recipe(self) -> None:
+        project = self.project()
+        config = project / ".orchestration/herdr-orchestrator.toml"
+        alternate_args = json.dumps(self.codex_args("gpt-5.6-terra"))
+        config.write_text(
+            config.read_text(encoding="utf-8").replace(
+                'default_recipe = "engineer"\nallowed_recipes = ["engineer"]',
+                'default_recipe = "alternate"\nallowed_recipes = ["engineer", "alternate"]',
+                1,
+            ) + "\n[peer_recipes.alternate]\ndescription = \"Default Engineer route\"\nkind = \"codex\"\nargs = " + alternate_args + '\ncost_class = "standard"\n',
+            encoding="utf-8",
+        )
+        assignment = self.peer_assignment(project)
+        value = json.loads(assignment.read_text(encoding="utf-8"))
+        value["recipe"] = None
+        assignment.write_text(json.dumps(value), encoding="utf-8")
+
+        completed = self.run_cli(
+            "start-peer", "--assignment", str(assignment), "--pane", "wX:pED", "--dry-run",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(json.loads(completed.stdout)["recipe"]["name"], "alternate")
+
     def test_start_peer_executes_the_exact_rendered_herdr_argv(self) -> None:
         project = self.project()
+        assignment = self.peer_assignment(project)
         configured = self.codex_args(
             "gpt-5.6-luna", "--config", "model_reasoning_effort=low",
             "--ask-for-approval", "never", "--no-alt-screen",
@@ -742,13 +906,13 @@ class ProjectValidationTests(unittest.TestCase):
             "--pane", "wX:pED", "--", *configured,
         ]
         arguments = type("Arguments", (), {
-            "project_root": str(project), "config": None, "protocol": None,
-            "recipe": "engineer", "name": "csv-engineer", "pane": "wX:pED",
+            "assignment": str(assignment), "pane": "wX:pED",
             "dry_run": False,
         })()
         completed = subprocess.CompletedProcess(expected, 0, b'{"started":true}\n', b"")
 
-        with mock.patch("subprocess.run", return_value=completed) as run:
+        environment = {"HERDR_ORCHESTRATOR_ROLE": "lead", "HERDR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_HELPER": str(HELPER.resolve()), "HERDR_ORCHESTRATOR_PROJECT_ROOT": str(project.resolve())}
+        with mock.patch.dict(os.environ, environment, clear=False), mock.patch("subprocess.run", return_value=completed) as run:
             from importlib.util import module_from_spec, spec_from_file_location
 
             specification = spec_from_file_location("herdr_orchestrator_for_test", HELPER)
@@ -767,6 +931,7 @@ class ProjectValidationTests(unittest.TestCase):
 
     def test_start_peer_rejects_an_invented_unsupported_native_flag(self) -> None:
         project = self.project()
+        assignment = self.peer_assignment(project)
         config = project / ".orchestration/herdr-orchestrator.toml"
         config.write_text(
             config.read_text(encoding="utf-8").replace(
@@ -777,12 +942,80 @@ class ProjectValidationTests(unittest.TestCase):
         )
 
         completed = self.run_cli(
-            "start-peer", "--project-root", str(project), "--recipe", "engineer",
-            "--name", "csv-engineer", "--pane", "wX:pED", "--dry-run",
+            "start-peer", "--assignment", str(assignment), "--pane", "wX:pED", "--dry-run",
         )
 
         self.assertEqual(completed.returncode, 2)
         self.assertIn("peer_recipes.engineer.args has an unsupported option", completed.stderr)
+
+    def test_peer_binding_cannot_start_another_peer(self) -> None:
+        project = self.project()
+        assignment = self.peer_assignment(project)
+        environment = {**os.environ, "HERDR_ORCHESTRATOR_ROLE": "peer", "HERDR_PANE_ID": "wX:pPeer", "HERDR_ORCHESTRATOR_PANE_ID": "wX:pPeer", "HERDR_ORCHESTRATOR_HELPER": str(HELPER.resolve()), "HERDR_ORCHESTRATOR_PROJECT_ROOT": str(project.resolve())}
+        completed = subprocess.run(
+            [sys.executable, str(HELPER), "start-peer", "--assignment", str(assignment), "--pane", "wX:pChild", "--dry-run"],
+            check=False, capture_output=True, text=True, env=environment,
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("requires a bound role", completed.stderr)
+
+    def test_start_peer_rejects_mismatched_bound_pane(self) -> None:
+        project = self.project()
+        assignment = self.peer_assignment(project)
+        environment = {**os.environ, "HERDR_ORCHESTRATOR_ROLE": "lead", "HERDR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_PANE_ID": "wX:pForeign", "HERDR_ORCHESTRATOR_HELPER": str(HELPER.resolve()), "HERDR_ORCHESTRATOR_PROJECT_ROOT": str(project.resolve())}
+        completed = subprocess.run(
+            [sys.executable, str(HELPER), "start-peer", "--assignment", str(assignment), "--pane", "wX:pChild", "--dry-run"],
+            check=False, capture_output=True, text=True, env=environment,
+        )
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("PANE_ID to match", completed.stderr)
+
+    def test_cycle_three_requires_convergence_assessment(self) -> None:
+        project = self.project()
+        assignment = self.peer_assignment(project, disposition="Reviewer")
+        value = json.loads(assignment.read_text(encoding="utf-8"))
+        value.update({"review_cycle": 3, "prior_review": {"reviewer_assignment_id": "lead-01:review-02", "reviewer_assignment_sha256": "a" * 64, "reviewer_handback_sha256": "b" * 64}})
+        assignment.write_text(json.dumps(value), encoding="utf-8")
+        rejected = self.run_cli("validate-assignment", "--assignment", str(assignment), "--project-root", str(project))
+        self.assertEqual(rejected.returncode, 2)
+        self.assertIn("requires convergence_assessment", rejected.stderr)
+        value["convergence_assessment"] = {"mechanisms": [{"mechanism": "parser boundary", "findings": ["review-02 finding 1"]}], "decision": "retry", "rationale": "Findings repeat the parser-boundary mechanism."}
+        assignment.write_text(json.dumps(value), encoding="utf-8")
+        invalid = self.run_cli("validate-assignment", "--assignment", str(assignment), "--project-root", str(project))
+        self.assertEqual(invalid.returncode, 2)
+        self.assertIn("decision must be continue", invalid.stderr)
+        value["convergence_assessment"]["decision"] = "re-architect"
+        assignment.write_text(json.dumps(value), encoding="utf-8")
+        accepted = self.run_cli("validate-assignment", "--assignment", str(assignment), "--project-root", str(project))
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+
+    def test_validate_assignment_uses_its_project_route_without_an_optional_override(self) -> None:
+        project = self.project()
+        assignment = self.peer_assignment(project)
+        value = json.loads(assignment.read_text(encoding="utf-8"))
+        value["recipe"] = "unconfigured-recipe"
+        assignment.write_text(json.dumps(value), encoding="utf-8")
+
+        rejected = self.run_cli("validate-assignment", "--assignment", str(assignment))
+
+        self.assertEqual(rejected.returncode, 2)
+        self.assertIn("not allowed for routing.engineer", rejected.stderr)
+
+    def test_validate_assignment_fails_closed_without_project_policy_unless_explicitly_structural(self) -> None:
+        project = self.root / "no-policy-project"
+        project.mkdir()
+        assignment = self.peer_assignment(self.project("policy-source"))
+        value = json.loads(assignment.read_text(encoding="utf-8"))
+        value["project_root"] = str(project.resolve())
+        assignment.write_text(json.dumps(value), encoding="utf-8")
+
+        rejected = self.run_cli("validate-assignment", "--assignment", str(assignment))
+        structural = self.run_cli("validate-assignment", "--assignment", str(assignment), "--structural-only")
+
+        self.assertEqual(rejected.returncode, 2)
+        self.assertIn("project config is not a readable file", rejected.stderr)
+        self.assertEqual(structural.returncode, 0, structural.stderr)
 
 
 if __name__ == "__main__":

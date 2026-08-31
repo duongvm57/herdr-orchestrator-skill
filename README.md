@@ -71,6 +71,13 @@ authorization, tamper-proof evidence, or automatic acceptance. Behavioral
 confidence requires repeated real runs against the supported harness/model
 versions.
 
+Role execution permissions are provider-specific and stay in each recipe's
+native `args`. SLP authority is separate from provider sandbox and approval
+permissions; see the commented examples in the project config template. In
+particular, a non-interactive approval policy does not expand a sandbox's
+writable filesystem roots, including Git common metadata used by linked
+worktrees.
+
 OpenAI package metadata marks the skill explicit-only, and its entrypoint
 requires explicit Human invocation.
 

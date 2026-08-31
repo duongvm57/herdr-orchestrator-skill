@@ -37,7 +37,7 @@ class LiveEvalTests(unittest.TestCase):
 
     def test_manifest_references_canonical_invariants_and_critical_thresholds(self) -> None:
         manifest = run_evals.validate_suite(copy.deepcopy(self.suite), ROOT)
-        self.assertEqual(len(manifest["cases"]), 15)
+        self.assertEqual(len(manifest["cases"]), 16)
         self.assertEqual({case["suite"] for case in manifest["cases"]}, {"install-materialization", "regression-orchestration", "contract-evidence", "capability-generalization"})
         self.assertEqual({case["agent"]["model"] for case in manifest["cases"]}, {"gpt-5.6-luna"})
         for case in (item for item in manifest["cases"] if item["release_gate"]):
@@ -96,6 +96,10 @@ class LiveEvalTests(unittest.TestCase):
             self.assertTrue(copied.is_dir())
             self.assertFalse(copied.is_symlink())
             self.assertEqual((project / install["official_skill_path"] / "SKILL.md").read_text(encoding="utf-8"), "official skill")
+            ocr = project / str(install["ocr_peer_reviewer_path"])
+            self.assertTrue(ocr.is_dir())
+            self.assertFalse(ocr.is_symlink())
+            self.assertEqual(install["ocr_peer_reviewer_tree_sha256"], run_evals._skill_tree_sha256(ocr))
 
     def test_materialized_install_verifier_rejects_incomplete_symlinked_or_unisolated_install(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -269,10 +273,17 @@ class LiveEvalTests(unittest.TestCase):
             self.assertTrue(all(value == [] for value in evidence_template.values()))
             assignment_template = project / ".orchestration/peer-assignment-template.json"
             completed = subprocess.run(
-                [sys.executable, str(ROOT / "skills/herdr-orchestrator/scripts/herdr_orchestrator.py"), "validate-assignment", "--assignment", str(assignment_template)],
+                [sys.executable, str(ROOT / "skills/herdr-orchestrator/scripts/herdr_orchestrator.py"), "validate-assignment", "--assignment", str(assignment_template), "--project-root", str(project)],
                 check=False, text=True, capture_output=True,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_ocr_fixture_authorizes_its_bounded_candidate_change(self) -> None:
+        protocol = (ROOT / "tests/evals/fixtures/candidate-review/WORKSPACE_PROTOCOL.md").read_text(encoding="utf-8")
+        ocr_case = next(item for item in self.suite["cases"] if item["id"] == "ocr-materialized-review")
+
+        self.assertIn("candidate-change.txt", protocol)
+        self.assertIn("Create candidate-change.txt", ocr_case["task"])
 
     def test_grading_requires_runner_observed_topology_not_agent_claims(self) -> None:
         grader = {"kind": "evidence-contract", "path": "evaluation-evidence.json", "requirements": {"minimum_peer_agents": 1}}
@@ -282,8 +293,30 @@ class LiveEvalTests(unittest.TestCase):
             self.assertFalse(run_evals.grade(grader, project, {"peer_agents": [], "supervisor_agents": []})["passed"])
             self.assertTrue(run_evals.grade(grader, project, {"peer_agents": ["peer-a"], "supervisor_agents": []})["passed"])
 
+    def test_grading_requires_preserved_ocr_status_in_a_validated_handback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            assignment = run_evals._deterministic_assignment("ocr:review", "peer-a", [], project, authority="read-only", disposition="Reviewer")
+            handback = run_evals._deterministic_handback("ocr:review", "COMPLETE")
+            handback["evidence"] = "Review procedure: ocr-delegate\\nOCR status: USED"
+            run_evals._write_eval_json(project / "evidence/assignment.json", assignment)
+            run_evals._write_eval_json(project / "evidence/handback.json", handback)
+            run_evals._write_eval_json(project / "evaluation-evidence.json", {
+                "peer_agents": ["peer-a"], "supervisor_agents": [],
+                "handbacks": [{"assignment": "evidence/assignment.json", "handback": "evidence/handback.json", "peer_agent": "peer-a"}],
+            })
+            grader = {
+                "kind": "evidence-contract", "path": "evaluation-evidence.json",
+                "requirements": {"minimum_peer_agents": 1, "validate_handbacks": True, "required_handback_evidence_text": "OCR status: USED"},
+            }
+
+            helper = ROOT / "skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
+            self.assertTrue(run_evals.grade(grader, project, {"peer_agents": ["peer-a"], "supervisor_agents": []}, helper=helper)["passed"])
+            grader["requirements"]["required_handback_evidence_text"] = "OCR status: OCR_UNAVAILABLE"
+            self.assertFalse(run_evals.grade(grader, project, {"peer_agents": ["peer-a"], "supervisor_agents": []}, helper=helper)["passed"])
+
     def test_live_prompt_contains_no_grader_truth(self) -> None:
-        case = self.suite["cases"][1]
+        case = next(item for item in self.suite["cases"] if item["id"] == "ocr-materialized-review")
         with tempfile.TemporaryDirectory() as temporary:
             project = self.prepared_live_project(Path(temporary))
             prompt = run_evals._live_prompt(case, project, ROOT / "skills/herdr-orchestrator")
@@ -300,6 +333,10 @@ class LiveEvalTests(unittest.TestCase):
             self.assertIn("Do not set HERDR_ENV", prompt)
             self.assertIn("evaluation-evidence-template.json", prompt)
             self.assertIn("actual task artifacts", prompt)
+            self.assertIn("peer_agents and supervisor_agents are arrays of exact agent-name strings", prompt)
+            self.assertIn("Each handbacks item is exactly assignment, handback, and peer_agent", prompt)
+            self.assertIn("evidence/ocr-reviewer-assignment.json", prompt)
+            self.assertIn("never index a temporary checkout or an absolute path", prompt)
             self.assertNotIn("parent.id is this Lead", prompt)
             self.assertNotIn("owner is never the Lead", prompt)
             self.assertNotIn('authority "write"', prompt)
@@ -318,6 +355,10 @@ class LiveEvalTests(unittest.TestCase):
             coupled_prompt = run_evals._live_prompt(coupled_case, project, ROOT / "skills/herdr-orchestrator")
             self.assertIn("atomic lifecycle/state boundary", coupled_prompt)
             self.assertNotIn("nonempty topology_rationale", coupled_prompt)
+
+            ocr_case = next(item for item in self.suite["cases"] if item["id"] == "ocr-materialized-review")
+            ocr_prompt = run_evals._live_prompt(ocr_case, project, ROOT / "skills/herdr-orchestrator")
+            self.assertIn("installed $ocr-peer-reviewer addon is available", ocr_prompt)
 
     def test_zero_peer_prompt_does_not_teach_a_topology_outcome(self) -> None:
         case = self.suite["cases"][0]

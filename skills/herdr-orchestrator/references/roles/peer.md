@@ -23,5 +23,5 @@ authority, or external blocker directly so the Lead can read and route it.
 
 Own proportionate verification for writes without self-accepting difficult
 work. Reviewer falsifies only the exact candidate: use `ocr-peer-reviewer` when
-available, otherwise review directly. Only complete coverage supports
-`APPROVE`.
+available, otherwise review directly. Put findings and coverage in `evidence`;
+return only the same semantic handback outcomes as every other Peer.

@@ -124,6 +124,7 @@ def _validate_grader(value: Any, label: str) -> dict[str, Any]:
         "require_coupled_assignment_scopes", "require_correlation_sequence",
         "supervisor_routes", "controls", "review_controls", "handback_controls",
         "require_materialized_install", "required_handback_evidence_path",
+        "required_handback_evidence_text", "validate_handbacks", "require_ocr_materialized_evidence",
     }
     if not isinstance(requirements, dict) or not requirements or set(requirements) - allowed:
         raise EvalError(f"{label}.requirements has unsupported or missing fields")
@@ -136,7 +137,7 @@ def _validate_grader(value: Any, label: str) -> dict[str, Any]:
         raise EvalError(f"{label}.requirements.minimum_handbacks must be a positive integer")
     if "require_topology_rationale" in requirements and requirements["require_topology_rationale"] is not True:
         raise EvalError(f"{label}.requirements.require_topology_rationale must be true when present")
-    for key in ("require_assignment_binding", "require_correlation_sequence"):
+    for key in ("require_assignment_binding", "require_correlation_sequence", "validate_handbacks", "require_ocr_materialized_evidence"):
         if key in requirements and requirements[key] is not True:
             raise EvalError(f"{label}.requirements.{key} must be true when present")
     if "require_disjoint_assignment_scopes" in requirements and (not isinstance(requirements["require_disjoint_assignment_scopes"], int) or requirements["require_disjoint_assignment_scopes"] < 2):
@@ -197,6 +198,12 @@ def _validate_grader(value: Any, label: str) -> dict[str, Any]:
         raise EvalError(f"{label}.requirements.require_materialized_install must be true when present")
     if "required_handback_evidence_path" in requirements:
         _relative(requirements["required_handback_evidence_path"], f"{label}.requirements.required_handback_evidence_path")
+    if "required_handback_evidence_text" in requirements:
+        _text(requirements["required_handback_evidence_text"], f"{label}.requirements.required_handback_evidence_text")
+        if "handbacks" not in requirements and requirements.get("validate_handbacks") is not True:
+            raise EvalError(f"{label}.requirements.required_handback_evidence_text requires handback validation")
+    if requirements.get("require_ocr_materialized_evidence") and requirements.get("validate_handbacks") is not True:
+        raise EvalError(f"{label}.requirements.require_ocr_materialized_evidence requires handback validation")
     return value
 
 
@@ -282,9 +289,9 @@ def load_suite(path: Path, root: Path = ROOT) -> dict[str, Any]:
     return validate_suite(_read_json(path, "eval suite"), root)
 
 
-def _command(arguments: list[str], cwd: Path | None = None, timeout: int = 120) -> subprocess.CompletedProcess[str]:
+def _command(arguments: list[str], cwd: Path | None = None, timeout: int = 120, environment: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(arguments, cwd=cwd, check=False, capture_output=True, text=True, timeout=timeout)
+        return subprocess.run(arguments, cwd=cwd, check=False, capture_output=True, text=True, timeout=timeout, env=environment)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise EvalError(f"command failed to run: {' '.join(arguments[:3])}: {exc}") from exc
 
@@ -420,12 +427,18 @@ def _owned_private_eval_home(home_root: Path):
 def _materialize_install(project: Path, home: Path, source_skill: Path | None, official_skill: str) -> dict[str, Any]:
     target = project / ".codex/skills/herdr-orchestrator"
     official_target = project / ".codex/skills/herdr"
+    ocr_source = source_skill.parent / "ocr-peer-reviewer" if source_skill is not None else None
+    ocr_target = project / ".codex/skills/ocr-peer-reviewer"
     if source_skill is not None:
         shutil.copytree(source_skill, target, symlinks=False)
+    if ocr_source is not None and ocr_source.is_dir():
+        shutil.copytree(ocr_source, ocr_target, symlinks=False)
     official_target.mkdir(parents=True)
     (official_target / "SKILL.md").write_text(official_skill, encoding="utf-8")
     if source_skill is not None and (target.is_symlink() or any(path.is_symlink() for path in target.rglob("*"))):
         raise EvalError("project-local skill installation must be materialized, not symlinked")
+    if ocr_source is not None and ocr_source.is_dir() and (ocr_target.is_symlink() or any(path.is_symlink() for path in ocr_target.rglob("*"))):
+        raise EvalError("project-local OCR skill installation must be materialized, not symlinked")
     return {
         "mode": "materialized-project-local-copy" if source_skill is not None else "official-herdr-skill-only-control",
         "path": str(target.relative_to(project)) if source_skill is not None else None,
@@ -433,6 +446,8 @@ def _materialize_install(project: Path, home: Path, source_skill: Path | None, o
         "tree_sha256": _skill_tree_sha256(target) if source_skill is not None else None,
         "official_skill_path": str(official_target.relative_to(project)),
         "official_skill_sha256": _sha256(official_skill.encode()),
+        "ocr_peer_reviewer_path": str(ocr_target.relative_to(project)) if ocr_source is not None and ocr_source.is_dir() else None,
+        "ocr_peer_reviewer_tree_sha256": _skill_tree_sha256(ocr_target) if ocr_source is not None and ocr_source.is_dir() else None,
         "home": str(home),
     }
 
@@ -450,13 +465,23 @@ def _verify_materialized_install(project: Path, home: Path, installation: dict[s
             raise EvalError("project-local current skill must be a complete materialized non-symlink tree")
         if target.resolve() == source_skill.resolve() or installation.get("tree_sha256") != _skill_tree_sha256(target):
             raise EvalError("project-local current skill materialization/provenance is invalid")
+        ocr_source = source_skill.parent / "ocr-peer-reviewer"
+        if ocr_source.is_dir():
+            ocr_path = installation.get("ocr_peer_reviewer_path")
+            if not isinstance(ocr_path, str):
+                raise EvalError("project-local OCR skill materialization path is missing")
+            ocr_target = project / ocr_path
+            if not ocr_target.is_dir() or ocr_target.is_symlink() or any(path.is_symlink() for path in ocr_target.rglob("*")):
+                raise EvalError("project-local OCR skill must be a complete materialized non-symlink tree")
+            if ocr_target.resolve() == ocr_source.resolve() or installation.get("ocr_peer_reviewer_tree_sha256") != _skill_tree_sha256(ocr_target):
+                raise EvalError("project-local OCR skill materialization/provenance is invalid")
     official_path = installation.get("official_skill_path")
     if not isinstance(official_path, str):
         raise EvalError("official Herdr skill materialization path is missing")
     official = project / official_path / "SKILL.md"
     if not official.is_file() or official.is_symlink() or _sha256(official.read_bytes()) != installation.get("official_skill_sha256") or official.read_text(encoding="utf-8") != official_skill:
         raise EvalError("official Herdr skill materialization/provenance is invalid")
-    return {"materialized_installation": True, "project_local_skill": skill_path, "official_skill": official_path}
+    return {"materialized_installation": True, "project_local_skill": skill_path, "official_skill": official_path, "ocr_peer_reviewer": installation.get("ocr_peer_reviewer_path")}
 
 
 def _isolated_codex_config(agent: dict[str, str], project: Path) -> str:
@@ -524,12 +549,18 @@ def _prepare_fixture(seed: Path, project: Path) -> None:
     ]
     (orchestration / "herdr-orchestrator.toml").write_text(
         "\n".join([
-            "version = 3", 'fallback_peer_recipe = "eval-peer"',
+            "version = 4", "assessment_after_cycles = 2",
             "", "[roles.lead]", 'kind = "codex"', f"args = {json.dumps(role_args)}",
+            'cost_class = "standard"',
             "", "[roles.supervisor]", 'kind = "codex"', f"args = {json.dumps(role_args)}",
+            'cost_class = "standard"',
             "", "[peer_recipes.eval-peer]",
             'description = "Bounded Luna Peer for isolated evaluation work."',
-            'kind = "codex"', f"args = {json.dumps(role_args)}", "",
+            'kind = "codex"', f"args = {json.dumps(role_args)}", 'cost_class = "standard"',
+            "", "[routing.engineer]", 'default_recipe = "eval-peer"', 'allowed_recipes = ["eval-peer"]',
+            "", "[routing.reviewer]", 'default_recipe = "eval-peer"', 'allowed_recipes = ["eval-peer"]',
+            "", "[routing.architect]", 'default_recipe = "eval-peer"', 'allowed_recipes = ["eval-peer"]',
+            "", "[routing.default]", 'default_recipe = "eval-peer"', 'allowed_recipes = ["eval-peer"]', "",
         ]),
         encoding="utf-8",
     )
@@ -578,7 +609,7 @@ def _prepare_fixture(seed: Path, project: Path) -> None:
     (orchestration / "peer-assignment-template.json").write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "assignment_id": "template-assignment",
                 "role": "peer",
                 "parent": {"role": "lead", "id": "template-lead"},
@@ -596,6 +627,10 @@ def _prepare_fixture(seed: Path, project: Path) -> None:
                 "languages": {"live": "English", "artifact": "English"},
                 "topology_rationale": None,
                 "candidate": None,
+                "review_cycle": 1,
+                "prior_review": None,
+                "convergence_assessment": None,
+                "cost_approval": None,
             },
             indent=2,
         )
@@ -657,7 +692,7 @@ def _write_eval_json(path: Path, value: dict[str, Any]) -> None:
 
 def _deterministic_assignment(assignment_id: str, owner: str, scopes: list[str], project_root: Path, *, worktree: dict[str, str] | None = None, authority: str = "write", disposition: str = "Engineer", candidate: dict[str, str] | None = None) -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "assignment_id": assignment_id,
         "role": "peer",
         "parent": {"role": "lead", "id": "deterministic-lead"},
@@ -675,6 +710,10 @@ def _deterministic_assignment(assignment_id: str, owner: str, scopes: list[str],
         "languages": {"live": "English", "artifact": "English"},
         "topology_rationale": None,
         "candidate": candidate,
+        "review_cycle": 1,
+        "prior_review": None,
+        "convergence_assessment": None,
+        "cost_approval": None,
     }
 
 
@@ -720,18 +759,20 @@ def _run_deterministic(case: dict[str, Any], project: Path, home: Path, installa
         helper = project / ".codex/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
         if not helper.is_file():
             raise EvalError("materialized candidate helper is unavailable for deterministic grading")
-        first_freeze = _command([sys.executable, str(helper), "freeze-candidate", "--project-root", str(project)], cwd=project, timeout=30)
+        environment = {**os.environ, "HERDR_ORCHESTRATOR_ROLE": "lead", "HERDR_PANE_ID": "wdet:pLead", "HERDR_ORCHESTRATOR_PANE_ID": "wdet:pLead", "HERDR_ORCHESTRATOR_HELPER": str(helper.resolve()), "HERDR_ORCHESTRATOR_PROJECT_ROOT": str(project.resolve())}
+        first_freeze = _command([sys.executable, str(helper), "freeze-candidate", "--project-root", str(project)], cwd=project, timeout=30, environment=environment)
         if first_freeze.returncode:
             raise EvalError(f"could not freeze deterministic stale candidate: {first_freeze.stderr.strip()}")
         stale = json.loads(first_freeze.stdout)["candidate"]
+        stale_document = _read_json(project / ".orchestration/current-candidate.json", "deterministic stale candidate")
         (project / "candidate-current.txt").write_text("new immutable candidate tree\n", encoding="utf-8")
-        current_freeze = _command([sys.executable, str(helper), "freeze-candidate", "--project-root", str(project)], cwd=project, timeout=30)
+        current_freeze = _command([sys.executable, str(helper), "freeze-candidate", "--project-root", str(project)], cwd=project, timeout=30, environment=environment)
         if current_freeze.returncode:
             raise EvalError(f"could not freeze deterministic current candidate: {current_freeze.stderr.strip()}")
-        current = json.loads(current_freeze.stdout)["candidate"]
+        current_document = _read_json(project / ".orchestration/current-candidate.json", "deterministic current candidate")
         _write_eval_json(project / "evidence/stale-review.json", _deterministic_assignment("deterministic:stale-review", "reviewer-a", [], project, authority="read-only", disposition="Reviewer", candidate=stale))
-        _write_eval_json(project / "evidence/current-candidate.json", current)
-        _write_eval_json(project / "evidence/matching-candidate.json", stale)
+        _write_eval_json(project / "evidence/current-candidate.json", current_document)
+        _write_eval_json(project / "evidence/matching-candidate.json", stale_document)
     elif case_id in {"reopen-handback-invalid-contract", "reopen-handback-valid-contract"}:
         outcome = "REOPEN_REQUEST" if case_id == "reopen-handback-invalid-contract" else "COMPLETE"
         stem = "reopen-invalid" if outcome == "REOPEN_REQUEST" else "reopen-valid"
@@ -801,11 +842,12 @@ def grade(grader: dict[str, Any], project: Path, topology: dict[str, Any], *, he
             raise EvalError("evaluation evidence has too few observed Supervisor agents")
         handbacks = candidate.get("handbacks", [])
         assignment_documents: list[tuple[dict[str, Any], dict[str, Any]]] = []
-        if "handbacks" in requirements:
+        if "handbacks" in requirements or requirements.get("validate_handbacks"):
             if not isinstance(handbacks, list):
                 raise EvalError("evaluation evidence handbacks must be an array")
             outcomes: list[str] = []
             rationales: list[Any] = []
+            handback_documents: list[dict[str, Any]] = []
             handback_helper = helper or project / ".codex/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
             for item in handbacks:
                 if not isinstance(item, dict) or set(item) != {"assignment", "handback", "peer_agent"}:
@@ -817,7 +859,11 @@ def grade(grader: dict[str, Any], project: Path, topology: dict[str, Any], *, he
                 completed = _command([sys.executable, str(handback_helper), "validate-handback", "--assignment", str(assignment), "--handback", str(handback)], cwd=project, timeout=30)
                 if completed.returncode:
                     raise EvalError(f"external handback validation failed: {completed.stderr.strip()}")
-                outcomes.append(_read_json(handback, "evidence handback").get("outcome"))
+                handback_document = _read_json(handback, "evidence handback")
+                if not isinstance(handback_document, dict):
+                    raise EvalError("evidence handback must be an object")
+                handback_documents.append(handback_document)
+                outcomes.append(handback_document.get("outcome"))
                 assignment_document = _read_json(assignment, "evidence assignment")
                 if not isinstance(assignment_document, dict):
                     raise EvalError("evidence assignment must be an object")
@@ -825,7 +871,7 @@ def grade(grader: dict[str, Any], project: Path, topology: dict[str, Any], *, he
                 rationales.append(assignment_document.get("topology_rationale"))
             if len(handbacks) < requirements.get("minimum_handbacks", 0):
                 raise EvalError("evaluation evidence has too few externally validated handbacks")
-            for outcome in requirements["handbacks"]:
+            for outcome in requirements.get("handbacks", []):
                 if outcome not in outcomes:
                     raise EvalError(f"required semantic handback outcome was not externally validated: {outcome}")
             if "required_handback_evidence_path" in requirements:
@@ -841,6 +887,37 @@ def grade(grader: dict[str, Any], project: Path, topology: dict[str, Any], *, he
                             continue
                 if expected_path not in evidence_paths:
                     raise EvalError("required externally inspectable handback evidence path was not preserved")
+            if "required_handback_evidence_text" in requirements:
+                expected_text = requirements["required_handback_evidence_text"]
+                if not any(expected_text in document.get("evidence", "") for document in handback_documents):
+                    raise EvalError("required externally validated handback evidence text was not preserved")
+            if requirements.get("require_ocr_materialized_evidence"):
+                candidate_path = project / ".orchestration/current-candidate.json"
+                if not candidate_path.is_file():
+                    raise EvalError("OCR control requires the canonical current candidate document")
+                required_paths = (
+                    project / "evidence/ocr-materialization.json",
+                    project / "evidence/ocr-reviewer-output.txt",
+                    project / "evidence/ocr/preview.json",
+                    project / "evidence/ocr/rules.json",
+                )
+                if not all(path.is_file() for path in required_paths):
+                    raise EvalError("OCR control is missing materialization receipt or raw OCR artifacts")
+                receipt = _read_json(required_paths[0], "OCR materialization receipt")
+                current = _read_json(candidate_path, "current candidate")
+                if not isinstance(receipt, dict) or not isinstance(current, dict) or receipt.get("synthetic_commit") != current.get("synthetic_commit"):
+                    raise EvalError("OCR materialization receipt does not bind the current synthetic candidate commit")
+                if "OCR status: USED" not in required_paths[1].read_text(encoding="utf-8", errors="replace"):
+                    raise EvalError("OCR command output does not report OCR status USED")
+                for raw_path in required_paths[2:]:
+                    _read_json(raw_path, f"OCR raw artifact {raw_path.name}")
+                reviewer_records = [(item, document) for item, document in assignment_documents if document.get("disposition", "").lower() == "reviewer"]
+                if len(reviewer_records) != 1:
+                    raise EvalError("OCR control requires exactly one validated Reviewer Assignment")
+                reviewer_item, _ = reviewer_records[0]
+                review = _command([sys.executable, str(handback_helper), "validate-review", "--assignment", str(_relative_evidence_path(project, reviewer_item["assignment"], "OCR Reviewer Assignment")), "--current-candidate", str(candidate_path), "--project-root", str(project)], cwd=project, timeout=30)
+                if review.returncode:
+                    raise EvalError(f"OCR Reviewer Assignment is not bound to the current candidate: {review.stderr.strip()}")
             if requirements.get("require_topology_rationale") and not any(isinstance(value, str) and value.strip() for value in rationales):
                 raise EvalError("no externally validated Assignment recorded a topology rationale")
         if requirements.get("require_assignment_binding"):
@@ -1233,15 +1310,29 @@ def _cleanup_eval_owned_panes(project: Path, provisioned_panes: Sequence[str]) -
 
 def _live_prompt(case: dict[str, Any], project: Path, source_skill: Path | None, supervisor_agents: Sequence[str] = ()) -> str:
     activation = "Activate and follow the installed $herdr-orchestrator skill; " if source_skill is not None else "Use the release-matched installed Herdr skill only; "
+    ocr_activation = "The installed $ocr-peer-reviewer addon is available for this OCR task; activate it for the Reviewer. " if "ocr-materialized-review" in case["invariants"] else ""
+    ocr_evidence = (
+        "For this OCR control, preserve project-owned copies at "
+        "evidence/ocr-reviewer-assignment.json, evidence/ocr-reviewer-handback.json, and "
+        "evidence/ocr-reviewer-output.txt plus the materialize-candidate receipt at "
+        "evidence/ocr-materialization.json and raw OCR preview.json/rules.json under evidence/ocr/ "
+        "before writing the public index. The handback must include "
+        "the actual `OCR status: ...` and candidate range in its evidence. Index the two JSON files using "
+        "those exact project-relative paths; never index a temporary checkout or an absolute path. "
+        if "ocr-materialized-review" in case["invariants"] else ""
+    )
     return (
         "# Bounded live evaluation mandate\n\n"
         + "You are the already-spawned Project Lead for a bounded repeatable live evaluation in a fresh consumer project. The harness already materialized the skills and validated the project preflight. Do not take a Launcher/setup route, repeat setup, or create another Lead or Supervisor. "
         + activation + "do not read any source repository outside this project. "
+        + ocr_activation
+        + ocr_evidence
         + f"Public task: {case['task']}\n"
         + (f"Human-attached Supervisor agent(s) for this public task: {', '.join(supervisor_agents)}.\n" if supervisor_agents else "")
         + "Any dynamically created Peer must use the installed orchestration contract's exact bound Lead pane as the native split target, then derive its binding from the exact pane ID returned by Herdr. Pass only the rendered project/helper/peer-role pane context; do not override a harness profile home, copy credentials, or prepare login. Do not set HERDR_ENV, HERDR_SOCKET_PATH, HERDR_PANE_ID, HERDR_TAB_ID, or HERDR_WORKSPACE_ID. "
         + "Use the installed skill and public workspace protocol to perform the public task. Runner preflight is already complete: do not reread setup documentation or perform unrelated work. "
         + "Use .orchestration/evaluation-evidence-template.json as the public schema for ./evaluation-evidence.json at the consumer-project root. Before your turn settles, index the actual task artifacts and every actual Peer and Supervisor used; do not invent participants or artifact records. "
+        + "For that public index, peer_agents and supervisor_agents are arrays of exact agent-name strings. Each handbacks item is exactly assignment, handback, and peer_agent, using project-relative file paths and the exact Peer name. Each dispatches item is exactly assignment, assignment_sha256, and peer_agent; calculate the SHA-256 from the final Assignment file bytes. "
         + "Do not write an answer key, eval ID, invariant list, grader rubric, or claimed pass/fail result. Then reply with one short sentence naming the evidence file."
     )
 

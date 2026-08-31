@@ -1,14 +1,16 @@
 # Project setup and update
 
-This branch writes only `.orchestration/herdr-orchestrator.toml` and
-`.orchestration/workspace-protocol.md`. Launch an agent only for an included
-task via the task-launch route.
+Writes config and protocol; launch only for an included task.
 
 ## 1. Preserve and discover
 
 Resolve the canonical repository root. Inventory status, worktrees,
 agents/panes, and destinations. Understand and preserve Human-owned or unrelated
 changes; present an in-place diff.
+
+Concurrent writers use clean, Human-trusted sibling slots; never nest a
+worktree in the repository. An untrusted required slot is a
+`DEPENDENCY_REQUEST` before launch.
 
 Require `HERDR_ENV=1` and Python 3.11+; prove the Launcher control boundary:
 
@@ -17,17 +19,16 @@ herdr agent list
 herdr pane current --current
 ```
 
-Stop on error. Choose configuration mode with one card:
+Stop on error. Choose configuration mode:
 
 - **Guided setup** (recommended): discover candidates, then ask each profile row.
-- **Configure TOML yourself:** accept version-3 TOML from chat or
+- **Configure TOML yourself:** accept version-4 TOML from chat or
   `.orchestration/herdr-orchestrator.toml`; otherwise show that path, starter
   from `assets/config.toml`, and role/recipe fields so the Human can create or
   edit it. Strictly parse and validate live tuples, then ask only missing
   protocol decisions.
 
-Use structured user input when available: one question/card, 2–3 choices,
-evidence-backed recommendation first, and free-form. Otherwise number answers.
+Version 3 blocks launch; Human-approved v4 replaces it.
 
 In Guided setup, intersect helper-verified kinds, `herdr agent start --help`,
 and runnable executables; omit the rest and mark Herdr-only kinds unavailable.
@@ -36,7 +37,7 @@ independently selects harness, model/cost, access, and native args; the Human
 chooses reuse and one fallback. Recipes express capability/model fit; the
 Assignment binds Peer disposition.
 
-Deep-probe auth, native choices, access, and spawn control; Herdr/helper
+Probe auth, native choices, access, and spawn control; Herdr/helper
 `--help` remains authority. Per selected kind, run `harness-models` in a
 temporary directory, consume its compact projection, then remove it. Missing
 adapters fail closed; prove each choice with a bounded native check or smoke.
@@ -70,48 +71,34 @@ recipe requirement. When present, read the selected adapter's concise
 `references/harnesses/<kind>-runtime-binding.md` before serializing its native
 recipe. Never hardcode Herdr IDs.
 
-Normal production and dogfood launch preserves the user's installed native
-harness profile, configuration, and authenticated provider setup. Isolation
-means a fresh consumer repository/worktree and clean orchestration/evidence
-state, not a fresh harness profile home, credential copy, or login preparation.
-A Human/project may request harness-profile isolation as a separate capability;
-it is never implied by this orchestration contract.
+Production preserves the installed native harness profile and authentication.
+Isolation means a fresh consumer checkout/evidence state, not copied credentials
+or an implied new profile. Use a Human-approved, residue-free smoke only when
+inspection cannot prove the selected envelope.
 
-Validate static controls; use a Human-approved collision-free smoke only when
-inspection is insufficient. It may create, read, fsync, and remove one in-scope
-probe, must reject out-of-scope writes without residue, and for control roles
-runs `herdr agent list` inside the exact native boundary. Do not configure an
-unenforceable envelope; state limitations precisely.
+Before serialization, validate temporary candidate config/protocol with
+`validate-project --project-root <repository-root> --config <candidate-config>
+--protocol <candidate-protocol>`. Show every granted root/network capability;
+kinds without a static rule need the live probe.
 
-Before smoke or serialization, write candidate config and protocol files in a
-temporary directory, then run `validate-project --project-root <repository-root>
---config <candidate-config> --protocol <candidate-protocol>`. Kinds without a
-static rule need the live probe. Show every
-granted root/network capability and grant it to other profiles only when
-authorized. A read-only Peer receives its project cwd read-only; a Supervisor
-receives only its assigned observation scope and optional artifact root by role
-policy; disclose any adapter-specific broader technical sandbox access required
-for Herdr IPC.
-
-Discovery is complete when the Human saw the kind map and compact inventory;
-every selected executable, model, argument, spawn/access boundary is proven;
-and every non-discoverable choice was supplied.
-
-## 3. Write schema version 3 and the protocol
+## 3. Write schema version 4 and the protocol
 
 Copy `assets/config.toml` and replace every placeholder. Require exactly:
 
-- `version = 3`;
-- one `fallback_peer_recipe` naming an exact Peer recipe;
-- one `[roles.lead]` and optional `[roles.supervisor]`, each containing only
-  `kind`, `args`, and optional boolean `approval_required`; and
+- `version = 4` and `assessment_after_cycles = 2` unless Human approves a
+  different temporary convergence-assessment guard;
+- one `[roles.lead]` and optional `[roles.supervisor]`, each containing
+  `kind`, `args`, `cost_class`, and optional boolean `approval_required`; and
 - one or more uniquely named `[peer_recipes.<name>]`, each containing exactly
-  nonempty `description`, `kind`, `args`, and optional boolean
-  `approval_required`.
+  nonempty `description`, `kind`, `args`, `cost_class = "standard"|"elevated"`,
+  and optional boolean `approval_required`; and
+- `[routing.engineer]`, `[routing.reviewer]`, `[routing.architect]`, and
+  `[routing.default]`, each with an exact `default_recipe` and nonempty
+  `allowed_recipes` from the peer recipe names.
 
-Peer recipe names identify reusable capabilities, not dispositions. Choose one
-general recipe as the fallback for unmatched Assignments; its validated
-harness, model, arguments, and authority remain unchanged. `kind` resolves
+Peer recipe names identify reusable capabilities, not dispositions. Custom
+dispositions use the explicit `default` route; there is no hidden fallback.
+`kind` resolves
 exactly one adapter without inheritance, translation, or legacy migration.
 Set `approval_required = true` only for a route that actually needs an
 approval-gated MCP/tool; such a route must not contain `--ask-for-approval
@@ -135,6 +122,6 @@ two intended files changed, placeholders and
 credential-like values are absent, and unrelated state remains. Present the
 scoped diff and unresolved assumptions for Human review.
 
-Setup is complete when version 3 and all protocol sections parse; discovery and
+Setup is complete when version 4 and all protocol sections parse; discovery and
 every recipe/envelope pass live validation; role boundaries hold; the Human
 reviewed a credential-free diff; no agent or probe residue remains.

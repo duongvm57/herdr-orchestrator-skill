@@ -14,7 +14,7 @@ HELPER = ROOT / "skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
 
 def assignment_document(**changes: object) -> dict[str, object]:
     document: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "assignment_id": "lead-01:peer-01",
         "role": "peer",
         "parent": {"role": "lead", "id": "lead-01"},
@@ -32,6 +32,10 @@ def assignment_document(**changes: object) -> dict[str, object]:
         "languages": {"live": "Vietnamese", "artifact": "English"},
         "topology_rationale": "Independent falsification changes the verdict.",
         "candidate": {"kind": "git_commit", "value": "a" * 40},
+        "review_cycle": 1,
+        "prior_review": None,
+        "convergence_assessment": None,
+        "cost_approval": None,
     }
     document.update(changes)
     return document
@@ -39,6 +43,8 @@ def assignment_document(**changes: object) -> dict[str, object]:
 
 class AssignmentContractTests(unittest.TestCase):
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
+        if args and args[0] == "validate-assignment" and "--project-root" not in args:
+            args = (*args, "--structural-only")
         return subprocess.run(
             [sys.executable, str(HELPER), *args],
             check=False,
@@ -126,9 +132,9 @@ class AssignmentContractTests(unittest.TestCase):
             assignment = root / "assignment.json"
             profile = root / "peer.md"
             protocol = root / "protocol.md"
-            output = root / "prompt.md"
+            output = root / ".orchestration" / "prompts" / "prompt.md"
             objective = "  literal $herdr-orchestrator ' \" `x` $() \\nnext line  "
-            document = assignment_document(objective=objective)
+            document = assignment_document(objective=objective, project_root=str(root.resolve()))
             assignment.write_text(json.dumps(document), encoding="utf-8")
             profile.write_text("Peer profile\n", encoding="utf-8")
             protocol.write_text("Applicable protocol\n", encoding="utf-8")
@@ -353,7 +359,7 @@ class AssignmentContractTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 2)
             self.assertIn("project_root must be a canonical absolute path", completed.stderr)
 
-    def test_review_requires_exact_immutable_candidate(self) -> None:
+    def test_review_rejects_a_raw_candidate_identity_without_v2_envelope(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             repository, commit = self.git_repository(root)
@@ -366,10 +372,10 @@ class AssignmentContractTests(unittest.TestCase):
             current.write_text(json.dumps({"kind": "git_commit", "value": "b" * 40}), encoding="utf-8")
             stale = self.run_cli("validate-review", "--assignment", str(path), "--current-candidate", str(current), "--project-root", str(repository))
 
-            self.assertEqual(applicable.returncode, 0, applicable.stderr)
-            self.assertTrue(json.loads(applicable.stdout)["review_applicable"])
+            self.assertEqual(applicable.returncode, 2)
+            self.assertIn("canonical candidate document", applicable.stderr)
             self.assertEqual(stale.returncode, 2)
-            self.assertIn("Git commit must exist", stale.stderr)
+            self.assertIn("canonical candidate document", stale.stderr)
 
     def test_review_rejects_mutable_diff_digest_as_candidate_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
