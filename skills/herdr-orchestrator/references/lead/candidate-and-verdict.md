@@ -18,9 +18,12 @@ the form binds the observed Lead pane and the helper rejects a mismatched pane.
 candidate-specific immutable diff, and a deterministic synthetic Git commit
 whose parent is the exact base and whose tree is the candidate. Its identity is
 the immutable Git tree plus the exact base commit; it uses a temporary Git
-index and the candidate-owned `.orchestration/candidate-objects` Git object
-directory. The real repository object directory is a read-only Git alternate:
-new blobs and trees never require a write to `.git`. Every helper candidate
+index and a candidate-owned private object directory under Git common metadata:
+`$(git rev-parse --git-common-dir)/herdr-orchestrator/candidate-objects`.
+This is outside every worktree and distinct from Git's normal object database,
+so candidate objects never appear as application changes in `git status`. The
+real repository object directory is a read-only Git alternate: new blobs and
+trees never require a write to its `objects` directory. Every helper candidate
 operation resolves through that same object-store environment. It never moves
 `HEAD`, never stages the user's index, and restores known project-control paths
 to their base state. The document records the bounded application scope and
@@ -30,6 +33,12 @@ verdict. Missing or corrupt candidate object storage is a clear
 candidate failure, never permission to inspect mutable worktree state. Any
 application mutation requires a new freeze and invalidates earlier verification
 and review.
+
+For a preexisting candidate created by an older installed skill, validation can
+read its former worktree-local store once. The next `freeze-candidate` copies
+and verifies those immutable objects into Git common metadata, then removes the
+legacy `.orchestration/candidate-objects` directory. Do not manually delete a
+legacy store before this migration or a fresh successful freeze.
 Project-control paths, including `skills-lock.json`, are excluded, so creating
 candidate or acceptance evidence does not itself stale the application tree.
 

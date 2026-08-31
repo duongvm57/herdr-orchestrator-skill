@@ -37,6 +37,10 @@ fresh binding. Production roles retain the user's normal harness profile,
 configuration, and authentication. The selected adapter, not this generic
 route, decides how native execution consumes the bounded binding.
 
+Pane projections set `PYTHONDONTWRITEBYTECODE=1`. Do not override it: Python
+cache must not become untracked candidate input. Candidate freeze also excludes
+any `__pycache__`, `.pyc`, or `.pyo` path as defence in depth.
+
 Do not dump the full API schema in preflight; use targeted command help only
 for a named capability. Stop on invalid configuration, unavailable skill/binary,
 or incompatible approval policy. Do not substitute a harness, model, profile,

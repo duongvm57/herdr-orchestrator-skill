@@ -15,6 +15,7 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -449,6 +450,7 @@ def _runtime_pane_environment(
         ("HERDR_ORCHESTRATOR_PROJECT_ROOT", str(binding.project_root)),
         ("HERDR_ORCHESTRATOR_HELPER", str(binding.helper)),
         ("HERDR_ORCHESTRATOR_ROLE", role),
+        ("PYTHONDONTWRITEBYTECODE", "1"),
         *(
             (("HERDR_ORCHESTRATOR_ASSIGNMENT_ID", assignment.assignment_id),
              ("HERDR_ORCHESTRATOR_OWNER", assignment.owner))
@@ -1065,22 +1067,100 @@ def _same_git_worktree_repository(project_root: Path, protocol_root: Path) -> bo
         return False
 
 
-def _candidate_object_directory(project_root: Path, *, create: bool) -> Path:
-    """Return the one candidate-owned Git object directory for this project."""
-    path = project_root / ".orchestration" / "candidate-objects"
+def _legacy_candidate_object_directory(project_root: Path) -> Path | None:
+    """Return the former worktree-local store only for one safe migration."""
+    legacy = project_root / ".orchestration" / "candidate-objects"
+    if not legacy.exists():
+        return None
     try:
-        if create:
-            path.mkdir(mode=0o700, parents=True, exist_ok=True)
-        resolved = path.resolve(strict=True)
+        resolved = legacy.resolve(strict=True)
         orchestration = (project_root / ".orchestration").resolve(strict=True)
         resolved.relative_to(orchestration)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HelperError(f"legacy candidate object storage is unavailable: {legacy}: {exc}") from exc
+    if not resolved.is_dir() or resolved.is_symlink():
+        raise HelperError(f"legacy candidate object storage is not a directory: {resolved}")
+    return resolved
+
+
+def _files_match(source: Path, target: Path) -> bool:
+    """Compare a legacy object without trusting its path or metadata."""
+    try:
+        if source.stat().st_size != target.stat().st_size:
+            return False
+        with source.open("rb") as source_stream, target.open("rb") as target_stream:
+            while True:
+                source_chunk = source_stream.read(1024 * 1024)
+                target_chunk = target_stream.read(1024 * 1024)
+                if source_chunk != target_chunk:
+                    return False
+                if not source_chunk:
+                    return True
+    except OSError as exc:
+        raise HelperError(f"could not verify legacy candidate object migration: {exc}") from exc
+
+
+def _migrate_legacy_candidate_object_directory(legacy: Path, target: Path) -> None:
+    """Copy, verify, then remove the old worktree-visible private object store."""
+    try:
+        for source in sorted(legacy.rglob("*")):
+            relative = source.relative_to(legacy)
+            destination = target / relative
+            if source.is_symlink():
+                raise HelperError(f"legacy candidate object storage contains a symlink: {relative}")
+            if source.is_dir():
+                destination.mkdir(mode=0o700, parents=True, exist_ok=True)
+                continue
+            if not source.is_file():
+                raise HelperError(f"legacy candidate object storage contains a non-file: {relative}")
+            destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            if destination.exists():
+                if destination.is_symlink() or not destination.is_file() or not _files_match(source, destination):
+                    raise HelperError(f"legacy candidate object conflicts with common metadata store: {relative}")
+                continue
+            shutil.copyfile(source, destination, follow_symlinks=False)
+            if not _files_match(source, destination):
+                raise HelperError(f"legacy candidate object migration did not preserve {relative}")
+        shutil.rmtree(legacy)
+    except HelperError:
+        raise
+    except OSError as exc:
+        raise HelperError(f"could not migrate legacy candidate object storage: {exc}") from exc
+
+
+def _candidate_object_directory(project_root: Path, *, create: bool) -> Path:
+    """Return the private candidate object store under common Git metadata.
+
+    Candidate objects must be outside every worktree: otherwise a normal Git
+    status mistakes immutable review data for application changes.  The common
+    directory is shared deliberately by sibling worktrees of one repository,
+    while the ``herdr-orchestrator`` namespace keeps this private store
+    separate from Git's normal ``objects`` database.
+    """
+    common = _git_common_directory(project_root, "project Git common directory")
+    path = common / "herdr-orchestrator" / "candidate-objects"
+    legacy = _legacy_candidate_object_directory(project_root)
+    try:
+        if path.is_symlink():
+            raise HelperError(f"candidate object storage must not be a symlink: {path}")
+        if create:
+            path.mkdir(mode=0o700, parents=True, exist_ok=True)
+            if legacy is not None:
+                _migrate_legacy_candidate_object_directory(legacy, path)
+        resolved = path.resolve(strict=True)
+        resolved.relative_to(common)
     except FileNotFoundError as exc:
+        if legacy is not None:
+            # Existing candidates remain inspectable without a write.  The next
+            # freeze invokes the create path above, verifies the copy, and
+            # removes this worktree-visible compatibility store.
+            return legacy
         raise HelperError(
             f"candidate object storage is missing: {path}; it is required to read the immutable candidate"
         ) from exc
     except (OSError, RuntimeError, ValueError) as exc:
         raise HelperError(f"candidate object storage is unavailable: {path}: {exc}") from exc
-    if not resolved.is_dir():
+    if resolved == common or not resolved.is_dir():
         raise HelperError(f"candidate object storage is not a directory: {resolved}")
     return resolved
 
@@ -1098,7 +1178,7 @@ def _real_object_directory(project_root: Path) -> Path:
 
 
 def _candidate_git_environment(project_root: Path, *, create: bool) -> dict[str, str]:
-    """Keep all candidate writes outside .git while reading base objects there."""
+    """Keep candidate writes out of worktrees and normal Git objects."""
     candidate_objects = _candidate_object_directory(project_root, create=create)
     real_objects = _real_object_directory(project_root)
     environment = dict(os.environ)
@@ -1244,7 +1324,9 @@ def _candidate_document(candidate: dict[str, str], synthetic_commit: str, diff_p
 
 
 def _candidate_path_is_excluded(path: bytes) -> bool:
-    return any(
+    if any(part == b"__pycache__" for part in path.split(b"/")):
+        return True
+    return path.endswith((b".pyc", b".pyo")) or any(
         path == prefix.encode("utf-8") or path.startswith(prefix.encode("utf-8") + b"/")
         for prefix in CANDIDATE_EXCLUDED_PREFIXES
     )

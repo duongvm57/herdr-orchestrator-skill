@@ -1,13 +1,16 @@
 # Project setup and update
 
-This branch writes `.orchestration/herdr-orchestrator.toml` and
-`.orchestration/workspace-protocol.md`. Launch an agent only for an included task.
+Writes config and protocol; launch only for an included task.
 
 ## 1. Preserve and discover
 
 Resolve the canonical repository root. Inventory status, worktrees,
 agents/panes, and destinations. Understand and preserve Human-owned or unrelated
 changes; present an in-place diff.
+
+Concurrent writers use clean, Human-trusted sibling slots; never nest a
+worktree in the repository. An untrusted required slot is a
+`DEPENDENCY_REQUEST` before launch.
 
 Require `HERDR_ENV=1` and Python 3.11+; prove the Launcher control boundary:
 
@@ -16,7 +19,7 @@ herdr agent list
 herdr pane current --current
 ```
 
-Stop on error. Choose configuration mode with one card:
+Stop on error. Choose configuration mode:
 
 - **Guided setup** (recommended): discover candidates, then ask each profile row.
 - **Configure TOML yourself:** accept version-4 TOML from chat or
@@ -26,8 +29,6 @@ Stop on error. Choose configuration mode with one card:
   protocol decisions.
 
 Version 3 blocks launch; Human-approved v4 replaces it.
-
-Use structured input when available; otherwise number answers.
 
 In Guided setup, intersect helper-verified kinds, `herdr agent start --help`,
 and runnable executables; omit the rest and mark Herdr-only kinds unavailable.

@@ -57,11 +57,17 @@ class ProductionOperabilityTests(unittest.TestCase):
         return result, document
 
     def candidate_object_paths(self, project: Path) -> list[str]:
-        store = project / ".orchestration/candidate-objects"
+        store = self.candidate_object_store(project)
         return sorted(path.relative_to(store).as_posix() for path in store.rglob("*") if path.is_file())
 
+    def candidate_object_store(self, project: Path) -> Path:
+        common = Path(self.git(project, "rev-parse", "--git-common-dir"))
+        if not common.is_absolute():
+            common = project / common
+        return common / "herdr-orchestrator" / "candidate-objects"
+
     def candidate_object_type(self, project: Path, object_id: str) -> str:
-        store = project / ".orchestration/candidate-objects"
+        store = self.candidate_object_store(project)
         git_dir = Path(self.git(project, "rev-parse", "--git-dir"))
         if not git_dir.is_absolute():
             git_dir = project / git_dir
@@ -155,10 +161,9 @@ class ProductionOperabilityTests(unittest.TestCase):
             path.relative_to(objects_path).as_posix()
             for path in objects_path.rglob("*") if path.is_file()
         )
-        original_modes = {path: path.stat().st_mode for path in (git_dir, objects_path, index_path)}
+        original_modes = {path: path.stat().st_mode for path in (objects_path, index_path)}
         os.chmod(index_path, 0o444)
         os.chmod(objects_path, 0o555)
-        os.chmod(git_dir, 0o555)
         try:
             first, document = self.freeze(project)
         finally:
@@ -178,7 +183,9 @@ class ProductionOperabilityTests(unittest.TestCase):
         candidate = document["candidate"]
         assert isinstance(candidate, dict)
         self.assertFalse((objects_path / candidate["tree"][:2] / candidate["tree"][2:]).exists())
-        self.assertTrue((project / ".orchestration/candidate-objects" / candidate["tree"][:2] / candidate["tree"][2:]).is_file())
+        store = self.candidate_object_store(project)
+        self.assertTrue((store / candidate["tree"][:2] / candidate["tree"][2:]).is_file())
+        self.assertFalse((project / ".orchestration/candidate-objects").exists())
         self.assertEqual(inspected.returncode, 0, inspected.stderr)
         frozen_diff = (project / str(document["diff"]["path"])).read_text(encoding="utf-8")  # type: ignore[index]
         self.assertIn("app.txt", frozen_diff)
@@ -201,7 +208,7 @@ class ProductionOperabilityTests(unittest.TestCase):
         )
         self.assertEqual(review.returncode, 0, review.stderr)
 
-        shutil.rmtree(project / ".orchestration/candidate-objects")
+        shutil.rmtree(store)
         missing_store = self.validate_current_candidate(project, document)
         self.assertEqual(missing_store.returncode, 2)
         self.assertIn("candidate object storage is missing", missing_store.stderr)
@@ -209,7 +216,7 @@ class ProductionOperabilityTests(unittest.TestCase):
         _, restored = self.freeze(project)
         restored_candidate = restored["candidate"]
         assert isinstance(restored_candidate, dict)
-        candidate_tree = project / ".orchestration/candidate-objects" / restored_candidate["tree"][:2] / restored_candidate["tree"][2:]
+        candidate_tree = store / restored_candidate["tree"][:2] / restored_candidate["tree"][2:]
         candidate_tree.unlink()
         missing_tree = self.validate_current_candidate(project, restored)
         self.assertEqual(missing_tree.returncode, 2)
@@ -218,7 +225,7 @@ class ProductionOperabilityTests(unittest.TestCase):
         _, restored = self.freeze(project)
         restored_candidate = restored["candidate"]
         assert isinstance(restored_candidate, dict)
-        candidate_tree = project / ".orchestration/candidate-objects" / restored_candidate["tree"][:2] / restored_candidate["tree"][2:]
+        candidate_tree = store / restored_candidate["tree"][:2] / restored_candidate["tree"][2:]
         os.chmod(candidate_tree, 0o600)
         candidate_tree.write_bytes(b"corrupt candidate object")
         corrupt_store = self.validate_current_candidate(project, restored)
@@ -241,7 +248,7 @@ class ProductionOperabilityTests(unittest.TestCase):
 
         self.assertEqual(inspected.returncode, 0, inspected.stderr)
         self.assertIn("app.txt", (project / str(document["diff"]["path"])).read_text(encoding="utf-8"))  # type: ignore[index]
-        self.assertTrue((project / ".orchestration/candidate-objects" / candidate["tree"][:2] / candidate["tree"][2:]).is_file())
+        self.assertTrue((self.candidate_object_store(project) / candidate["tree"][:2] / candidate["tree"][2:]).is_file())
         second, second_document = self.freeze(project)
         self.assertEqual(second["candidate"], first["candidate"])
         reviewer_assignment = project / ".orchestration/reviewer-assignment.json"
@@ -253,6 +260,40 @@ class ProductionOperabilityTests(unittest.TestCase):
         )
         self.assertEqual(second_document["candidate"], candidate)
         self.assertEqual(review.returncode, 0, review.stderr)
+
+    def test_freeze_excludes_untracked_python_bytecode_at_any_depth(self) -> None:
+        project = self.project()
+        cache = project / "package" / "__pycache__"
+        cache.mkdir(parents=True)
+        (cache / "module.cpython-311.pyc").write_bytes(b"cache")
+        (project / "scratch.pyo").write_bytes(b"cache")
+        (project / "app.txt").write_text("candidate application change\n", encoding="utf-8")
+
+        _, document = self.freeze(project)
+        diff = (project / str(document["diff"]["path"])).read_text(encoding="utf-8")  # type: ignore[index]
+
+        self.assertIn("app.txt", diff)
+        self.assertNotIn("__pycache__", diff)
+        self.assertNotIn("scratch.pyo", diff)
+
+    def test_freeze_migrates_legacy_candidate_objects_out_of_the_worktree(self) -> None:
+        project = self.project()
+        (project / "app.txt").write_text("candidate before migration\n", encoding="utf-8")
+        frozen, document = self.freeze(project)
+        store = self.candidate_object_store(project)
+        legacy = project / ".orchestration" / "candidate-objects"
+        legacy.parent.mkdir(exist_ok=True)
+        shutil.move(str(store), str(legacy))
+
+        # A validator remains read-only and can inspect a previously frozen
+        # candidate before a Lead elects to issue a replacement freeze.
+        self.assertEqual(self.validate_current_candidate(project, document).returncode, 0)
+
+        migrated, migrated_document = self.freeze(project)
+        self.assertEqual(migrated["candidate"], frozen["candidate"])
+        self.assertEqual(migrated_document["candidate"], document["candidate"])
+        self.assertTrue((store / str(frozen["synthetic_commit"])[:2] / str(frozen["synthetic_commit"])[2:]).is_file())
+        self.assertFalse(legacy.exists())
 
     def test_candidate_control_paths_never_self_ingest_or_grow_object_storage(self) -> None:
         project = self.project()
@@ -361,7 +402,7 @@ class ProductionOperabilityTests(unittest.TestCase):
             if object_path != f"{candidate['tree'][:2]}/{candidate['tree'][2:]}"
             and self.candidate_object_type(project, object_path.replace("/", "")) == "blob"
         )
-        blob_path = project / ".orchestration/candidate-objects" / changed_blob
+        blob_path = self.candidate_object_store(project) / changed_blob
         os.chmod(blob_path, 0o600)
         blob_path.write_bytes(b"corrupt changed candidate blob")
         corrupt = self.validate_current_candidate(project, document)
@@ -378,7 +419,7 @@ class ProductionOperabilityTests(unittest.TestCase):
             if object_path != f"{missing_candidate['tree'][:2]}/{missing_candidate['tree'][2:]}"
             and self.candidate_object_type(missing_project, object_path.replace("/", "")) == "blob"
         )
-        (missing_project / ".orchestration/candidate-objects" / missing_blob).unlink()
+        (self.candidate_object_store(missing_project) / missing_blob).unlink()
         missing = self.validate_current_candidate(missing_project, missing_document)
         self.assertEqual(missing.returncode, 2)
         self.assertIn("candidate immutable diff failed", missing.stderr)

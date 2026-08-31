@@ -542,6 +542,7 @@ class ProjectValidationTests(unittest.TestCase):
         self.assertEqual(environment["HERDR_ORCHESTRATOR_ROLE"], "peer")
         self.assertEqual(environment["HERDR_ORCHESTRATOR_PROJECT_ROOT"], str((self.root / "runtime-project").resolve()))
         self.assertEqual(environment["HERDR_ORCHESTRATOR_HELPER"], str(HELPER.resolve()))
+        self.assertEqual(environment["PYTHONDONTWRITEBYTECODE"], "1")
         self.assertTrue(set(environment).isdisjoint({
             "HOME", "CODEX_HOME", "HERDR_ENV", "HERDR_SOCKET_PATH",
             "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID",

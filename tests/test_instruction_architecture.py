@@ -212,7 +212,7 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("A bare helper command does not\ncarry that binding and is rejected", lead)
         self.assertIn("<adapter-runtime-bound-helper> validate-acceptance --project-root <root>", launch)
         self.assertIn(".orchestration/current-acceptance.json", candidate)
-        self.assertIn("candidate-owned `.orchestration/candidate-objects`", candidate)
+        self.assertIn("candidate-owned private object directory under Git common metadata", candidate)
         self.assertIn("read-only Git alternate", candidate)
         self.assertIn("candidate-specific immutable diff", candidate)
         self.assertIn("not successful project completion", launch)
