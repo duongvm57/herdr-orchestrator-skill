@@ -32,13 +32,12 @@ must not edit the consumer project. See the selected
 `references/harnesses/<kind>-runtime-binding.md`; do not promote one adapter's
 requirements into this generic Supervisor contract.
 
-Discover the Launcher's exact source pane once with `herdr pane current
---current`, read its pane ID from JSON, then use that literal ID for the split;
-do not rely on a subprocess's ambient current-pane identity:
+Require the explicit task Lead pane ID from task launch or the Human
+attachment. Split that literal pane; never use the Launcher's current pane or
+infer the attachment from workspace, cwd, focus, or adjacency:
 
 ```text
-herdr pane current --current
-herdr pane split --pane <returned-launcher-pane-id> --direction <right-or-down> --cwd <root> \
+herdr pane split --pane <attached-lead-pane-id> --direction <right-or-down> --cwd <root> \
   --env HERDR_ORCHESTRATOR_PROJECT_ROOT=<root> \
   --env HERDR_ORCHESTRATOR_HELPER=<canonical-helper-absolute-path> \
   --env HERDR_ORCHESTRATOR_ROLE=supervisor --no-focus

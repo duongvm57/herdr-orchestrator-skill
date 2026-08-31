@@ -56,15 +56,20 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("do not blind-retry", launch)
         self.assertIn("never change pre-existing topology", launch)
 
-    def test_launcher_and_supervisor_split_explicitly_bound_panes(self) -> None:
+    def test_launcher_creates_a_task_workspace_and_supervisor_splits_the_attached_lead(self) -> None:
         launch = read("references/launcher/task-launch.md")
         supervisor = read("references/launcher/supervisor-attachment.md")
 
-        for document in (launch, supervisor):
-            self.assertIn("herdr pane current --current", document)
-            self.assertIn("herdr pane split --pane <returned-launcher-pane-id>", document)
-            self.assertNotIn("herdr pane split --current", document)
-            self.assertNotIn("HERDR_PANE_ID", document)
+        self.assertIn("herdr workspace create --cwd <root>", launch)
+        self.assertIn(".result.root_pane.pane_id", launch)
+        self.assertIn("never split the Launcher pane", launch)
+        self.assertNotIn("herdr pane split --pane <returned-launcher-pane-id>", launch)
+        self.assertNotIn("herdr pane current --current", launch)
+        self.assertIn("herdr pane split --pane <attached-lead-pane-id>", supervisor)
+        self.assertIn("never use the Launcher's current pane", supervisor)
+        self.assertNotIn("herdr pane current --current", supervisor)
+        self.assertNotIn("herdr pane split --current", supervisor)
+        self.assertNotIn("HERDR_PANE_ID", supervisor)
 
     def test_setup_uses_current_validation_and_approval_policy_boundary(self) -> None:
         setup = read("references/launcher/setup.md")

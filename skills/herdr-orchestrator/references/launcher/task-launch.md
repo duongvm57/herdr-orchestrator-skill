@@ -6,11 +6,12 @@ Launcher does not coordinate Peers after delivery or become the Lead.
 
 ## Start the Lead
 
-Use the release-matched official Herdr Agent Skill. Inspect the current pane
-once to discover the Launcher's exact source pane ID, then split that explicit
-pane with the canonical project root, role context, and no focus. Read every
-pane ID from JSON; do not predict it. Start the exact configured Lead recipe in
-the returned Lead pane with native arguments after `--`.
+Use the release-matched official Herdr Agent Skill. Create one fresh task
+workspace with the canonical project root, role context, and no focus. This
+keeps the Launcher in its existing workspace: never split the Launcher pane to
+start a Lead. Read the new workspace's exact root pane ID from native JSON; do
+not predict it. Start the exact configured Lead recipe in that returned root
+pane with native arguments after `--`.
 
 After native pane creation returns the exact Lead pane ID, create the fresh
 Lead runtime binding and render its selected adapter projection as specified in
@@ -19,13 +20,16 @@ initial prompt. It supplies runtime facts only; it neither changes the selected
 Lead recipe nor grants orchestration, Assignment, or lifecycle authority.
 
 ```text
-herdr pane current --current
-herdr pane split --pane <returned-launcher-pane-id> --direction <right-or-down> --cwd <root> \
+herdr workspace create --cwd <root> --label <unique-task-label> \
   --env HERDR_ORCHESTRATOR_PROJECT_ROOT=<root> \
   --env HERDR_ORCHESTRATOR_HELPER=<canonical-helper-absolute-path> \
   --env HERDR_ORCHESTRATOR_ROLE=lead --no-focus
-herdr agent start <unique-lead-name> --kind <configured-kind> --pane <returned-pane-id> -- <configured-native-args...>
+herdr agent start <unique-lead-name> --kind <configured-kind> --pane <returned-task-root-pane-id> -- <configured-native-args...>
 ```
+
+Read `.result.root_pane.pane_id`; it is the Lead pane and task topology anchor.
+Same-checkout Supervisor and Peers split it; an isolated concurrent writer uses
+its own Herdr worktree workspace.
 
 Before that native start, validate the selected control-role cost class. An
 elevated Lead/Supervisor requires the exact Human decision; standard carries no
