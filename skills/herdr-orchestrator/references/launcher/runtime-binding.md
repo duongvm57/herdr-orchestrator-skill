@@ -1,64 +1,33 @@
-# Role runtime binding
+# Role runtime context
 
-A role runtime binding is the bounded native context for one already-selected
-harness role. It carries runtime facts only: the exact Herdr executable,
-socket endpoint, pane identity, canonical helper, project root, and SLP role.
-It does not select a harness, change a recipe, confer Assignment authority,
-infer topology, or retain lifecycle state.
+Runtime context is a temporary machine-compiled artifact. It carries exact
+Herdr executable, socket, pane, helper, project, role, and adapter projection;
+it carries no profile, credential, authority, topology inference, or lifecycle
+state.
 
-The Launcher builds one fresh JSON document for itself before a guarded helper
-call and for each launched role from active native session facts. Read each pane ID from
-native Herdr JSON; do not guess paths, socket endpoints, pane IDs, or home
-directories, and do not persist this document in the consumer project. Its
-exact version-2 shape is:
-
-```json
-{
-  "schema_version": 2,
-  "role": "lead",
-  "herdr_executable": "/absolute/path/to/herdr",
-  "herdr_socket_endpoint": "/absolute/path/to/herdr.sock",
-  "herdr_pane_id": "w1:p1",
-  "helper": "/absolute/path/to/herdr_orchestrator.py",
-  "project_root": "/absolute/path/to/project"
-}
-```
-
-The helper rejects unknown fields, noncanonical paths, missing
-executable/helper/project, invalid pane IDs, and unknown roles. A runtime
-binding never carries a harness profile, HOME, credential, authentication, or
-provider setup. Normal production launch uses the user's selected harness
-environment and authenticated profile.
-
-After the configured recipe has already selected its harness, render that
-adapter's projection into a temporary prompt fragment:
+After native Herdr returns an exact pane ID, compile the role context:
 
 ```text
-python3 <canonical-helper> render-runtime-binding --binding <binding.json> \
-  --kind <configured-kind> --output <runtime-projection.md>
+python3 <canonical-helper> compile-runtime --project-root <root> \
+  --kind <configured-kind> --role <role> --pane-id <returned-pane-id> \
+  --output <runtime-context.json>
 ```
 
-Include the returned fragment in the initial role prompt and use its exact
-helper command form for every guarded helper call. That form supplies the
-binding's `HERDR_ORCHESTRATOR_PANE_ID`; the helper compares it to native
-`HERDR_PANE_ID`. The pane-start environment is not this binding and must not
-invent a child pane ID. A kind with no verified projection fails closed; do not
-borrow another harness's configuration, command syntax, or environment
-assumptions.
+The compiler resolves and validates Herdr/socket/helper facts. Pass explicit
+`--herdr-program` or `--socket-endpoint` only when the managed environment does
+not expose them. A failure requires setup doctor; never guess or borrow another
+adapter.
 
-For a Peer or Reviewer pane, render a separate launch projection from the
-bound Lead binding before native pane creation:
+For another role in the same session, pass `--source-context
+<current-runtime.json>` to reuse verified Herdr/socket facts while selecting
+that role's adapter. Native path overrides are then rejected.
 
-```text
-python3 <canonical-helper> render-runtime-binding-pane --binding <binding.json> \
-  --kind <configured-kind> --role peer --output <pane-binding.json>
-```
+Before a Peer/Reviewer split, compile from the bound Lead pane with
+`--target-role peer --assignment <assignment.json>`. Use the returned
+`pane_launch.source_pane_id` and literal `pane_environment`; Herdr itself adds
+managed pane/socket/workspace identity. After split, compile a fresh Peer
+context from the returned pane ID and the Lead `--source-context`.
 
-Use `source_pane_id` from that output as the literal native split target and
-every `pane_environment` entry as one literal `--env NAME=VALUE` argument,
-without filling values from the ambient shell or another adapter. The generic
-projection supplies only project, helper, and target-role context; an adapter
-may add only verified process-start facts. It must not supply Herdr-managed
-environment values such as the socket, pane, tab, or workspace identity. After
-Herdr returns the new pane ID, derive the fresh Peer binding with that returned
-exact ID before rendering its role prompt.
+Prompts consume `runtime_projection` through the canonical renderer. Guarded
+helper calls use the exact command form inside it, which binds
+`HERDR_ORCHESTRATOR_PANE_ID` to native `HERDR_PANE_ID`.

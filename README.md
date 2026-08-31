@@ -103,8 +103,12 @@ the orchestrator into the Launcher harness; install the OCR add-on into any
 Peer-capable harness where you want OCR-backed review.
 
 Launchers, Leads, and Supervisors need the official `herdr` Agent Skill
-available inside their Herdr-managed pane; `herdr --skill` is the
-release-matching/install source, not a default initial-prompt dump.
+available inside their Herdr-managed pane. Project setup runs
+`install-official-skill` to copy the exact `herdr --skill` output into the
+tracked `.agents/skills/herdr/SKILL.md`, plus the tracked Claude mirror at
+`.claude/skills/herdr/SKILL.md` when Claude is selected. Commit these files;
+doctor rejects missing, stale, uncommitted, or shadowed configured-harness copies.
+This is not repeated for each task.
 `herdr-orchestrator` supplies only SLP role and Assignment policy. Peers must not load that orchestration
 skill as a generic launcher. A Reviewer that
 does not discover `ocr-peer-reviewer` continues with direct review. Every
@@ -133,11 +137,16 @@ From the repository, invoke:
 $herdr-orchestrator set up orchestration for this repository
 ```
 
-Setup first intersects the orchestrator's verified adapter registry with
-Herdr-supported, installed local harnesses. Herdr kinds without a verified
-adapter are shown as unavailable rather than accepted through a generic
-fallback. Setup then performs deeper model, effort, access, and native-spawn
-discovery only for the harnesses you select. It shows exact native choices before asking which recipes are
+Setup runs the canonical helper's read-only `doctor` once to intersect the
+orchestrator's verified adapter registry with Herdr-supported, installed local
+harnesses. Independent probes run with bounded parallelism. Doctor reports
+direct integration installation separately from Herdr
+agent support: a missing hook never makes an advertised kind unsupported, but
+a configured lifecycle authority without screen fallback is not ready. Herdr
+kinds without a complete verified adapter
+are unavailable rather than accepted through a generic fallback. Setup then
+performs deeper model, effort, access, and native-spawn discovery only for the
+harnesses you select. It shows exact native choices before asking which recipes are
 permitted, then asks about cost, authority, review gates, expensive reversals,
 and Human-only decisions and creates two tracked files:
 
@@ -162,8 +171,10 @@ and technical literals remain unchanged. Selected Lead and Supervisor recipes
 must prove local Herdr control access, and each recipe must prove only its
 assigned evidence/commit boundary, before setup writes config.
 
-Review the generated diff. Re-run setup after changing machine, harness, model,
-or permission policy. Legacy `routes.toml` and `workers.*.toml` are unsupported.
+Review the generated diff. Re-run setup doctor after changing Herdr, its
+official skill, machine, harness, model, integration, recipe, or permission
+policy. Task launch does not repeat version, skill, status, help, integration,
+or catalog discovery. Legacy `routes.toml` and `workers.*.toml` are unsupported.
 
 ## Run a task
 
@@ -171,11 +182,11 @@ or permission policy. Legacy `routes.toml` and `workers.*.toml` are unsupported.
 $herdr-orchestrator implement issue #42 and preserve my uncommitted changes
 ```
 
-The Launcher validates accepted project inputs, then follows the installed
-official Herdr skill to split a background pane, start the exact configured
-Lead recipe, and submit the task as one direct value with no shell evaluation.
-Missing capability stops launch without substitution. Focus changes only when
-explicitly requested.
+The Launcher creates a dedicated workspace through the official Herdr skill.
+The helper compiles the configured start argv, adapter runtime context, and
+Lead prompt; native Herdr performs lifecycle operations. The Human task remains
+verbatim data and never enters a shell. Missing capability stops launch without
+substitution. Focus changes only when explicitly requested.
 
 The Lead receives its Lead role/profile, the full Workspace Protocol, the
 verbatim Human task, and configured Peer recipes. It uses native Herdr operations for

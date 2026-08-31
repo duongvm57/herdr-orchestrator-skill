@@ -3,16 +3,38 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
+from typing import Mapping
 
 from .base import (
     ArgumentRule,
     EvidenceRootRule,
     HarnessAdapter,
     HarnessError,
+    IntegrationSpec,
+    RuntimeBinding,
     choices,
+    no_extra_pane_environment,
+    render_literal_runtime_binding,
     validate_absolute_directory,
     validate_model,
 )
+
+
+def render_runtime_binding(binding: RuntimeBinding) -> str:
+    return render_literal_runtime_binding(
+        binding,
+        "Claude Code",
+        "Claude Code uses its normal role profile; the literal binding pins only "
+        "Herdr and guarded-helper runtime facts.",
+    )
+
+
+def resolve_global_skill_roots(
+    environment: Mapping[str, str], home: Path,
+) -> tuple[Path, ...]:
+    del environment
+    return (home / ".claude" / "skills",)
 
 
 def validate_spawn_tools(value: str, location: str) -> None:
@@ -43,5 +65,12 @@ ADAPTER = HarnessAdapter(
         "--no-chrome": ArgumentRule(),
         "--ax-screen-reader": ArgumentRule(),
     },
+    runtime_binding_renderer=render_runtime_binding,
+    pane_environment_projector=no_extra_pane_environment,
+    global_skill_roots_resolver=resolve_global_skill_roots,
+    integration=IntegrationSpec(
+        role="session",
+        state_authority="screen_manifest",
+    ),
     evidence_root=EvidenceRootRule(option="--add-dir"),
 )

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import math
-from typing import Any
+from pathlib import Path
+from typing import Any, Mapping
 
 from .base import (
     ArgumentRule,
@@ -12,9 +13,13 @@ from .base import (
     EvidenceRootRule,
     HarnessAdapter,
     HarnessError,
+    IntegrationSpec,
+    RuntimeBinding,
     catalog_model_id,
     choices,
     decode_catalog,
+    no_extra_pane_environment,
+    render_literal_runtime_binding,
     validate_absolute_directory,
     validate_model,
     validate_tool_list,
@@ -23,6 +28,30 @@ from .base import (
 
 THINKING_LEVELS = ("off", "minimal", "low", "medium", "high", "xhigh", "max", "auto")
 COST_FIELDS = ("input", "output", "cacheRead", "cacheWrite")
+
+
+def resolve_global_skill_roots(
+    environment: Mapping[str, str], home: Path,
+) -> tuple[Path, ...]:
+    config_name = environment.get("PI_CONFIG_DIR") or ".omp"
+    profile = environment.get("OMP_PROFILE") or environment.get("PI_PROFILE")
+    if profile:
+        root = home / config_name / "profiles" / profile / "agent"
+    else:
+        configured = environment.get("PI_CODING_AGENT_DIR")
+        root = Path(configured).expanduser() if configured else home / config_name / "agent"
+        if not root.is_absolute():
+            root = Path.cwd() / root
+    return (home / ".agents" / "skills", root / "skills")
+
+
+def render_runtime_binding(binding: RuntimeBinding) -> str:
+    return render_literal_runtime_binding(
+        binding,
+        "OMP",
+        "OMP uses its normal role profile; the literal binding pins only Herdr "
+        "and guarded-helper runtime facts.",
+    )
 
 
 def _option_values(args: list[str], option: str) -> list[str]:
@@ -176,6 +205,14 @@ ADAPTER = HarnessAdapter(
         "--approval-mode": ArgumentRule(choices("always-ask", "write")),
         "--add-dir": ArgumentRule(validate_absolute_directory, repeatable=True),
     },
+    runtime_binding_renderer=render_runtime_binding,
+    pane_environment_projector=no_extra_pane_environment,
+    global_skill_roots_resolver=resolve_global_skill_roots,
+    integration=IntegrationSpec(
+        role="state_and_session",
+        state_authority="lifecycle_without_documented_fallback",
+        required_for_lifecycle=True,
+    ),
     argument_set_validator=validate_argument_set,
     catalog=CatalogSpec(
         command=("models", "--json", "--no-extensions"),

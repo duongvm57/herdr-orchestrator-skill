@@ -9,70 +9,52 @@ Launcher does not coordinate Peers after delivery or become the Lead.
 Use the release-matched official Herdr Agent Skill. Create one fresh task
 workspace with the canonical project root, role context, and no focus. This
 keeps the Launcher in its existing workspace: never split the Launcher pane to
-start a Lead. Read the new workspace's exact root pane ID from native JSON; do
-not predict it. Start the exact configured Lead recipe in that returned root
-pane with native arguments after `--`.
-
-After native pane creation returns the exact Lead pane ID, create the fresh
-Lead runtime binding and render its selected adapter projection as specified in
-`references/launcher/runtime-binding.md`. Append that bounded projection to the
-initial prompt. It supplies runtime facts only; it neither changes the selected
-Lead recipe nor grants orchestration, Assignment, or lifecycle authority.
+start a Lead. Read the exact root pane ID from native JSON.
 
 ```text
 herdr workspace create --cwd <root> --label <unique-task-label> \
   --env HERDR_ORCHESTRATOR_PROJECT_ROOT=<root> \
   --env HERDR_ORCHESTRATOR_HELPER=<canonical-helper-absolute-path> \
   --env HERDR_ORCHESTRATOR_ROLE=lead --no-focus
-herdr agent start <unique-lead-name> --kind <configured-kind> --pane <returned-task-root-pane-id> -- <configured-native-args...>
 ```
 
 Read `.result.root_pane.pane_id`; it is the Lead pane and task topology anchor.
 Same-checkout Supervisor and Peers split it; an isolated concurrent writer uses
 its own Herdr worktree workspace.
 
-Before that native start, validate the selected control-role cost class. An
-elevated Lead/Supervisor requires the exact Human decision; standard carries no
-approval text:
+Compile the exact configured start manifest after pane creation. An elevated
+recipe requires the verbatim Human decision:
 
 ```text
-<canonical-helper> validate-control-role-launch --project-root <root> --role lead \
-  --cost-approval <verbatim-human-decision-if-elevated>
+<canonical-helper> prepare-control-role-launch --project-root <root> --role lead \
+  --name <unique-lead-name> --pane <returned-task-root-pane-id> \
+  --cost-approval <verbatim-human-decision-if-elevated> --output <launch.json>
 ```
 
-Read the selected concise Lead profile for this one bounded composition, then
-write the prompt built from it, the applicable full Workspace Protocol, the
-configured Peer recipes, and the verbatim Human task to one temporary UTF-8
-prompt file. If any available recipe is `elevated`, obtain the Human decision
-in preflight and include its exact text under `# Human elevated-cost approval`;
-the Lead must copy it unchanged into each applicable Assignment. Submit only
-through the installed helper path resolved in preflight:
+Inspect the manifest, then execute its `herdr_argv` through the official Herdr
+skill without editing or shell-reconstructing it. Compile the returned Lead
+pane as specified in `references/launcher/runtime-binding.md`. Write the Human
+task unchanged to a temporary UTF-8 file, then machine-render the prompt:
+
+```text
+<canonical-helper> render-control-prompt --project-root <root> --role lead \
+  --payload <human-task-file> --runtime-context <lead-runtime.json> \
+  --cost-approval <verbatim-human-decision-if-elevated> --output <prompt-file>
+```
+
+The renderer inserts the full Workspace Protocol, configured Peer recipes,
+Lead boundary, adapter runtime context, and payload hash. Submit only through
+the installed helper:
 
 ```text
 <adapter-runtime-bound-helper> submit-prompt --agent <unique-lead-name> --prompt-file <prompt-file> \
   --project-root <root>
 ```
 
-`<adapter-runtime-bound-helper>` is the exact helper command form from the
-Launcher's runtime-binding projection. The helper invokes native Herdr with direct subprocess argv; do not assemble a
-shell command from task text. Do not strip, normalize, route on, or
-shell-evaluate that text. Pass the exact `<canonical-helper-absolute-path>` in
-the Lead's launch environment as `HERDR_ORCHESTRATOR_HELPER`; it is the only
-helper path the Lead may use. The default preserves Launcher focus; focus only
-at Human request.
-
-The prompt must confirm that the Lead harness has the release-matched official
-Herdr skill installed in its supported instruction context. A documented
-harness-specific compatibility fallback may inject one fresh `herdr --skill`
-copy. It must state that the Lead uses the official Herdr skill for generic
-operations, cannot create another Lead or Supervisor, and must use an explicit
-Assignment for every Peer. It contains:
-
-1. the concise Lead profile;
-2. the full repository Workspace Protocol; and
-3. the verbatim Human task and available configured Peer recipes; and
-4. the adapter-owned runtime-binding projection; and
-5. the verbatim Human elevated-cost approval when one is required.
+`<adapter-runtime-bound-helper>` comes from the compiled Lead runtime context.
+The helpers use direct subprocess argv and preserve the task bytes; no task text
+is shell input. Pass the canonical helper path in the workspace environment.
+The default preserves Launcher focus; focus only at Human request.
 
 If native startup returns `agent_not_ready` because it is blocked by an
 approval or directory-trust UI, preserve the newly created agent and pane and
@@ -107,7 +89,7 @@ then run this semantic check locally:
   --lead-id <exact-launched-lead-name>
 ```
 
-Here the form is the Launcher's freshly rendered runtime-binding projection;
+Here the form is the Launcher's freshly compiled runtime projection;
 it binds the observed Launcher pane for this guarded call.
 
 Only a passing check permits the Launcher to surface successful project

@@ -7,7 +7,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from .base import (
     IDENTIFIER_RE,
@@ -15,9 +15,13 @@ from .base import (
     CatalogSpec,
     HarnessAdapter,
     HarnessError,
+    IntegrationSpec,
+    RuntimeBinding,
     catalog_model_id,
     choices,
     decode_catalog,
+    no_extra_pane_environment,
+    render_literal_runtime_binding,
     validate_identifier,
     validate_model,
     validate_tool_list,
@@ -30,6 +34,25 @@ DATED_MODEL_RE = re.compile(r"-\d{8}\Z")
 THINKING_LEVELS = ("off", "minimal", "low", "medium", "high", "xhigh", "max")
 MAX_SETTINGS_BYTES = 1024 * 1024
 MAX_SCOPE_PATTERNS = 512
+
+
+def render_runtime_binding(binding: RuntimeBinding) -> str:
+    return render_literal_runtime_binding(
+        binding,
+        "Pi",
+        "Pi shell tools inherit the role process environment; the literal binding "
+        "also pins the exact native endpoint and guarded-helper identity.",
+    )
+
+
+def resolve_global_skill_roots(
+    environment: Mapping[str, str], home: Path,
+) -> tuple[Path, ...]:
+    configured = environment.get("PI_CODING_AGENT_DIR")
+    root = Path(configured).expanduser() if configured else home / ".pi" / "agent"
+    if not root.is_absolute():
+        root = Path.cwd() / root
+    return (home / ".agents" / "skills", root / "skills")
 
 
 def _validate_scope_pattern(value: str, location: str) -> None:
@@ -315,6 +338,13 @@ ADAPTER = HarnessAdapter(
         "--fast": ArgumentRule(),
         "--tui-mode": ArgumentRule(choices("regular", "fullscreen")),
     },
+    runtime_binding_renderer=render_runtime_binding,
+    pane_environment_projector=no_extra_pane_environment,
+    global_skill_roots_resolver=resolve_global_skill_roots,
+    integration=IntegrationSpec(
+        role="state_and_session",
+        state_authority="lifecycle_with_screen_fallback",
+    ),
     catalog=CatalogSpec(
         command=("--list-models",),
         modes={"live": ()},

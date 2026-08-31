@@ -67,6 +67,42 @@ class AssignmentContractTests(unittest.TestCase):
         commit = subprocess.run(("git", "-C", str(repository), "rev-parse", "HEAD"), check=True, capture_output=True, text=True).stdout.strip()
         return repository, commit
 
+    def runtime_context(self, root: Path) -> Path:
+        orchestration = root / ".orchestration"
+        orchestration.mkdir(exist_ok=True)
+        config = orchestration / "herdr-orchestrator.toml"
+        if not config.exists():
+            config.write_text(
+                "\n".join((
+                    "version = 4",
+                    "assessment_after_cycles = 2",
+                    "", "[roles.lead]", 'kind = "pi"',
+                    'args = ["--model", "test/model"]', 'cost_class = "standard"',
+                    "", "[peer_recipes.review]", 'description = "Review recipe"',
+                    'kind = "pi"', 'args = ["--model", "test/model"]',
+                    'cost_class = "standard"',
+                    "", "[routing.engineer]", 'default_recipe = "review"', 'allowed_recipes = ["review"]',
+                    "", "[routing.reviewer]", 'default_recipe = "review"', 'allowed_recipes = ["review"]',
+                    "", "[routing.architect]", 'default_recipe = "review"', 'allowed_recipes = ["review"]',
+                    "", "[routing.default]", 'default_recipe = "review"', 'allowed_recipes = ["review"]',
+                    "",
+                )),
+                encoding="utf-8",
+            )
+        output = root / "peer-runtime.json"
+        completed = self.run_cli(
+            "compile-runtime",
+            "--project-root", str(root.resolve()),
+            "--kind", "pi",
+            "--role", "peer",
+            "--pane-id", "w1:pPeer",
+            "--herdr-program", "/bin/echo",
+            "--socket-endpoint", str(root / "herdr.sock"),
+            "--output", str(output),
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        return output
+
     def test_assignment_is_inspectable_and_parentage_is_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             assignment = Path(temporary) / "assignment.json"
@@ -113,20 +149,22 @@ class AssignmentContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             assignment, profile, protocol, output = root / "assignment.json", root / "peer.md", root / "protocol.md", root / "prompt.md"
-            assignment.write_text(json.dumps(assignment_document(owner="lead-01")), encoding="utf-8")
+            assignment.write_text(json.dumps(assignment_document(owner="lead-01", project_root=str(root.resolve()))), encoding="utf-8")
             profile.write_text("Peer profile\n", encoding="utf-8")
             protocol.write_text("Applicable protocol\n", encoding="utf-8")
+            runtime = self.runtime_context(root)
 
             completed = self.run_cli(
                 "render-assignment", "--assignment", str(assignment), "--role-profile", str(profile),
-                "--applicable-protocol", str(protocol), "--output", str(output),
+                "--applicable-protocol", str(protocol), "--runtime-context", str(runtime),
+                "--output", str(output),
             )
 
             self.assertEqual(completed.returncode, 2)
             self.assertIn("assigned Peer", completed.stderr)
             self.assertFalse(output.exists())
 
-    def test_prompt_renderer_preserves_assignment_text_without_runtime_control(self) -> None:
+    def test_prompt_renderer_preserves_assignment_and_inserts_compiled_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             assignment = root / "assignment.json"
@@ -138,10 +176,12 @@ class AssignmentContractTests(unittest.TestCase):
             assignment.write_text(json.dumps(document), encoding="utf-8")
             profile.write_text("Peer profile\n", encoding="utf-8")
             protocol.write_text("Applicable protocol\n", encoding="utf-8")
+            runtime = self.runtime_context(root)
 
             completed = self.run_cli(
                 "render-assignment", "--assignment", str(assignment), "--role-profile", str(profile),
-                "--applicable-protocol", str(protocol), "--output", str(output),
+                "--applicable-protocol", str(protocol), "--runtime-context", str(runtime),
+                "--output", str(output),
             )
 
             self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -151,15 +191,35 @@ class AssignmentContractTests(unittest.TestCase):
             self.assertIn('"assignment_id": "lead-01:peer-01"', rendered)
             self.assertIn("every value is a non-empty string", rendered)
             self.assertIn("prompt delivery and Herdr lifecycle are not assignment completion", rendered)
+            self.assertIn("# Adapter Runtime Context", rendered)
+            self.assertIn("HERDR_ORCHESTRATOR_PANE_ID=w1:pPeer", rendered)
+
+            wrong_runtime = root / "wrong-runtime.json"
+            compiled = self.run_cli(
+                "compile-runtime", "--project-root", str(root.resolve()),
+                "--kind", "codex", "--role", "peer", "--pane-id", "w1:pWrong",
+                "--herdr-program", "/bin/echo", "--socket-endpoint", str(root / "herdr.sock"),
+                "--output", str(wrong_runtime),
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            mismatch = self.run_cli(
+                "render-assignment", "--assignment", str(assignment),
+                "--role-profile", str(profile), "--applicable-protocol", str(protocol),
+                "--runtime-context", str(wrong_runtime),
+                "--output", str(root / ".orchestration" / "prompts" / "wrong.md"),
+            )
+            self.assertEqual(mismatch.returncode, 2)
+            self.assertIn("must match the Assignment recipe", mismatch.stderr)
 
     def test_renderer_rejects_a_full_workspace_protocol_for_peer_context(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             assignment, profile, protocol, output = root / "assignment.json", root / "peer.md", root / "protocol.md", root / "prompt.md"
-            assignment.write_text(json.dumps(assignment_document()), encoding="utf-8")
+            assignment.write_text(json.dumps(assignment_document(project_root=str(root.resolve()))), encoding="utf-8")
             profile.write_text("Peer profile\n", encoding="utf-8")
             protocol.write_text("\n".join(f"## {number}. Full protocol" for number in range(1, 13)), encoding="utf-8")
-            completed = self.run_cli("render-assignment", "--assignment", str(assignment), "--role-profile", str(profile), "--applicable-protocol", str(protocol), "--output", str(output))
+            runtime = self.runtime_context(root)
+            completed = self.run_cli("render-assignment", "--assignment", str(assignment), "--role-profile", str(profile), "--applicable-protocol", str(protocol), "--runtime-context", str(runtime), "--output", str(output))
             self.assertEqual(completed.returncode, 2)
             self.assertIn("Peer applicable protocol projection", completed.stderr)
 

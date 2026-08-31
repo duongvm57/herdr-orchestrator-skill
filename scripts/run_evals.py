@@ -425,10 +425,10 @@ def _owned_private_eval_home(home_root: Path):
 
 
 def _materialize_install(project: Path, home: Path, source_skill: Path | None, official_skill: str) -> dict[str, Any]:
-    target = project / ".codex/skills/herdr-orchestrator"
-    official_target = project / ".codex/skills/herdr"
+    target = project / ".agents/skills/herdr-orchestrator"
+    official_target = project / ".agents/skills/herdr"
     ocr_source = source_skill.parent / "ocr-peer-reviewer" if source_skill is not None else None
-    ocr_target = project / ".codex/skills/ocr-peer-reviewer"
+    ocr_target = project / ".agents/skills/ocr-peer-reviewer"
     if source_skill is not None:
         shutil.copytree(source_skill, target, symlinks=False)
     if ocr_source is not None and ocr_source.is_dir():
@@ -652,7 +652,7 @@ def _relative_evidence_path(project: Path, raw: Any, label: str) -> Path:
 
 
 def _run_delegation_control(project: Path, assignments: list[Any]) -> int:
-    helper = project / ".codex/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
+    helper = project / ".agents/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
     if not helper.is_file():
         raise EvalError("materialized Assignment helper is unavailable for external grading")
     command = [sys.executable, str(helper), "validate-delegation"]
@@ -665,21 +665,21 @@ def _run_delegation_control(project: Path, assignments: list[Any]) -> int:
 
 
 def _run_review_control(project: Path, assignment: Any, current_candidate: Any) -> int:
-    helper = project / ".codex/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
+    helper = project / ".agents/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
     if not helper.is_file():
         raise EvalError("materialized Assignment helper is unavailable for external grading")
     return _command([sys.executable, str(helper), "validate-review", "--assignment", str(_relative_evidence_path(project, assignment, "review control assignment")), "--current-candidate", str(_relative_evidence_path(project, current_candidate, "review control current candidate")), "--project-root", str(project)], cwd=project, timeout=30).returncode
 
 
 def _run_handback_control(project: Path, assignment: Any, handback: Any) -> int:
-    helper = project / ".codex/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
+    helper = project / ".agents/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
     if not helper.is_file():
         raise EvalError("materialized Assignment helper is unavailable for external grading")
     return _command([sys.executable, str(helper), "validate-handback", "--assignment", str(_relative_evidence_path(project, assignment, "handback control assignment")), "--handback", str(_relative_evidence_path(project, handback, "handback control handback"))], cwd=project, timeout=30).returncode
 
 
 def _validate_materialized_project(project: Path) -> None:
-    helper = project / ".codex/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
+    helper = project / ".agents/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
     completed = _command([sys.executable, str(helper), "validate-project", "--project-root", str(project)], cwd=project, timeout=30)
     if completed.returncode:
         raise EvalError(f"materialized eval project preflight failed: {completed.stderr.strip()}")
@@ -756,7 +756,7 @@ def _run_deterministic(case: dict[str, Any], project: Path, home: Path, installa
             },
         })
     elif case_id == "candidate-binding-contract":
-        helper = project / ".codex/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
+        helper = project / ".agents/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
         if not helper.is_file():
             raise EvalError("materialized candidate helper is unavailable for deterministic grading")
         environment = {**os.environ, "HERDR_ORCHESTRATOR_ROLE": "lead", "HERDR_PANE_ID": "wdet:pLead", "HERDR_ORCHESTRATOR_PANE_ID": "wdet:pLead", "HERDR_ORCHESTRATOR_HELPER": str(helper.resolve()), "HERDR_ORCHESTRATOR_PROJECT_ROOT": str(project.resolve())}
@@ -848,7 +848,7 @@ def grade(grader: dict[str, Any], project: Path, topology: dict[str, Any], *, he
             outcomes: list[str] = []
             rationales: list[Any] = []
             handback_documents: list[dict[str, Any]] = []
-            handback_helper = helper or project / ".codex/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
+            handback_helper = helper or project / ".agents/skills/herdr-orchestrator/scripts/herdr_orchestrator.py"
             for item in handbacks:
                 if not isinstance(item, dict) or set(item) != {"assignment", "handback", "peer_agent"}:
                     raise EvalError("each evidence handback must name its assignment, handback, and actual Peer agent")
