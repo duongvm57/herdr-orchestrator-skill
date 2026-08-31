@@ -18,12 +18,11 @@ Choose the disposition independently from the profile:
 - **Other bounded Peer:** receives only the question, evidence boundary,
   exclusions, and decision it informs.
 
-Construct the canonical Assignment first, validate it, and render it with the
-selected Peer profile plus a bounded applicable-protocol projection. The
-projection contains only task-relevant constraints; never pass the full
-`WORKSPACE_PROTOCOL.md` to a Peer renderer. Submit the rendered result through
-the recipe-bound helper to start and the official Herdr skill to prompt, wait,
-and read the Peer. Prompt submission and lifecycle settle are not Assignment completion: active Lead
+Construct and validate the canonical Assignment first. Compile the pane launch,
+split it with native Herdr, then compile the returned Peer runtime and render
+the Assignment with its selected profile plus bounded protocol constraints.
+Submit through the recipe-bound helper to start and the official Herdr skill to
+prompt, wait, and read. Prompt submission and lifecycle settle are not Assignment completion: active Lead
 collection inspects output and accepts only a structured handback with the
 matching `assignment_id`. The outcome is exactly `COMPLETE`, `REOPEN_REQUEST`,
 `DEPENDENCY_REQUEST`, or `BLOCKED`. A detached Lead is not automatically woken.
@@ -53,7 +52,7 @@ Peer start below; it has no generic Herdr lifecycle control:
 python3 "$HERDR_ORCHESTRATOR_HELPER" validate-assignment --assignment <assignment.json> --project-root <root>
 python3 "$HERDR_ORCHESTRATOR_HELPER" render-assignment --assignment <assignment.json> \
   --role-profile <peer-profile.md> --applicable-protocol <bounded-constraints.md> \
-  --output <rendered-prompt.md>
+  --runtime-context <peer-runtime.json> --output <rendered-prompt.md>
 python3 "$HERDR_ORCHESTRATOR_HELPER" validate-delegation --assignment <active-peer.json> \
   --assignment <new-peer.json>
 python3 "$HERDR_ORCHESTRATOR_HELPER" validate-review --assignment <reviewer.json> \
@@ -62,13 +61,10 @@ python3 "$HERDR_ORCHESTRATOR_HELPER" validate-handback --assignment <peer.json> 
   --handback <handback.json>
 ```
 
-Before pane creation, use the Lead's exact bound native Herdr/helper/project
-facts and pane ID to render the Peer launch projection. After Herdr returns the
-new Peer pane ID, create the fresh Peer runtime binding with role `peer` and
-that returned exact pane ID. Render the selected Peer adapter's verified
-projection and include it in the rendered Peer prompt. The adapter owns how its
-native process consumes that binding; do not assume that a different harness
-needs inherited shell values or another harness's command syntax.
+Before pane creation, use `compile-runtime --target-role peer --assignment` from
+the Lead's exact pane. After split, compile a fresh `peer` context from the
+returned Peer pane. `render-assignment` validates and inserts that adapter
+context; no provider syntax is assembled in prose.
 
 ## Herdr worktree allocation for concurrent writers
 
@@ -96,11 +92,9 @@ Read `workspace.workspace_id`, `workspace.worktree.checkout_path`, and
 `root_pane.pane_id` from the native JSON response. Put that exact checkout path
 in the writer Assignment's `project_root`, and record the returned workspace ID
 plus canonical integration root in its `worktree`; use that checkout as `--cwd`.
-Build the temporary peer launch binding from those
-same facts (role `peer`, checkout path, returned root pane ID), render its pane
-projection, then split its returned root pane to create the Peer pane. Build the
-fresh Peer binding from the resulting Peer pane ID before rendering the prompt.
-This uses the existing runtime-binding contract; it does not create a worktree
+Compile the temporary pane launch from those facts, split the returned root
+pane, then compile the fresh Peer context from the resulting pane ID before
+rendering the prompt. This does not create a worktree
 registry or a second lifecycle service.
 
 Before starting any concurrent writer, capture the authoritative native list
@@ -131,16 +125,16 @@ to it, and remove each newly owned worktree with `herdr worktree remove
 --workspace <workspace.workspace_id>`. A worktree handback never substitutes
 for integration, candidate freeze, review, or acceptance.
 
-Before creating the pane, render the same binding's pane projection:
+Before creating the pane, compile its launch projection:
 
 ```text
-python3 "$HERDR_ORCHESTRATOR_HELPER" render-runtime-binding-pane \
-  --binding <lead-runtime-binding.json> --kind <configured-peer-kind> --role peer \
-  --assignment <assignment.json> \
-  --output <peer-pane-binding.json>
+<adapter-runtime-bound-helper> compile-runtime --project-root <root> \
+  --kind <configured-peer-kind> --role lead --pane-id <lead-pane-id> \
+  --source-context <lead-runtime.json> --target-role peer \
+  --assignment <assignment.json> --output <peer-launch.json>
 ```
 
-Use every returned `pane_environment` entry as one literal `--env NAME=VALUE`
+Use every returned `pane_launch.pane_environment` entry as one literal `--env NAME=VALUE`
 argument in the next native pane call. Do not fill in a missing value from the
 ambient shell, add another harness's home/context syntax, or manually add a
 Herdr-managed runtime variable.
@@ -149,7 +143,7 @@ Create one native Herdr Peer pane with the canonical project and role context.
 This is one direct `herdr pane split --env` call, not a pane manager:
 
 ```text
-herdr pane split --pane <source_pane_id-from-peer-pane-binding.json> \
+herdr pane split --pane <pane_launch.source_pane_id> \
   --direction <right-or-down> --cwd <root> \
   <literal --env arguments from peer-pane-binding.json> --no-focus
 ```
@@ -161,6 +155,10 @@ This applies unchanged to a Reviewer, which remains a Peer with disposition
 `Reviewer`, not a separate runtime role.
 The Reviewer pane projection also binds the exact Assignment id and owner; only
 that pane may materialize the assigned candidate.
+
+Compile `<peer-runtime.json>` with `compile-runtime --role peer --pane-id
+<returned-peer-pane-id> --source-context <lead-runtime.json>` before calling
+`render-assignment`.
 
 Start the named Peer through the recipe-bound helper, then pass the rendered
 prompt as one direct Herdr prompt value. The helper is the only canonical Peer

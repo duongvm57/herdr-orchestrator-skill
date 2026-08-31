@@ -20,7 +20,8 @@ class PackageFlowTests(unittest.TestCase):
         helper = (SKILL_ROOT / "scripts/herdr_orchestrator.py").read_text(encoding="utf-8")
         self.assertNotIn('"pane", "split"', helper)
         self.assertIn('"agent", "prompt"', helper)
-        self.assertIn("only Herdr\ncalls are recipe-bound Peer start and one-shot prompt submission", helper)
+        self.assertIn("only\nstate-changing Herdr calls are recipe-bound Peer start", helper)
+        self.assertIn("setup-time doctor calls are read-only", helper)
         self.assertIn("no pane, session, wait, or lifecycle control", helper)
 
 if __name__ == "__main__":

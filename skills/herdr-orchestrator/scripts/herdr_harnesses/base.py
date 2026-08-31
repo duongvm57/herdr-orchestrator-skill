@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import re
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 
 
 MODEL_ID_RE = re.compile(
@@ -28,6 +29,7 @@ ArgumentSetValidator = Callable[[list[str], str], None]
 ControlPlaneValidator = Callable[[list[str], str], None]
 RuntimeBindingRenderer = Callable[["RuntimeBinding"], str]
 PaneEnvironmentProjector = Callable[["RuntimeBinding"], tuple[tuple[str, str], ...]]
+GlobalSkillRootsResolver = Callable[[Mapping[str, str], Path], tuple[Path, ...]]
 
 
 @dataclass(frozen=True)
@@ -69,15 +71,24 @@ class EvidenceRootRule:
 
 
 @dataclass(frozen=True)
+class IntegrationSpec:
+    role: str
+    state_authority: str
+    required_for_lifecycle: bool = False
+
+
+@dataclass(frozen=True)
 class HarnessAdapter:
     kind: str
     arguments: dict[str, ArgumentRule]
+    runtime_binding_renderer: RuntimeBindingRenderer
+    pane_environment_projector: PaneEnvironmentProjector
+    global_skill_roots_resolver: GlobalSkillRootsResolver
+    integration: IntegrationSpec
     argument_set_validator: Optional[ArgumentSetValidator] = None
     catalog: Optional[CatalogSpec] = None
     evidence_root: Optional[EvidenceRootRule] = None
     control_plane_validator: Optional[ControlPlaneValidator] = None
-    runtime_binding_renderer: Optional[RuntimeBindingRenderer] = None
-    pane_environment_projector: Optional[PaneEnvironmentProjector] = None
 
     def validate_arguments(self, args: list[str], location: str) -> None:
         seen: set[str] = set()
@@ -159,21 +170,36 @@ class HarnessAdapter:
             self.control_plane_validator(args, location)
 
     def render_runtime_binding(self, binding: RuntimeBinding) -> str:
-        if self.runtime_binding_renderer is None:
-            raise HarnessError(
-                f"{self.kind} has no verified runtime-binding projection"
-            )
         return self.runtime_binding_renderer(binding)
 
     def project_pane_environment(
         self,
         binding: RuntimeBinding,
     ) -> tuple[tuple[str, str], ...]:
-        if self.pane_environment_projector is None:
-            raise HarnessError(
-                f"{self.kind} has no verified runtime-binding pane projection"
-            )
         return self.pane_environment_projector(binding)
+
+    def resolve_global_skill_roots(
+        self,
+        environment: Mapping[str, str],
+        home: Path,
+    ) -> tuple[Path, ...]:
+        """Resolve user-level skill roots that can shadow a project skill."""
+        try:
+            roots = self.global_skill_roots_resolver(environment, home)
+            if not roots:
+                raise HarnessError(f"{self.kind} has no global skill roots")
+            resolved = tuple(root.resolve(strict=False) for root in roots)
+        except HarnessError:
+            raise
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise HarnessError(
+                f"{self.kind} global skill roots are invalid"
+            ) from exc
+        if len(set(resolved)) != len(resolved) or any(
+            not root.is_absolute() or root == Path(root.anchor) for root in resolved
+        ):
+            raise HarnessError(f"{self.kind} global skill roots are invalid")
+        return resolved
 
     def project_catalog(
         self,
@@ -228,6 +254,47 @@ def choices(*allowed: str) -> ValueValidator:
             raise HarnessError(f"{location} has an unsupported value")
 
     return validate
+
+
+def render_literal_runtime_binding(
+    binding: RuntimeBinding,
+    harness_label: str,
+    compatibility_note: str,
+) -> str:
+    """Render a shell-literal binding without copying profile or credential state."""
+    environment = (
+        ("HERDR_ENV", "1"),
+        ("HERDR_SOCKET_PATH", str(binding.herdr_socket_endpoint)),
+        ("HERDR_ORCHESTRATOR_PANE_ID", binding.herdr_pane_id),
+        ("HERDR_ORCHESTRATOR_PROJECT_ROOT", str(binding.project_root)),
+        ("HERDR_ORCHESTRATOR_HELPER", str(binding.helper)),
+        ("HERDR_ORCHESTRATOR_ROLE", binding.role),
+    )
+    prefix = "env " + " ".join(
+        f"{key}={shlex.quote(value)}" for key, value in environment
+    )
+    return "\n".join((
+        f"## {harness_label} native runtime binding",
+        "",
+        compatibility_note,
+        "For every native Herdr or guarded helper operation, use the applicable "
+        "literal command form below.",
+        "",
+        f"- Native Herdr: `{prefix} {shlex.quote(str(binding.herdr_executable))} <native-herdr-args...>`",
+        f"- Canonical helper: `{prefix} python3 {shlex.quote(str(binding.helper))} <helper-command-and-args...>`",
+        "",
+        "These commands carry runtime facts only. They preserve the harness's normal "
+        "profile and authentication and do not change recipe, Assignment authority, "
+        "role topology, or lifecycle ownership.",
+    )) + "\n"
+
+
+def no_extra_pane_environment(
+    binding: RuntimeBinding,
+) -> tuple[tuple[str, str], ...]:
+    """Opt in to the generic safe pane projection without provider overrides."""
+    del binding
+    return ()
 
 
 def validate_absolute_directory(value: str, location: str) -> None:

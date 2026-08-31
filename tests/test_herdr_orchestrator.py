@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -7,6 +8,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from fnmatch import fnmatchcase
 from unittest import mock
@@ -48,13 +50,22 @@ class ProjectValidationTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
 
-    def run_cli(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+    def run_cli(
+        self,
+        *arguments: str,
+        environment_overrides: dict[str, str | None] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         environment = {**os.environ, "HERDR_ORCHESTRATOR_ROLE": "lead", "HERDR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_PANE_ID": "wX:pLead", "HERDR_ORCHESTRATOR_HELPER": str(HELPER.resolve())}
         if "--project-root" in arguments:
             environment["HERDR_ORCHESTRATOR_PROJECT_ROOT"] = str(Path(arguments[arguments.index("--project-root") + 1]).resolve())
         if "--assignment" in arguments:
             assignment = json.loads(Path(arguments[arguments.index("--assignment") + 1]).read_text(encoding="utf-8"))
             environment["HERDR_ORCHESTRATOR_PROJECT_ROOT"] = assignment["project_root"]
+        for key, value in (environment_overrides or {}).items():
+            if value is None:
+                environment.pop(key, None)
+            else:
+                environment[key] = value
         return subprocess.run(
             [sys.executable, str(HELPER), *arguments], check=False, capture_output=True, text=True, env=environment
         )
@@ -380,7 +391,7 @@ class ProjectValidationTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         for command in ("init-run", "stage-assets", "pack", "deliver", "receipt"):
             self.assertNotIn(command, completed.stdout)
-        for command in ("validate-project", "validate-control-role-launch", "render-runtime-binding", "render-runtime-binding-pane", "start-peer", "submit-prompt", "freeze-candidate", "materialize-candidate", "validate-acceptance", "render-assignment", "validate-handback", "harness-models"):
+        for command in ("validate-project", "doctor", "install-official-skill", "validate-control-role-launch", "compile-runtime", "prepare-control-role-launch", "render-control-prompt", "render-runtime-binding", "render-runtime-binding-pane", "start-peer", "submit-prompt", "freeze-candidate", "materialize-candidate", "validate-acceptance", "render-assignment", "validate-handback", "harness-models"):
             self.assertIn(command, completed.stdout)
 
     def test_codex_adapter_renders_literal_runtime_binding_commands(self) -> None:
@@ -415,6 +426,189 @@ class ProjectValidationTests(unittest.TestCase):
         )
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_compile_runtime_replaces_hand_authored_binding_and_pane_json(self) -> None:
+        project = self.project("compiled-runtime")
+        assignment = self.peer_assignment(project)
+        output = self.root / "runtime-context.json"
+
+        completed = self.run_cli(
+            "compile-runtime",
+            "--project-root", str(project),
+            "--kind", "codex",
+            "--role", "lead",
+            "--pane-id", "w9:pLead",
+            "--target-role", "peer",
+            "--assignment", str(assignment),
+            "--herdr-program", "/bin/echo",
+            "--socket-endpoint", str(self.root / "herdr.sock"),
+            "--output", str(output),
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        context = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(context["binding"]["role"], "lead")
+        self.assertEqual(context["binding"]["herdr_pane_id"], "w9:pLead")
+        self.assertEqual(context["binding"]["helper"], str(HELPER.resolve()))
+        self.assertIn("HERDR_ORCHESTRATOR_PANE_ID=w9:pLead", context["runtime_projection"])
+        pane = context["pane_launch"]
+        self.assertEqual(pane["source_pane_id"], "w9:pLead")
+        self.assertEqual(pane["role"], "peer")
+        environment = {item["name"]: item["value"] for item in pane["pane_environment"]}
+        self.assertEqual(environment["HERDR_ORCHESTRATOR_ASSIGNMENT_ID"], "lead-01:csv-engineer")
+        self.assertEqual(environment["HERDR_ORCHESTRATOR_OWNER"], "csv-engineer")
+        self.assertNotIn("HERDR_SOCKET_PATH", environment)
+
+        peer_output = self.root / "pi-peer-runtime.json"
+        peer = self.run_cli(
+            "compile-runtime",
+            "--project-root", str(project),
+            "--kind", "pi",
+            "--role", "peer",
+            "--pane-id", "w9:pPeer",
+            "--source-context", str(output),
+            "--output", str(peer_output),
+        )
+        self.assertEqual(peer.returncode, 0, peer.stderr)
+        peer_context = json.loads(peer_output.read_text(encoding="utf-8"))
+        self.assertEqual(peer_context["harness"], "pi")
+        self.assertEqual(
+            peer_context["binding"]["herdr_socket_endpoint"],
+            context["binding"]["herdr_socket_endpoint"],
+        )
+        self.assertIn("Pi native runtime binding", peer_context["runtime_projection"])
+
+        conflict = self.run_cli(
+            "compile-runtime",
+            "--project-root", str(project),
+            "--kind", "pi",
+            "--role", "peer",
+            "--pane-id", "w9:pPeer2",
+            "--source-context", str(output),
+            "--herdr-program", "/bin/echo",
+            "--output", str(self.root / "conflict.json"),
+        )
+        self.assertEqual(conflict.returncode, 2)
+        self.assertIn("cannot be combined with native path overrides", conflict.stderr)
+
+    def test_prepare_control_launch_compiles_exact_recipe_without_starting_agent(self) -> None:
+        project = self.project("prepared-launch")
+        output = self.root / "lead-launch.json"
+        marker = self.root / "unexpected-start"
+        fake_herdr = self.root / "manifest-herdr"
+        fake_herdr.write_text(
+            "#!/bin/sh\ntouch " + shlex.quote(str(marker)) + "\n",
+            encoding="utf-8",
+        )
+        fake_herdr.chmod(0o755)
+
+        completed = self.run_cli(
+            "prepare-control-role-launch",
+            "--project-root", str(project),
+            "--role", "lead",
+            "--name", "dexport-lead",
+            "--pane", "w7:p1",
+            "--herdr-program", str(fake_herdr),
+            "--output", str(output),
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        manifest = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(manifest["agent"], {"name": "dexport-lead", "pane": "w7:p1"})
+        self.assertEqual(manifest["recipe"]["kind"], "codex")
+        self.assertEqual(manifest["herdr_argv"][:8], [
+            str(fake_herdr.resolve()), "agent", "start", "dexport-lead",
+            "--kind", "codex", "--pane", "w7:p1",
+        ])
+        self.assertEqual(manifest["herdr_argv"][8], "--")
+        self.assertFalse(marker.exists())
+
+    def test_render_control_prompt_preserves_verbatim_task_and_compiled_runtime(self) -> None:
+        project = self.project("control-prompt")
+        runtime = self.root / "lead-runtime.json"
+        compiled = self.run_cli(
+            "compile-runtime",
+            "--project-root", str(project),
+            "--kind", "codex",
+            "--role", "lead",
+            "--pane-id", "w8:pLead",
+            "--herdr-program", "/bin/echo",
+            "--socket-endpoint", str(self.root / "herdr.sock"),
+            "--output", str(runtime),
+        )
+        self.assertEqual(compiled.returncode, 0, compiled.stderr)
+        task = self.root / "task.txt"
+        payload = b"Implement `$herdr-orchestrator`; preserve $(touch nope).\nNo trailing rewrite."
+        task.write_bytes(payload)
+        output = self.root / "lead-prompt.md"
+
+        completed = self.run_cli(
+            "render-control-prompt",
+            "--project-root", str(project),
+            "--role", "lead",
+            "--payload", str(task),
+            "--runtime-context", str(runtime),
+            "--output", str(output),
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        rendered = output.read_bytes()
+        self.assertTrue(rendered.endswith(payload))
+        text = rendered.decode("utf-8")
+        self.assertIn("# Workspace Protocol", text)
+        self.assertIn("# Configured Peer Recipes", text)
+        self.assertIn("# Adapter Runtime Context", text)
+        self.assertIn("HERDR_ORCHESTRATOR_PANE_ID=w8:pLead", text)
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["payload_sha256"], hashlib.sha256(payload).hexdigest())
+
+    def test_render_supervisor_prompt_machine_binds_attachment_and_protocol_scope(self) -> None:
+        project = self.project("supervisor-prompt")
+        runtime = self.root / "supervisor-runtime.json"
+        compiled = self.run_cli(
+            "compile-runtime",
+            "--project-root", str(project),
+            "--kind", "codex",
+            "--role", "supervisor",
+            "--pane-id", "w8:pSupervisor",
+            "--herdr-program", "/bin/echo",
+            "--socket-endpoint", str(self.root / "herdr.sock"),
+            "--output", str(runtime),
+        )
+        self.assertEqual(compiled.returncode, 0, compiled.stderr)
+        mandate = self.root / "mandate.txt"
+        payload = b"Observe bounded evidence only."
+        mandate.write_bytes(payload)
+        output = self.root / "supervisor-prompt.md"
+
+        missing = self.run_cli(
+            "render-control-prompt",
+            "--project-root", str(project),
+            "--role", "supervisor",
+            "--payload", str(mandate),
+            "--runtime-context", str(runtime),
+            "--output", str(output),
+        )
+        self.assertEqual(missing.returncode, 2)
+        self.assertIn("attached Lead name", missing.stderr)
+
+        completed = self.run_cli(
+            "render-control-prompt",
+            "--project-root", str(project),
+            "--role", "supervisor",
+            "--payload", str(mandate),
+            "--runtime-context", str(runtime),
+            "--attached-lead-name", "dexport-lead",
+            "--attached-lead-pane", "w8:pLead",
+            "--output", str(output),
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        rendered = output.read_bytes()
+        self.assertTrue(rendered.endswith(payload))
+        text = rendered.decode("utf-8")
+        self.assertIn('"lead_name": "dexport-lead"', text)
+        self.assertIn('"lead_pane": "w8:pLead"', text)
+        self.assertNotIn("# Workspace Protocol", text)
 
     def test_runtime_binding_requires_bound_pane_and_rejects_profile_fields(self) -> None:
         binding = self.runtime_binding()
@@ -603,12 +797,458 @@ class ProjectValidationTests(unittest.TestCase):
 
         self.assertEqual(validated.returncode, 0, validated.stderr)
         self.assertNotIn("shell_environment_policy", validated.stdout)
-        self.assertEqual(projected.returncode, 2)
-        self.assertIn("claude has no verified runtime-binding projection", projected.stderr)
-        self.assertNotIn("shell_environment_policy", projected.stderr)
-        self.assertEqual(pane_projected.returncode, 2)
-        self.assertIn("claude has no verified runtime-binding pane projection", pane_projected.stderr)
-        self.assertNotIn("CODEX_HOME", pane_projected.stderr)
+        self.assertEqual(projected.returncode, 0, projected.stderr)
+        runtime = (self.root / "claude-runtime.md").read_text(encoding="utf-8")
+        self.assertIn("Claude Code native runtime binding", runtime)
+        self.assertNotIn("shell_environment_policy", runtime)
+        self.assertEqual(pane_projected.returncode, 0, pane_projected.stderr)
+        pane = json.loads((self.root / "claude-pane.json").read_text(encoding="utf-8"))
+        self.assertEqual(pane["harness"], "claude")
+        self.assertNotIn("CODEX_HOME", json.dumps(pane))
+
+    def test_every_verified_harness_has_end_to_end_runtime_projection(self) -> None:
+        binding = self.runtime_binding()
+        expected = ("pi", "claude", "codex", "opencode", "grok", "omp")
+
+        for kind in expected:
+            with self.subTest(kind=kind):
+                runtime_path = self.root / f"{kind}-runtime.md"
+                pane_path = self.root / f"{kind}-pane.json"
+                rendered = self.run_cli(
+                    "render-runtime-binding",
+                    "--binding", str(binding),
+                    "--kind", kind,
+                    "--output", str(runtime_path),
+                )
+                pane_rendered = self.run_cli(
+                    "render-runtime-binding-pane",
+                    "--binding", str(binding),
+                    "--kind", kind,
+                    "--role", "peer",
+                    "--output", str(pane_path),
+                )
+
+                self.assertEqual(rendered.returncode, 0, rendered.stderr)
+                self.assertEqual(pane_rendered.returncode, 0, pane_rendered.stderr)
+                runtime = runtime_path.read_text(encoding="utf-8")
+                pane = json.loads(pane_path.read_text(encoding="utf-8"))
+                self.assertIn("HERDR_ORCHESTRATOR_PANE_ID=wX:pE0", runtime)
+                self.assertNotIn("HOME=", runtime)
+                self.assertNotIn("CODEX_HOME=", runtime)
+                self.assertEqual(pane["harness"], kind)
+                names = {item["name"] for item in pane["pane_environment"]}
+                self.assertTrue(names.isdisjoint({
+                    "HOME", "CODEX_HOME", "HERDR_ENV", "HERDR_SOCKET_PATH",
+                    "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID",
+                }))
+
+    def test_doctor_distinguishes_agent_support_from_integration_role(self) -> None:
+        kinds = ("pi", "claude", "codex", "opencode", "grok", "omp")
+        commands = self.root / "doctor-commands"
+        commands.mkdir()
+        fake_herdr = commands / "herdr"
+        fake_herdr.write_text(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            "args = sys.argv[1:]\n"
+            "if args == ['--version']:\n"
+            " print('herdr 0.8.2')\n"
+            "elif args == ['status']:\n"
+            " print('server:\\n  status: running\\n  compatible: yes\\n  socket: /tmp/herdr.sock')\n"
+            "elif args == ['--skill']:\n"
+            " print('---\\nname: herdr\\ndescription: test\\n---\\n\\n# OFFICIAL SKILL BODY THAT MUST NOT LEAK')\n"
+            "elif args == ['agent', 'start', '--help']:\n"
+            " print('[possible values: pi, claude, codex, opencode, grok, omp]')\n"
+            "elif args == ['integration', 'status']:\n"
+            " print('pi: current (v8) (/private/pi)')\n"
+            " print('claude: current (v8) (/private/claude)')\n"
+            " print('codex: current (v8) (/private/codex)')\n"
+            " print('opencode: current (v10) (/private/opencode)')\n"
+            " print('grok: not installed (/private/grok)')\n"
+            " print('omp: not installed (/private/omp)')\n"
+            "else:\n"
+            " raise SystemExit(2)\n",
+            encoding="utf-8",
+        )
+        fake_herdr.chmod(0o755)
+        arguments = [
+            "doctor", "--project-root", str(self.root),
+            "--herdr-program", str(fake_herdr),
+        ]
+        for kind in kinds:
+            program = commands / kind
+            program.write_text(
+                "#!/usr/bin/env python3\nimport pathlib, sys\nprint(pathlib.Path(sys.argv[0]).name + ' 1.0.0')\n",
+                encoding="utf-8",
+            )
+            program.chmod(0o755)
+            arguments.extend(("--harness-program", f"{kind}={program}"))
+
+        completed = self.run_cli(*arguments)
+
+        self.assertEqual(completed.returncode, 2, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertFalse(result["ready"])
+        self.assertEqual(result["project"]["status"], "not_checked")
+        harnesses = {item["kind"]: item for item in result["harnesses"]}
+        self.assertEqual(set(harnesses), set(kinds))
+        for kind in kinds:
+            self.assertTrue(harnesses[kind]["supported_by_herdr"])
+            self.assertEqual(harnesses[kind]["runtime"], "static_projection_ready")
+        self.assertTrue(harnesses["grok"]["ready"])
+        self.assertFalse(harnesses["omp"]["ready"])
+        self.assertEqual(harnesses["grok"]["integration"], {
+            "required_for_lifecycle": False,
+            "role": "session",
+            "state": "not_installed",
+            "state_authority": "screen_manifest",
+        })
+        self.assertEqual(harnesses["omp"]["integration"], {
+            "required_for_lifecycle": True,
+            "role": "state_and_session",
+            "state": "not_installed",
+            "state_authority": "lifecycle_without_documented_fallback",
+        })
+        self.assertIn(
+            {
+                "scope": "harness.omp.integration",
+                "reason": "current_lifecycle_integration_required",
+                "remediation": ["herdr", "integration", "install", "omp"],
+            },
+            result["failures"],
+        )
+        self.assertEqual(result["probe_strategy"], "bounded_parallel")
+        self.assertNotIn("OFFICIAL SKILL BODY", completed.stdout)
+        self.assertNotIn("/private/", completed.stdout)
+
+        fake_herdr.write_text(
+            fake_herdr.read_text(encoding="utf-8").replace(
+                "omp: not installed",
+                "omp: current",
+            ),
+            encoding="utf-8",
+        )
+        accepted = self.run_cli(*arguments)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertTrue(json.loads(accepted.stdout)["ready"])
+
+        fake_herdr.write_text(
+            fake_herdr.read_text(encoding="utf-8").replace(
+                "pi, claude, codex, opencode, grok, omp",
+                "pi, claude, codex, opencode, grok",
+            ),
+            encoding="utf-8",
+        )
+        rejected = self.run_cli(
+            "doctor", "--project-root", str(self.root),
+            "--kind", "omp",
+            "--herdr-program", str(fake_herdr),
+            "--harness-program", f"omp={commands / 'omp'}",
+        )
+        self.assertEqual(rejected.returncode, 2)
+        rejection = json.loads(rejected.stdout)
+        self.assertFalse(rejection["ready"])
+        self.assertIn(
+            {"scope": "harness.omp.support", "reason": "not_advertised_by_herdr"},
+            rejection["failures"],
+        )
+
+    def test_doctor_runs_independent_herdr_probes_concurrently(self) -> None:
+        commands = self.root / "parallel-doctor"
+        commands.mkdir()
+        fake_herdr = commands / "herdr"
+        fake_herdr.write_text(
+            "#!/usr/bin/env python3\n"
+            "import sys, time\n"
+            "time.sleep(0.5)\n"
+            "args = sys.argv[1:]\n"
+            "if args == ['--version']: print('herdr 1.0')\n"
+            "elif args == ['status']: print('server:\\n  status: running\\n  compatible: yes\\n  socket: /tmp/herdr.sock')\n"
+            "elif args == ['--skill']: print('---\\nname: herdr\\ndescription: test\\n---\\n\\n# Herdr')\n"
+            "elif args == ['agent', 'start', '--help']: print('[possible values: pi]')\n"
+            "elif args == ['integration', 'status']: print('pi: current')\n"
+            "else: raise SystemExit(2)\n",
+            encoding="utf-8",
+        )
+        fake_herdr.chmod(0o755)
+        fake_pi = commands / "pi"
+        fake_pi.write_text("#!/bin/sh\necho 'pi 1.0'\n", encoding="utf-8")
+        fake_pi.chmod(0o755)
+
+        started = time.monotonic()
+        completed = self.run_cli(
+            "doctor", "--project-root", str(self.root), "--kind", "pi",
+            "--herdr-program", str(fake_herdr),
+            "--harness-program", f"pi={fake_pi}",
+        )
+        elapsed = time.monotonic() - started
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertLess(elapsed, 2.0, f"doctor probes ran sequentially in {elapsed:.2f}s")
+
+    def test_install_official_skill_materializes_target_project_roots(self) -> None:
+        fake_herdr = self.root / "materialize-herdr"
+        skill_text = "---\nname: herdr\ndescription: first\n---\n\n# Herdr\n"
+        fake_herdr.write_text(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            f"sys.stdout.write({skill_text!r}) if sys.argv[1:] == ['--skill'] else sys.exit(2)\n",
+            encoding="utf-8",
+        )
+        fake_herdr.chmod(0o755)
+        kinds = ("pi", "claude", "codex", "opencode", "grok", "omp")
+        arguments = [
+            "install-official-skill",
+            "--project-root", str(self.root),
+            "--herdr-program", str(fake_herdr),
+        ]
+        for kind in kinds:
+            arguments.extend(("--kind", kind))
+
+        installed = self.run_cli(*arguments)
+
+        self.assertEqual(installed.returncode, 0, installed.stderr)
+        result = json.loads(installed.stdout)
+        self.assertEqual(
+            {item["target"]: item["status"] for item in result["installations"]},
+            {"agents": "installed", "claude": "installed"},
+        )
+        targets = {
+            "agents": self.root / ".agents/skills/herdr/SKILL.md",
+            "claude": self.root / ".claude/skills/herdr/SKILL.md",
+        }
+        for target_kind, target in targets.items():
+            with self.subTest(target=target_kind):
+                self.assertEqual(target.read_text(encoding="utf-8"), skill_text)
+                self.assertEqual(
+                    next(item["path"] for item in result["installations"] if item["target"] == target_kind),
+                    str(target.relative_to(self.root)),
+                )
+
+        current = self.run_cli(*arguments)
+        self.assertEqual(current.returncode, 0, current.stderr)
+        self.assertTrue(all(
+            item["status"] == "current"
+            for item in json.loads(current.stdout)["installations"]
+        ))
+
+        updated_text = skill_text.replace("description: first", "description: updated")
+        fake_herdr.write_text(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            f"sys.stdout.write({updated_text!r}) if sys.argv[1:] == ['--skill'] else sys.exit(2)\n",
+            encoding="utf-8",
+        )
+        stale = self.run_cli(*arguments)
+        self.assertEqual(stale.returncode, 2)
+        self.assertIn("stale; rerun with --replace", stale.stderr)
+        self.assertEqual(
+            targets["agents"].read_text(encoding="utf-8"),
+            skill_text,
+        )
+
+        updated = self.run_cli(
+            *arguments, "--replace"
+        )
+        self.assertEqual(updated.returncode, 0, updated.stderr)
+        self.assertTrue(all(
+            item["status"] == "updated"
+            for item in json.loads(updated.stdout)["installations"]
+        ))
+        for target in targets.values():
+            self.assertEqual(
+                target.read_text(encoding="utf-8"),
+                updated_text,
+            )
+
+    def test_doctor_validates_project_and_configured_catalog_at_setup(self) -> None:
+        project = self.project("doctor-project")
+        config = project / ".orchestration/herdr-orchestrator.toml"
+        config_text = config.read_text(encoding="utf-8")
+        updated_config, replacements = re.subn(
+            r'(\[peer_recipes\.engineer\]\ndescription = "Writable implementation recipe"\n)'
+            r'kind = "codex"\nargs = \[.*?\]',
+            r'\1kind = "claude"\nargs = ["--model", "claude-test"]',
+            config_text,
+            count=1,
+        )
+        self.assertEqual(replacements, 1)
+        config.write_text(updated_config, encoding="utf-8")
+        commands = self.root / "doctor-project-commands"
+        commands.mkdir()
+        fake_herdr = commands / "herdr"
+        fake_herdr.write_text(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            "args = sys.argv[1:]\n"
+            "if args == ['--version']: print('herdr 0.8.2')\n"
+            "elif args == ['status']: print('server:\\n  status: running\\n  compatible: yes\\n  socket: /tmp/herdr.sock')\n"
+            "elif args == ['--skill']: print('---\\nname: herdr\\ndescription: test\\n---\\n\\n# Herdr')\n"
+            "elif args == ['agent', 'start', '--help']: print('[possible values: claude, codex]')\n"
+            "elif args == ['integration', 'status']:\n"
+            " print('claude: current (v8) (/private/claude)')\n"
+            " print('codex: current (v8) (/private/codex)')\n"
+            "else: raise SystemExit(2)\n",
+            encoding="utf-8",
+        )
+        fake_herdr.chmod(0o755)
+        fake_codex = commands / "codex"
+        fake_codex.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            "if sys.argv[1:] == ['--version']:\n"
+            " print('codex-cli 1.0.0')\n"
+            "elif sys.argv[1:] == ['debug', 'models']:\n"
+            " print(json.dumps({'models': [{'slug': 'gpt-5.6-sol', 'supported_reasoning_levels': [], 'default_reasoning_level': None}]}))\n"
+            "else:\n"
+            " raise SystemExit(2)\n",
+            encoding="utf-8",
+        )
+        fake_codex.chmod(0o755)
+        fake_claude = commands / "claude"
+        fake_claude.write_text(
+            "#!/bin/sh\necho 'claude-cli 1.0.0'\n", encoding="utf-8"
+        )
+        fake_claude.chmod(0o755)
+        install = self.run_cli(
+            "install-official-skill", "--project-root", str(project),
+            "--herdr-program", str(fake_herdr),
+        )
+        self.assertEqual(install.returncode, 0, install.stderr)
+        for command in (
+            ("git", "init", "-q", str(project)),
+            ("git", "-C", str(project), "config", "user.email", "test@example.invalid"),
+            ("git", "-C", str(project), "config", "user.name", "Doctor Test"),
+            ("git", "-C", str(project), "add", "."),
+            ("git", "-C", str(project), "commit", "-qm", "setup"),
+        ):
+            subprocess.run(command, check=True, capture_output=True, text=True)
+        worktree = self.root / "doctor-worktree"
+        subprocess.run(
+            ("git", "-C", str(project), "worktree", "add", "-q", "-b", "doctor-worktree", str(worktree), "HEAD"),
+            check=True, capture_output=True, text=True,
+        )
+        self.addCleanup(
+            lambda: subprocess.run(
+                ("git", "-C", str(project), "worktree", "remove", "--force", str(worktree)),
+                check=False, capture_output=True, text=True,
+            )
+        )
+        self.assertEqual(
+            (worktree / ".agents/skills/herdr/SKILL.md").read_text(encoding="utf-8"),
+            "---\nname: herdr\ndescription: test\n---\n\n# Herdr\n",
+        )
+        self.assertEqual(
+            (worktree / ".claude/skills/herdr/SKILL.md").read_text(encoding="utf-8"),
+            "---\nname: herdr\ndescription: test\n---\n\n# Herdr\n",
+        )
+        home = self.root / "doctor-home"
+        home.mkdir()
+        environment = {"HOME": str(home), "CODEX_HOME": None}
+        official = project / ".agents/skills/herdr/SKILL.md"
+
+        completed = self.run_cli(
+            "doctor", "--project-root", str(project),
+            "--herdr-program", str(fake_herdr),
+            "--harness-program", f"codex={fake_codex}",
+            "--harness-program", f"claude={fake_claude}",
+            environment_overrides=environment,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertTrue(result["ready"])
+        self.assertEqual(result["project"]["status"], "ready")
+        harnesses = {item["kind"]: item for item in result["harnesses"]}
+        self.assertEqual(set(harnesses), {"claude", "codex"})
+        self.assertEqual(harnesses["codex"]["catalog"]["status"], "ready")
+        self.assertEqual(harnesses["codex"]["catalog"]["model_count"], 1)
+        self.assertEqual(
+            {item["target"] for item in result["official_skill"]["targets"]},
+            {"agents", "claude"},
+        )
+        self.assertTrue(all(
+            item["status"] == "current"
+            and item["repository"]["status"] == "committed"
+            for item in result["official_skill"]["targets"]
+        ))
+
+        global_skill = home / ".agents/skills/herdr/SKILL.md"
+        global_skill.parent.mkdir(parents=True)
+        global_skill.write_text("stale\n", encoding="utf-8")
+        claude_global_skill = home / ".claude/skills/herdr/SKILL.md"
+        claude_global_skill.parent.mkdir(parents=True)
+        claude_global_skill.write_text("stale\n", encoding="utf-8")
+        shadowed = self.run_cli(
+            "doctor", "--project-root", str(project),
+            "--herdr-program", str(fake_herdr),
+            "--harness-program", f"codex={fake_codex}",
+            "--harness-program", f"claude={fake_claude}",
+            environment_overrides=environment,
+        )
+        self.assertEqual(shadowed.returncode, 2)
+        shadowed_result = json.loads(shadowed.stdout)
+        self.assertEqual(
+            {item["kind"]: item for item in shadowed_result["harnesses"]}["codex"]
+            ["global_official_skill"]["status"],
+            "shadowed",
+        )
+        self.assertIn(
+            {
+                "scope": "harness.codex.global_official_skill",
+                "reason": "global_skill_shadows_repository_skill",
+            },
+            shadowed_result["failures"],
+        )
+        self.assertIn(
+            {
+                "scope": "harness.claude.global_official_skill",
+                "reason": "global_skill_shadows_repository_skill",
+            },
+            shadowed_result["failures"],
+        )
+        global_skill.unlink()
+        claude_global_skill.unlink()
+
+        official.write_text("stale\n", encoding="utf-8")
+        stale = self.run_cli(
+            "doctor", "--project-root", str(project),
+            "--herdr-program", str(fake_herdr),
+            "--harness-program", f"codex={fake_codex}",
+            "--harness-program", f"claude={fake_claude}",
+            environment_overrides=environment,
+        )
+        self.assertEqual(stale.returncode, 2)
+        stale_result = json.loads(stale.stdout)
+        self.assertEqual(
+            stale_result["official_skill"]["targets"][0]["status"],
+            "stale",
+        )
+        skill_failure = next(
+            failure for failure in stale_result["failures"]
+            if failure["scope"] == "official_skill.agents"
+        )
+        self.assertIn("--replace", skill_failure["remediation"])
+
+        official.unlink()
+        missing = self.run_cli(
+            "doctor", "--project-root", str(project),
+            "--herdr-program", str(fake_herdr),
+            "--harness-program", f"codex={fake_codex}",
+            "--harness-program", f"claude={fake_claude}",
+            environment_overrides=environment,
+        )
+        self.assertEqual(missing.returncode, 2)
+        missing_result = json.loads(missing.stdout)
+        self.assertEqual(
+            missing_result["official_skill"]["targets"][0]["status"],
+            "missing",
+        )
+        missing_failure = next(
+            failure for failure in missing_result["failures"]
+            if failure["scope"] == "official_skill.agents"
+        )
+        self.assertNotIn("--replace", missing_failure["remediation"])
 
     def test_runtime_binding_rejects_unverified_harness_without_guessing(self) -> None:
         completed = self.run_cli(

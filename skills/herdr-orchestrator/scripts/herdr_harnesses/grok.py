@@ -3,19 +3,40 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from pathlib import Path
+from typing import Any, Mapping
 
 from .base import (
     ArgumentRule,
     CatalogSpec,
     HarnessAdapter,
     HarnessError,
+    IntegrationSpec,
+    RuntimeBinding,
     catalog_model_id,
     choices,
     decode_catalog,
+    no_extra_pane_environment,
+    render_literal_runtime_binding,
     validate_identifier,
     validate_model,
 )
+
+
+def render_runtime_binding(binding: RuntimeBinding) -> str:
+    return render_literal_runtime_binding(
+        binding,
+        "Grok CLI",
+        "Grok CLI uses its normal role profile; the literal binding pins only "
+        "Herdr and guarded-helper runtime facts.",
+    )
+
+
+def resolve_global_skill_roots(
+    environment: Mapping[str, str], home: Path,
+) -> tuple[Path, ...]:
+    del environment
+    return (home / ".agents" / "skills", home / ".grok" / "skills")
 
 
 def project_catalog(raw: bytes, label: str) -> list[dict[str, Any]]:
@@ -78,6 +99,13 @@ ADAPTER = HarnessAdapter(
         "--no-alt-screen": ArgumentRule(),
         "--no-plan": ArgumentRule(),
     },
+    runtime_binding_renderer=render_runtime_binding,
+    pane_environment_projector=no_extra_pane_environment,
+    global_skill_roots_resolver=resolve_global_skill_roots,
+    integration=IntegrationSpec(
+        role="session",
+        state_authority="screen_manifest",
+    ),
     catalog=CatalogSpec(
         command=("models",),
         modes={"live": ()},

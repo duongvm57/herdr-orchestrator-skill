@@ -4,47 +4,33 @@ Require `HERDR_ENV=1`; otherwise stop rather than controlling a session from
 outside Herdr. Resolve the canonical project root and the exact absolute path
 of `scripts/herdr_orchestrator.py` in this active installed skill. Call that
 path `<canonical-helper>`; it is never a path guessed under the consumer
-repository. Run:
+repository.
 
-```text
-python3 <canonical-helper> validate-project --project-root <root>
-```
+Task launch consumes the config and Workspace Protocol accepted during setup.
+Do not rerun setup discovery: no `doctor`, `validate-project`, Herdr
+version/skill/status/help, integration inspection, harness version, or model
+catalog call belongs on this hot path. The later control-role cost check parses
+and validates the configured recipes before native start. If an actual native
+operation exposes environment drift, stop with its bounded diagnostic and ask
+the Human to rerun setup doctor; never substitute a harness or guess a repair.
 
-Capture the installed-contract snapshot before launch:
-
-```text
-herdr --version
-herdr --skill
-herdr status                 # only when a server is active
-herdr agent start --help
-```
-
-Use the release-matched `herdr --skill` and the official [Herdr Agents
-docs](https://herdr.dev/docs/agents/) to verify/install the official skill and
-for lifecycle/detection semantics. Confirm the selected Launcher, Lead, or
-Supervisor harness has that skill installed in its supported instruction
-context. Only a harness that genuinely cannot install skills may use a
-documented compatibility fallback that injects one fresh copy into its initial
-prompt. CLI support alone does not prove the spawned agent received the skill.
-The project config and Workspace Protocol are authoritative for recipe,
-language, and SLP policy; Herdr is authoritative for pane, agent, and
-lifecycle mechanics.
+Setup already verified the release-matched official Herdr Agent Skill and the
+selected harness instruction context. The project config and Workspace
+Protocol remain authoritative for recipe, language, and SLP policy; Herdr is
+authoritative for pane, agent, and lifecycle mechanics.
 
 Read `references/launcher/runtime-binding.md` before starting a role. Resolve
-the active session's exact Herdr executable and socket endpoint; after native
-pane creation, read the returned exact pane ID before constructing that role's
-fresh binding. Production roles retain the user's normal harness profile,
-configuration, and authentication. The selected adapter, not this generic
-route, decides how native execution consumes the bounded binding.
+the returned exact pane ID after native creation; the compiler resolves and
+validates executable, socket, helper, and adapter facts. Production roles keep
+the user's normal harness profile, configuration, and authentication.
 
 Pane projections set `PYTHONDONTWRITEBYTECODE=1`. Do not override it: Python
 cache must not become untracked candidate input. Candidate freeze also excludes
 any `__pycache__`, `.pyc`, or `.pyo` path as defence in depth.
 
-Do not dump the full API schema in preflight; use targeted command help only
-for a named capability. Stop on invalid configuration, unavailable skill/binary,
-or incompatible approval policy. Do not substitute a harness, model, profile,
-or authority envelope. Before launch, show the selected recipe,
+Stop on invalid configuration, a native capability failure, or incompatible
+approval policy. Do not substitute a harness, model, profile, or authority
+envelope. Before launch, show the selected recipe,
 harness/model/effort, native priority flags, and `cost_class`. An `elevated`
 recipe requires Human approval; copy the exact decision into
 `Assignment.cost_approval`, which is rendered verbatim to the Lead.

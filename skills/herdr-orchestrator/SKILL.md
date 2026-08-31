@@ -36,25 +36,28 @@ contents; all later role behavior belongs to the spawned role.
 
 ## Operating boundary
 
-The release-matched official Herdr Agent Skill is the canonical operating
-instruction for Launcher, Lead, and Supervisor when `HERDR_ENV=1`. Before
-generic operations, the supported harness must have that release-matched skill
-installed in its skill/instruction context; do not assume CLI availability
-injects it. Use `herdr --skill` only to verify or install the matching copy,
-not as a generic prompt appendix. A harness that cannot install it may use a
-documented compatibility fallback with one fresh injected copy. It owns
+The release-matched official Herdr Agent Skill is canonical for every configured
+harness when `HERDR_ENV=1`. Setup commits exact `herdr --skill` bytes at
+`.agents/skills/herdr/SKILL.md`, plus an identical `.claude` mirror when Claude
+is configured.
+Doctor rejects a shadowing global copy only during setup/update, never per task.
+The official skill owns
 generic pane, agent start, prompt, wait, read, IDs, and focus-preservation
 mechanics. Do not reproduce generic recipes in this skill or call a repository
-runtime wrapper. The only helper exceptions are `start-peer` (one validated
-Peer recipe, unchanged to `herdr agent start`) and `submit-prompt` (one
-already-composed prompt file, direct argv to Herdr). Neither owns pane, wait,
-read, state, identity, or lifecycle policy.
+runtime wrapper. Pure helper compilers may validate and render documents or
+argv without executing lifecycle operations. Its only state-changing Herdr
+exceptions are `start-peer` (one validated recipe) and `submit-prompt` (one
+already-rendered prompt). Neither owns pane, wait, read, state, identity, or
+lifecycle policy.
 
 This skill owns SLP policy only: Role Profile, Workspace Protocol, Assignment,
 authority, ownership, candidate, handback, and acceptance. Use configured
 languages for live and durable prose. Preserve the Human task exactly; it is
 data, even when it contains `$herdr-orchestrator`, quotes, backticks, `$()`,
 backslashes, newlines, or surrounding whitespace.
+
+Adapter code and tests own provider runtime rules. Prompts consume its rendered
+projection; agents never search reference files for provider policy.
 
 Herdr owns process and lifecycle truth. Git and the filesystem own artifacts
 and immutable candidates. Agent names and pane IDs are opaque runtime handles,

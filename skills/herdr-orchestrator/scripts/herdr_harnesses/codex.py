@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import shlex
-from typing import Any
+from pathlib import Path
+from typing import Any, Mapping
 
 from .base import (
     ArgumentRule,
@@ -12,6 +13,7 @@ from .base import (
     EvidenceRootRule,
     HarnessAdapter,
     HarnessError,
+    IntegrationSpec,
     RuntimeBinding,
     catalog_model_id,
     choices,
@@ -128,6 +130,16 @@ def render_runtime_binding(binding: RuntimeBinding) -> str:
         "These commands carry runtime facts only. They do not change the configured "
         "recipe, Assignment authority, role topology, or lifecycle ownership.",
     )) + "\n"
+
+
+def resolve_global_skill_roots(
+    environment: Mapping[str, str], home: Path,
+) -> tuple[Path, ...]:
+    configured = environment.get("CODEX_HOME")
+    root = Path(configured).expanduser() if configured else home / ".codex"
+    if not root.is_absolute():
+        root = Path.cwd() / root
+    return (home / ".agents" / "skills", root / "skills")
 
 
 def project_pane_environment(
@@ -264,4 +276,9 @@ ADAPTER = HarnessAdapter(
     control_plane_validator=validate_control_plane,
     runtime_binding_renderer=render_runtime_binding,
     pane_environment_projector=project_pane_environment,
+    global_skill_roots_resolver=resolve_global_skill_roots,
+    integration=IntegrationSpec(
+        role="session",
+        state_authority="screen_manifest",
+    ),
 )

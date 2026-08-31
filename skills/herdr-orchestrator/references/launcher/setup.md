@@ -1,16 +1,12 @@
 # Project setup and update
 
-Writes config and protocol; launch only for an included task.
+Writes config and protocol; launch only for its included task.
 
 ## 1. Preserve and discover
 
-Resolve the canonical repository root. Inventory status, worktrees,
-agents/panes, and destinations. Understand and preserve Human-owned or unrelated
-changes; present an in-place diff.
-
-Concurrent writers use clean, Human-trusted sibling slots; never nest a
-worktree in the repository. An untrusted required slot is a
-`DEPENDENCY_REQUEST` before launch.
+Resolve the canonical root; inventory worktrees and agents/panes. Preserve
+unrelated changes and present a diff. Concurrent writers use Human-trusted
+sibling slots; an untrusted required slot is a `DEPENDENCY_REQUEST`.
 
 Require `HERDR_ENV=1` and Python 3.11+; prove the Launcher control boundary:
 
@@ -19,28 +15,43 @@ herdr agent list
 herdr pane current --current
 ```
 
-Stop on error. Choose configuration mode:
+Stop on error. Use Human-confirmed guided rows or v4 TOML; ask missing
+protocol decisions. Otherwise show the templates.
 
-- **Guided setup** (recommended): discover candidates, then ask each profile row.
-- **Configure TOML yourself:** accept version-4 TOML from chat or
-  `.orchestration/herdr-orchestrator.toml`; otherwise show that path, starter
-  from `assets/config.toml`, and role/recipe fields so the Human can create or
-  edit it. Strictly parse and validate live tuples, then ask only missing
-  protocol decisions.
+Version 3 blocks launch; approved v4 replaces it.
 
-Version 3 blocks launch; Human-approved v4 replaces it.
+Run discovery once through credential-free doctor output:
 
-In Guided setup, intersect helper-verified kinds, `herdr agent start --help`,
-and runnable executables; omit the rest and mark Herdr-only kinds unavailable.
-Build Lead, optional Supervisor, and applicable Peer capability rows. Each row
-independently selects harness, model/cost, access, and native args; the Human
-chooses reuse and one fallback. Recipes express capability/model fit; the
-Assignment binds Peer disposition.
+```text
+python3 <canonical-helper> doctor --project-root <repository-root>
+```
 
-Probe auth, native choices, access, and spawn control; Herdr/helper
-`--help` remains authority. Per selected kind, run `harness-models` in a
-temporary directory, consume its compact projection, then remove it. Missing
-adapters fail closed; prove each choice with a bounded native check or smoke.
+Doctor runs bounded parallel read-only probes. Present remediation before any
+authorized execution.
+
+Without config, doctor checks every verified kind; repeated `--kind <kind>` may
+narrow only this initial probe. It separates Herdr agent support, executable,
+runtime binding, and direct integration. Missing optional direct integration
+does not mean Herdr lacks agent support. A configured lifecycle authority with
+no documented screen fallback must be current.
+
+Use it to omit unavailable harnesses and choose role rows. Then materialize
+release bytes once:
+
+```text
+python3 <canonical-helper> install-official-skill \
+  --project-root <repository-root>
+```
+
+The command writes `.agents/skills/herdr/SKILL.md` and, for Claude, its
+identical `.claude` mirror. With no `--kind`, it covers every configured
+harness; use explicit `--kind` only before config exists. Commit them before
+final doctor; use `--replace` only for doctor-reported stale bytes. Final
+doctor requires matching configured-harness digests in committed files and blocks a global `herdr` skill
+that shadows them. No install/check enters task launch.
+
+Probe access/spawn only when static discovery cannot decide it. Candidate doctor
+runs configured bounded model catalogs; missing adapters or projections fail closed.
 Decide:
 
 - live orchestration and artifact languages on first setup or change;
@@ -65,21 +76,24 @@ artifact root is assigned. An adapter-specific Herdr IPC requirement may need a
 broader technical sandbox envelope; disclose it precisely without describing
 it as a role-authority ACL.
 
-Apply only the selected adapter's verified runtime-binding projection. Do not
-promote one harness's subprocess, home, or shell behavior into a project-wide
-recipe requirement. When present, read the selected adapter's concise
-`references/harnesses/<kind>-runtime-binding.md` before serializing its native
-recipe. Never hardcode Herdr IDs.
+Apply only the selected adapter's verified runtime-binding projection. The
+adapter code owns provider-specific subprocess, sandbox, and shell rules; do
+not promote them into a project-wide recipe requirement. Never hardcode Herdr
+IDs.
 
-Production preserves the installed native harness profile and authentication.
-Isolation means a fresh consumer checkout/evidence state, not copied credentials
-or an implied new profile. Use a Human-approved, residue-free smoke only when
-inspection cannot prove the selected envelope.
+Preserve native profile/authentication. Isolation means fresh evidence, not copied
+credentials. Use a Human-approved residue-free smoke only when inspection cannot
+prove the envelope.
 
-Before serialization, validate temporary candidate config/protocol with
-`validate-project --project-root <repository-root> --config <candidate-config>
---protocol <candidate-protocol>`. Show every granted root/network capability;
-kinds without a static rule need the live probe.
+Before serialization, run the complete candidate gate:
+
+```text
+python3 <canonical-helper> doctor --project-root <repository-root> \
+  --config <candidate-config> --protocol <candidate-protocol>
+```
+
+This validates the project and every configured catalog. Do not pass `--kind`.
+Show granted root/network capability; live-probe kinds without static rules.
 
 ## 3. Write schema version 4 and the protocol
 
@@ -114,14 +128,12 @@ protocol free of task paths, secrets, and global role manuals.
 
 ## 4. Validate and review
 
-Run `python3 <canonical-helper> validate-project --project-root
-<repository-root> --config <candidate-config> --protocol <candidate-protocol>`;
-consume its compact JSON before serialization. After serialization, rerun the
-default canonical-path validation. Recheck every recipe live. Confirm only the
-two intended files changed, placeholders and
-credential-like values are absent, and unrelated state remains. Present the
-scoped diff and unresolved assumptions for Human review.
+Consume passing candidate doctor JSON. After serialization, rerun `python3
+<canonical-helper> doctor --project-root <repository-root>` on canonical paths.
+Confirm only two intended files changed, no placeholders/credentials appear,
+and unrelated state remains. Present the diff and assumptions.
 
-Setup is complete when version 4 and all protocol sections parse; discovery and
-every recipe/envelope pass live validation; role boundaries hold; the Human
-reviewed a credential-free diff; no agent or probe residue remains.
+Setup completes when doctor reports `ready: true`, generated skills are
+committed, role boundaries hold, the Human reviewed the credential-free diff,
+and no probe residue remains. Rerun after changing Herdr, skill, harness,
+model, integration, recipe, or permissions—not before each task.

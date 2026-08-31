@@ -45,11 +45,13 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("--no-focus", launch)
         self.assertIn("submit-prompt --agent <unique-lead-name> --prompt-file <prompt-file>", launch)
         self.assertIn("--project-root <root>", launch)
-        self.assertIn("# Human elevated-cost approval", launch)
-        self.assertIn("copy it unchanged into each applicable Assignment", launch)
+        self.assertIn("prepare-control-role-launch", launch)
+        self.assertIn("render-control-prompt", launch)
+        self.assertIn("verbatim Human decision", launch)
+        self.assertIn("payload hash", launch)
         self.assertIn("<adapter-runtime-bound-helper> submit-prompt", launch)
         self.assertIn("direct subprocess argv", launch)
-        self.assertIn("Do not strip, normalize", launch)
+        self.assertIn("preserve the task bytes", launch)
         self.assertIn("agent_not_ready", launch)
         self.assertIn("surface the exact native question to the Human", launch)
         self.assertIn("continue with that same Lead and pane", launch)
@@ -73,13 +75,35 @@ class InstructionArchitectureTests(unittest.TestCase):
 
     def test_setup_uses_current_validation_and_approval_policy_boundary(self) -> None:
         setup = read("references/launcher/setup.md")
-        self.assertIn("validate-project --project-root", setup)
+        self.assertIn("doctor --project-root", setup)
+        self.assertIn("direct integration", setup)
+        self.assertIn("does not mean Herdr lacks agent support", setup)
         self.assertNotIn("--git-common-dir", setup)
         self.assertIn("Approval-gated routes", setup)
         self.assertIn("approval_required = true", setup)
         self.assertIn("selected adapter's verified runtime-binding projection", setup)
+        self.assertIn("install-official-skill", setup)
+        self.assertRegex(setup, r"matching configured-harness\s+digests")
+        self.assertIn("committed files", setup)
+        self.assertIn("global `herdr` skill", setup)
+        self.assertIn("No install/check enters task launch", setup)
         self.assertNotIn("shell_environment_policy", setup)
         self.assertIn("Recreate the session", setup)
+
+    def test_task_preflight_does_not_repeat_setup_doctor_or_native_discovery(self) -> None:
+        preflight = read("references/launcher/preflight.md")
+
+        self.assertIn("no `doctor`, `validate-project`", preflight)
+        self.assertIn("rerun setup doctor", preflight)
+        for command in (
+            "herdr --version",
+            "herdr --skill",
+            "herdr status",
+            "herdr agent start --help",
+            "herdr integration status",
+            "harness-models",
+        ):
+            self.assertNotIn(command, preflight)
 
     def test_role_disclosure_preserves_authority_boundaries(self) -> None:
         lead = read("references/roles/lead.md")
@@ -99,7 +123,7 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("`REOPEN_REQUEST`", peer)
         self.assertIn("not a technical ACL", peer)
         self.assertIn("Lead named in your attachment", supervisor)
-        self.assertIn("explicit supervised Lead name/pane", attachment)
+        self.assertIn("--attached-lead-name <lead-name> --attached-lead-pane <lead-pane>", attachment)
         self.assertIn("do not create a Supervisor inference turn", " ".join(attachment.split()))
 
     def test_continuous_supervision_stays_fail_closed_without_native_wake_proof(self) -> None:
@@ -119,18 +143,18 @@ class InstructionArchitectureTests(unittest.TestCase):
 
         self.assertIn("construct, validate, and render the canonical Assignment", lead)
         self.assertIn("Do not parse prose back into an Assignment", lead_words)
-        self.assertIn("bounded applicable-protocol projection", lifecycle)
-        self.assertIn("never pass the full", lifecycle)
+        self.assertIn("bounded protocol constraints", lifecycle)
+        self.assertIn("--applicable-protocol <bounded-constraints.md>", lifecycle)
         self.assertIn("same exact name in `owner`", lifecycle)
         self.assertIn("never a Peer or Supervisor entry", lifecycle)
-        self.assertIn("herdr pane split --pane <source_pane_id", lifecycle)
-        self.assertIn("new Peer pane ID", lifecycle)
-        self.assertIn("render-runtime-binding-pane", lifecycle)
+        self.assertIn("herdr pane split --pane <pane_launch.source_pane_id>", lifecycle)
+        self.assertIn("returned Peer pane", lifecycle)
+        self.assertIn("compile-runtime --project-root", lifecycle)
         self.assertIn("pane_environment", lifecycle)
         self.assertIn("literal `--env NAME=VALUE`", lifecycle)
         self.assertNotIn("CODEX_HOME", lifecycle)
-        self.assertIn("fresh Peer runtime binding", lifecycle)
-        self.assertIn("another harness's command syntax", lifecycle)
+        self.assertIn("fresh Peer context", lifecycle)
+        self.assertIn("no provider syntax is assembled in prose", lifecycle)
         for managed in ("HERDR_ENV", "HERDR_SOCKET_PATH", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID"):
             self.assertIn(managed, lifecycle)
         self.assertIn("not a separate runtime role", lifecycle)
@@ -196,7 +220,7 @@ class InstructionArchitectureTests(unittest.TestCase):
         lead = read("references/roles/lead.md")
         candidate = read("references/lead/candidate-and-verdict.md")
 
-        self.assertIn("the concise Lead profile", launch)
+        self.assertIn("render-control-prompt", launch)
         self.assertIn("do not issue a project acceptance or Human-facing final\nverdict", lead)
         self.assertIn("exact stable candidate identity", lead)
         self.assertIn("actual diff/artifact", lead)
@@ -260,9 +284,10 @@ class InstructionArchitectureTests(unittest.TestCase):
         )
 
         self.assertIn("HERDR_ORCHESTRATOR_HELPER=<canonical-helper-absolute-path>", launch)
-        self.assertIn("only\nhelper path the Lead may use", launch)
+        self.assertIn("canonical helper path in the workspace environment", launch)
         self.assertIn("Never guess consumer-root `scripts/`", lead)
-        self.assertIn("submit-prompt --agent <unique-supervisor-name>", supervisor)
+        self.assertIn("render-control-prompt", supervisor)
+        self.assertIn("<adapter-runtime-bound-helper> submit-prompt", supervisor)
         self.assertIn("--project-root <root>", supervisor)
         self.assertIn("no native-wake proof bundled", supervisor)
         self.assertIn("do not depend on a final result from `agent prompt\n--wait`", launch)
@@ -286,18 +311,19 @@ class InstructionArchitectureTests(unittest.TestCase):
                 "references/roles/supervisor.md",
             )
         )
-        codex_projection = read("references/harnesses/codex-runtime-binding.md")
         codex_adapter = read("scripts/herdr_harnesses/codex.py")
 
-        for field in (
-            "herdr_executable",
-            "herdr_socket_endpoint",
-            "herdr_pane_id",
-            "helper",
-            "project_root",
-            '"role"',
+        for option in (
+            "compile-runtime",
+            "--project-root",
+            "--kind",
+            "--role",
+            "--pane-id",
+            "--target-role peer",
+            "--assignment",
         ):
-            self.assertIn(field, binding)
+            self.assertIn(option, binding)
+        self.assertNotIn('"herdr_executable"', binding)
         self.assertNotIn("codex", binding.lower())
         self.assertNotIn("shell_environment_policy", generic_documents)
         self.assertNotIn("CODEX_HOME", generic_documents)
@@ -306,12 +332,16 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("project_pane_environment", codex_adapter)
         self.assertIn("pane_environment_projector=project_pane_environment", codex_adapter)
         self.assertIn("shell_environment_policy.inherit", codex_adapter)
-        self.assertIn("literal native Herdr and helper commands", codex_projection)
-        self.assertIn("does not override `HOME` or `CODEX_HOME`", codex_projection)
         self.assertIn("HERDR_ORCHESTRATOR_PANE_ID", codex_adapter)
-        self.assertIn("use its exact\nhelper command form for every guarded helper call", binding)
-        self.assertIn("compares it to native\n`HERDR_PANE_ID`", binding)
-        self.assertIn("Do not copy this syntax into OMP, Pi, Claude", codex_projection)
+        self.assertIn("exact command form", binding)
+        self.assertIn("native `HERDR_PANE_ID`", binding)
+        self.assertIn("Adapter code and tests own provider runtime rules", read("SKILL.md"))
+        for kind in ("pi", "claude", "codex", "opencode", "grok", "omp"):
+            adapter = read(f"scripts/herdr_harnesses/{kind}.py")
+            self.assertIn("runtime_binding_renderer=", adapter)
+            self.assertIn("pane_environment_projector=", adapter)
+            self.assertIn("global_skill_roots_resolver=", adapter)
+            self.assertIn("integration=IntegrationSpec", adapter)
 
     def test_instruction_pointers_resolve(self) -> None:
         documents = [SKILL_ROOT / "SKILL.md", *sorted((SKILL_ROOT / "references").rglob("*.md"))]
