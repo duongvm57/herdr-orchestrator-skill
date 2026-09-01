@@ -22,39 +22,48 @@ Read `.result.root_pane.pane_id`; it is the Lead pane and task topology anchor.
 Same-checkout Supervisor and Peers split it; an isolated concurrent writer uses
 its own Herdr worktree workspace.
 
+Allocate one unique run-scoped scratch directory through the host temporary-file
+facility. Keep launch, runtime, and verbatim Human payload files there; never
+reuse a fixed shared temporary path.
+
 Compile the exact configured start manifest after pane creation. An elevated
 recipe requires the verbatim Human decision:
 
 ```text
 <canonical-helper> prepare-control-role-launch --project-root <root> --role lead \
   --name <unique-lead-name> --pane <returned-task-root-pane-id> \
-  --cost-approval <verbatim-human-decision-if-elevated> --output <launch.json>
+  --cost-approval <verbatim-human-decision-if-elevated> --output <run-scratch>/launch.json
 ```
 
 Inspect the manifest, then execute its `herdr_argv` through the official Herdr
 skill without editing or shell-reconstructing it. Compile the returned Lead
-pane as specified in `references/launcher/runtime-binding.md`. Write the Human
-task unchanged to a temporary UTF-8 file, then machine-render the prompt:
+pane as specified in `references/launcher/runtime-binding.md`, writing its
+context under the same run scratch. Write the Human task unchanged to
+`<run-scratch>/human-task.txt`, then compose and submit it in one helper call:
 
 ```text
-<canonical-helper> render-control-prompt --project-root <root> --role lead \
-  --payload <human-task-file> --runtime-context <lead-runtime.json> \
-  --cost-approval <verbatim-human-decision-if-elevated> --output <prompt-file>
+<adapter-runtime-bound-helper> submit-control-prompt --agent <unique-lead-name> \
+  --project-root <root> --role lead --payload <run-scratch>/human-task.txt \
+  --runtime-context <run-scratch>/lead-runtime.json \
+  --cost-approval <verbatim-human-decision-if-elevated>
 ```
 
-The renderer inserts the full Workspace Protocol, configured Peer recipes,
-Lead boundary, adapter runtime context, and payload hash. Submit only through
-the installed helper:
-
-```text
-<adapter-runtime-bound-helper> submit-prompt --agent <unique-lead-name> --prompt-file <prompt-file> \
-  --project-root <root>
-```
-
-`<adapter-runtime-bound-helper>` comes from the compiled Lead runtime context.
-The helpers use direct subprocess argv and preserve the task bytes; no task text
-is shell input. Pass the canonical helper path in the workspace environment.
+The command inserts the full Workspace Protocol, configured Peer recipes, Lead
+boundary, adapter runtime context, and payload hash in memory, then submits the
+exact bytes through native Herdr. `<adapter-runtime-bound-helper>` comes from the
+compiled Lead runtime context. The helper uses direct subprocess argv; no task
+text is shell input and no rendered prompt transport file is created. Pass the
+canonical helper path in the workspace environment.
 The default preserves Launcher focus; focus only at Human request.
+
+## Attach the default bounded Supervisor
+
+After Lead prompt delivery, read `references/launcher/supervisor-attachment.md`
+completely and run its default bounded-observation branch for this exact Lead.
+Every task launch requires this attachment. It observes one settled Lead turn
+and reports orchestration friction; it is not continuous supervision. A missing
+or failed Supervisor launch is a `DEPENDENCY_REQUEST`, not a reason to continue
+without one.
 
 If native startup returns `agent_not_ready` because it is blocked by an
 approval or directory-trust UI, preserve the newly created agent and pane and
@@ -74,8 +83,8 @@ transcript observation; do not depend on a final result from `agent prompt
 Peer semantic completion requires its matching Assignment handback, and Lead
 project completion requires a candidate plus valid acceptance evidence. Launch
 setup is complete when native start and safe prompt submission have been
-observed. Report the exact Lead name and pane ID to the Human. No durable
-transport state is created.
+observed for both Lead and default Supervisor. Report both exact names and pane
+IDs to the Human. No durable transport state is created.
 
 ## Production completion gate and one recovery
 

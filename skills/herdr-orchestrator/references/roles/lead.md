@@ -16,7 +16,7 @@ smallest useful topology: implement a tiny tightly coupled task yourself; use a
 bounded Peer when independent work or judgment changes the outcome.
 
 Choose a configured recipe fitting each bounded Assignment. For every Peer,
-construct, validate, and render the canonical Assignment with its profile and a
+construct, validate, and submit the canonical Assignment with its profile and a
 bounded applicable-protocol projection, then submit it through official Herdr.
 Before the first Assignment, observe your exact current Lead identity through
 the official Herdr skill. Then choose the exact distinct Peer identity:

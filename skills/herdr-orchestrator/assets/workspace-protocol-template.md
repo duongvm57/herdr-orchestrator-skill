@@ -6,7 +6,7 @@
 - Version: 1
 - Last reviewed: YYYY-MM-DD
 - Repository root:
-- Readers: Project Lead; Supervisor only when explicitly assigned
+- Readers: Project Lead and the task's explicitly attached bounded Supervisor
 - Live orchestration language:
 - Durable Markdown artifact language:
 

@@ -272,6 +272,19 @@ class ProjectValidationTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
+    def test_validate_project_requires_default_supervisor_recipe(self) -> None:
+        project = self.project()
+        config = project / ".orchestration/herdr-orchestrator.toml"
+        text = config.read_text(encoding="utf-8")
+        start = text.index("[roles.supervisor]")
+        end = text.index("[peer_recipes.", start)
+        config.write_text(text[:start] + text[end:], encoding="utf-8")
+
+        completed = self.run_cli("validate-project", "--project-root", str(project))
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("roles must contain exactly lead and supervisor", completed.stderr)
+
     def test_validate_project_rejects_control_roles_without_control_plane_access(self) -> None:
         for role in ("lead", "supervisor"):
             with self.subTest(role=role):
@@ -391,7 +404,7 @@ class ProjectValidationTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         for command in ("init-run", "stage-assets", "pack", "deliver", "receipt"):
             self.assertNotIn(command, completed.stdout)
-        for command in ("validate-project", "doctor", "install-official-skill", "validate-control-role-launch", "compile-runtime", "prepare-control-role-launch", "render-control-prompt", "render-runtime-binding", "render-runtime-binding-pane", "start-peer", "submit-prompt", "freeze-candidate", "materialize-candidate", "validate-acceptance", "render-assignment", "validate-handback", "harness-models"):
+        for command in ("validate-project", "doctor", "install-official-skill", "validate-control-role-launch", "compile-runtime", "prepare-control-role-launch", "render-control-prompt", "submit-control-prompt", "render-runtime-binding", "render-runtime-binding-pane", "start-peer", "submit-prompt", "submit-assignment", "freeze-candidate", "materialize-candidate", "validate-acceptance", "render-assignment", "validate-handback", "harness-models"):
             self.assertIn(command, completed.stdout)
 
     def test_codex_adapter_renders_literal_runtime_binding_commands(self) -> None:
@@ -411,6 +424,7 @@ class ProjectValidationTests(unittest.TestCase):
         self.assertIn("Codex tool subprocesses cannot rely on inherited role environment", projection)
         self.assertIn(f"HERDR_SOCKET_PATH={self.root / 'herdr.sock'}", projection)
         self.assertIn(f"HERDR_ORCHESTRATOR_HELPER={HELPER.resolve()}", projection)
+        self.assertIn("HERDR_PANE_ID=wX:pE0", projection)
         self.assertIn("HERDR_ORCHESTRATOR_PANE_ID=wX:pE0", projection)
         self.assertIn(str(Path("/bin/echo").resolve()), projection)
         self.assertNotIn("HOME=", projection)
@@ -561,6 +575,96 @@ class ProjectValidationTests(unittest.TestCase):
         self.assertIn("HERDR_ORCHESTRATOR_PANE_ID=w8:pLead", text)
         result = json.loads(completed.stdout)
         self.assertEqual(result["payload_sha256"], hashlib.sha256(payload).hexdigest())
+
+    def test_submit_control_prompt_composes_in_memory_with_exact_pane_binding(self) -> None:
+        project = self.project("submitted-control-prompt")
+        command_directory = self.root / "control-submit-commands"
+        command_directory.mkdir()
+        capture = self.root / "control-submit-argv.json"
+        fake_herdr = command_directory / "herdr"
+        fake_herdr.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, os, pathlib, sys\n"
+            "pathlib.Path(os.environ['HERDR_TEST_CAPTURE']).write_text(json.dumps(sys.argv), encoding='utf-8')\n",
+            encoding="utf-8",
+        )
+        fake_herdr.chmod(0o755)
+        runtime = self.root / "submitted-lead-runtime.json"
+        compiled = self.run_cli(
+            "compile-runtime", "--project-root", str(project), "--kind", "codex",
+            "--role", "lead", "--pane-id", "w8:pLead", "--herdr-program", str(fake_herdr),
+            "--socket-endpoint", str(self.root / "herdr.sock"), "--output", str(runtime),
+        )
+        self.assertEqual(compiled.returncode, 0, compiled.stderr)
+        payload = b"literal $(touch never) with Unicode: ca phe \xe2\x98\x95\n"
+        task = self.root / "submitted-task.txt"
+        task.write_bytes(payload)
+
+        completed = self.run_cli(
+            "submit-control-prompt", "--agent", "lead-01", "--project-root", str(project),
+            "--role", "lead", "--payload", str(task), "--runtime-context", str(runtime),
+            environment_overrides={
+                "PATH": str(command_directory) + os.pathsep + os.environ.get("PATH", ""),
+                "HERDR_TEST_CAPTURE": str(capture),
+            },
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        argv = json.loads(capture.read_text(encoding="utf-8"))
+        self.assertEqual(argv[1:4], ["agent", "prompt", "lead-01"])
+        self.assertTrue(argv[4].encode().endswith(payload))
+        self.assertIn("HERDR_PANE_ID=w8:pLead", argv[4])
+        self.assertIn("HERDR_ORCHESTRATOR_PANE_ID=w8:pLead", argv[4])
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["command"], "submit-control-prompt")
+        self.assertEqual(result["payload_sha256"], hashlib.sha256(payload).hexdigest())
+        self.assertNotIn("prompt_file", result)
+
+    def test_submit_assignment_composes_and_submits_without_prompt_artifact(self) -> None:
+        project = self.project("submitted-assignment")
+        assignment = self.peer_assignment(project)
+        command_directory = self.root / "assignment-submit-commands"
+        command_directory.mkdir()
+        capture = self.root / "assignment-submit-argv.json"
+        fake_herdr = command_directory / "herdr"
+        fake_herdr.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, os, pathlib, sys\n"
+            "pathlib.Path(os.environ['HERDR_TEST_CAPTURE']).write_text(json.dumps(sys.argv), encoding='utf-8')\n",
+            encoding="utf-8",
+        )
+        fake_herdr.chmod(0o755)
+        runtime = self.root / "submitted-peer-runtime.json"
+        compiled = self.run_cli(
+            "compile-runtime", "--project-root", str(project), "--kind", "codex",
+            "--role", "peer", "--pane-id", "w8:pPeer", "--herdr-program", str(fake_herdr),
+            "--socket-endpoint", str(self.root / "herdr.sock"), "--output", str(runtime),
+        )
+        self.assertEqual(compiled.returncode, 0, compiled.stderr)
+        constraints = self.root / "peer-constraints.md"
+        constraints.write_text("Only the bounded owned scope applies.\n", encoding="utf-8")
+
+        completed = self.run_cli(
+            "submit-assignment", "--agent", "csv-engineer", "--assignment", str(assignment),
+            "--role-profile", str(SKILL_ROOT / "references/roles/peer.md"),
+            "--applicable-protocol", str(constraints), "--runtime-context", str(runtime),
+            environment_overrides={
+                "PATH": str(command_directory) + os.pathsep + os.environ.get("PATH", ""),
+                "HERDR_TEST_CAPTURE": str(capture),
+            },
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        argv = json.loads(capture.read_text(encoding="utf-8"))
+        self.assertEqual(argv[1:4], ["agent", "prompt", "csv-engineer"])
+        self.assertIn('"assignment_id": "lead-01:csv-engineer"', argv[4])
+        self.assertIn("HERDR_PANE_ID=w8:pPeer", argv[4])
+        self.assertIn("HERDR_ORCHESTRATOR_ASSIGNMENT_ID=lead-01:csv-engineer", argv[4])
+        self.assertIn("HERDR_ORCHESTRATOR_OWNER=csv-engineer", argv[4])
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["command"], "submit-assignment")
+        self.assertEqual(result["assignment_id"], "lead-01:csv-engineer")
+        self.assertFalse((project / ".orchestration/prompts").exists())
 
     def test_render_supervisor_prompt_machine_binds_attachment_and_protocol_scope(self) -> None:
         project = self.project("supervisor-prompt")

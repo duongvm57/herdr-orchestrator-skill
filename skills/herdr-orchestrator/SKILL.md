@@ -23,7 +23,8 @@ Read one selected route completely; compose only when it says so.
 
 - **Setup/update:** read `references/launcher/setup.md`,
   `references/launcher/workspace-protocol-authoring.md`,
-  `assets/config.toml`, and `assets/workspace-protocol-template.md`.
+  `assets/config.toml`, `assets/workspace-protocol-template.md`, and
+  `assets/orchestration.gitignore`.
 - **Task launch:** read `references/launcher/preflight.md`, then
   `references/launcher/task-launch.md`.
 - **Supervisor attachment:** read `references/launcher/preflight.md`, then
@@ -44,11 +45,11 @@ Doctor rejects a shadowing global copy only during setup/update, never per task.
 The official skill owns
 generic pane, agent start, prompt, wait, read, IDs, and focus-preservation
 mechanics. Do not reproduce generic recipes in this skill or call a repository
-runtime wrapper. Pure helper compilers may validate and render documents or
-argv without executing lifecycle operations. Its only state-changing Herdr
-exceptions are `start-peer` (one validated recipe) and `submit-prompt` (one
-already-rendered prompt). Neither owns pane, wait, read, state, identity, or
-lifecycle policy.
+runtime wrapper. Helpers validate/render documents or argv without lifecycle
+operations. State-changing exceptions are recipe-bound `start-peer`, in-memory
+`submit-control-prompt` and `submit-assignment`, and compatibility
+`submit-prompt`. None owns pane, wait, read, state, identity, or lifecycle
+policy.
 
 This skill owns SLP policy only: Role Profile, Workspace Protocol, Assignment,
 authority, ownership, candidate, handback, and acceptance. Use configured

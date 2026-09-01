@@ -42,6 +42,8 @@ class RuntimeBinding:
     helper: Path
     project_root: Path
     herdr_pane_id: str
+    assignment_id: str | None = None
+    owner: str | None = None
 
 
 @dataclass(frozen=True)

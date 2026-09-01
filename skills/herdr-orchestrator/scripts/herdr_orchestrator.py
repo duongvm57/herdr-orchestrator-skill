@@ -284,8 +284,8 @@ def _parse_project_config(data: bytes, label: str) -> dict[str, Any]:
     if config["version"] != PROJECT_CONFIG_VERSION:
         raise HelperError(f"project config version must be {PROJECT_CONFIG_VERSION}")
     roles = config["roles"]
-    if not isinstance(roles, dict) or set(roles) - {"lead", "supervisor"} or "lead" not in roles:
-        raise HelperError("roles must contain lead and optional supervisor only")
+    if not isinstance(roles, dict) or set(roles) != {"lead", "supervisor"}:
+        raise HelperError("roles must contain exactly lead and supervisor")
     peers = config["peer_recipes"]
     if not isinstance(peers, dict) or not peers:
         raise HelperError("peer_recipes must be a nonempty TOML table")
@@ -307,9 +307,7 @@ def _parse_project_config(data: bytes, label: str) -> dict[str, Any]:
         if default_recipe not in allowed_recipes or any(recipe not in validated_peers for recipe in allowed_recipes):
             raise HelperError(f"routing.{disposition} must use configured peer_recipes and include its default_recipe")
         validated_routes[disposition] = {"default_recipe": default_recipe, "allowed_recipes": list(allowed_recipes)}
-    result = {"version": PROJECT_CONFIG_VERSION, "assessment_after_cycles": threshold, "roles": {"lead": _validate_recipe(roles["lead"], "roles.lead", False, control_plane=True)}, "peer_recipes": validated_peers, "routing": validated_routes}
-    if "supervisor" in roles:
-        result["roles"]["supervisor"] = _validate_recipe(roles["supervisor"], "roles.supervisor", False, control_plane=True)
+    result = {"version": PROJECT_CONFIG_VERSION, "assessment_after_cycles": threshold, "roles": {"lead": _validate_recipe(roles["lead"], "roles.lead", False, control_plane=True), "supervisor": _validate_recipe(roles["supervisor"], "roles.supervisor", False, control_plane=True)}, "peer_recipes": validated_peers, "routing": validated_routes}
     return result
 
 
@@ -1432,18 +1430,18 @@ def command_start_peer(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
-def command_submit_prompt(args: argparse.Namespace) -> dict[str, Any]:
-    """Submit one already-composed prompt file without shell interpolation.
-
-    This is deliberately a one-shot delivery boundary, not a lifecycle or wait
-    abstraction.  Native Herdr remains responsible for all later observation.
-    """
-    project_root = _require_directory(Path(args.project_root), "project root")
-    _require_capability(frozenset({"launcher", "lead", "supervisor"}), project_root=project_root)
-    name = _runtime_handle(args.agent, "agent")
-    prompt_path = _require_file(Path(args.prompt_file), "prompt file")
-    prompt_data = _read(prompt_path, "prompt file")
-    prompt = _safe_text(prompt_data, "prompt file")
+def _submit_prompt_data(
+    *,
+    agent: str,
+    project_root: Path,
+    prompt_data: bytes,
+    allowed_roles: frozenset[str],
+) -> dict[str, Any]:
+    """Submit validated bytes once without owning later lifecycle state."""
+    root = _require_directory(project_root, "project root")
+    _require_capability(allowed_roles, project_root=root)
+    name = _runtime_handle(agent, "agent")
+    prompt = _safe_text(prompt_data, "prompt")
     herdr_argv = ["herdr", "agent", "prompt", name, prompt]
     try:
         completed = subprocess.run(herdr_argv, shell=False, check=False, capture_output=True)
@@ -1458,16 +1456,34 @@ def command_submit_prompt(args: argparse.Namespace) -> dict[str, Any]:
         )
     return {
         "schema_version": SCHEMA_VERSION,
-        "command": "submit-prompt",
-        "project_root": str(project_root),
+        "project_root": str(root),
         "agent": name,
-        "prompt_file": str(prompt_path),
         "prompt_sha256": _sha256(prompt_data),
         "prompt_bytes": len(prompt_data),
-        "herdr_argv": herdr_argv[:-1] + ["<prompt-file-content>"],
+        "herdr_argv": herdr_argv[:-1] + ["<prompt-content>"],
         "submission": "accepted-by-native-herdr",
         "stdout": _safe_diagnostic_text(completed.stdout, "Herdr prompt stdout"),
         "stderr": _safe_diagnostic_text(completed.stderr, "Herdr prompt stderr"),
+    }
+
+
+def command_submit_prompt(args: argparse.Namespace) -> dict[str, Any]:
+    """Submit one already-composed prompt file without shell interpolation.
+
+    This compatibility command remains a one-shot delivery boundary. New
+    control-role and Peer paths compose and submit in memory instead.
+    """
+    prompt_path = _require_file(Path(args.prompt_file), "prompt file")
+    result = _submit_prompt_data(
+        agent=args.agent,
+        project_root=Path(args.project_root),
+        prompt_data=_read(prompt_path, "prompt file"),
+        allowed_roles=frozenset({"launcher", "lead", "supervisor"}),
+    )
+    return {
+        **result,
+        "command": "submit-prompt",
+        "prompt_file": str(prompt_path),
     }
 
 
@@ -1747,8 +1763,8 @@ def command_prepare_control_role_launch(args: argparse.Namespace) -> dict[str, A
     }
 
 
-def command_render_control_prompt(args: argparse.Namespace) -> dict[str, Any]:
-    """Render a Lead or Supervisor prompt while preserving its Human payload bytes."""
+def _compose_control_prompt(args: argparse.Namespace) -> tuple[bytes, dict[str, Any]]:
+    """Compose a Lead or Supervisor prompt while preserving Human payload bytes."""
     root = _require_directory(Path(args.project_root), "project root")
     validated = command_validate_project(
         argparse.Namespace(project_root=str(root), config=None, protocol=None)
@@ -1836,21 +1852,47 @@ def command_render_control_prompt(args: argparse.Namespace) -> dict[str, Any]:
         + f"SHA-256: `{_sha256(payload)}`; bytes: `{len(payload)}`\n\n"
     ).encode("utf-8")
     rendered = prefix + payload
-    output = _check_output(Path(args.output), args.replace)
-    _atomic_write(output, rendered, args.replace)
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "command": "render-control-prompt",
+    return rendered, {
         "role": role,
         "harness": adapter.kind,
-        "path": str(output),
         "sha256": _sha256(rendered),
         "payload_sha256": _sha256(payload),
         "payload_bytes": len(payload),
     }
 
 
-def command_render_assignment(args: argparse.Namespace) -> dict[str, Any]:
+def command_render_control_prompt(args: argparse.Namespace) -> dict[str, Any]:
+    """Render a control prompt to a compatibility artifact."""
+    rendered, metadata = _compose_control_prompt(args)
+    output = _check_output(Path(args.output), args.replace)
+    _atomic_write(output, rendered, args.replace)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "command": "render-control-prompt",
+        **metadata,
+        "path": str(output),
+    }
+
+
+def command_submit_control_prompt(args: argparse.Namespace) -> dict[str, Any]:
+    """Compose and submit one control-role prompt without a transport file."""
+    rendered, metadata = _compose_control_prompt(args)
+    submitted = _submit_prompt_data(
+        agent=args.agent,
+        project_root=Path(args.project_root),
+        prompt_data=rendered,
+        allowed_roles=frozenset({"launcher", "lead", "supervisor"}),
+    )
+    return {
+        **submitted,
+        **metadata,
+        "command": "submit-control-prompt",
+    }
+
+
+def _compose_assignment_prompt(
+    args: argparse.Namespace,
+) -> tuple[Assignment, str, bytes]:
     assignment = _assignment_from_document(_json_document(Path(args.assignment), "assignment"))
     context, binding, adapter = _runtime_context(Path(args.runtime_context))
     if binding.role != "peer" or str(binding.project_root) != assignment.project_root:
@@ -1863,12 +1905,31 @@ def command_render_assignment(args: argparse.Namespace) -> dict[str, Any]:
     route = _route_for_assignment(config, assignment)
     if adapter.kind != route["recipe"]["kind"]:
         raise HelperError("Peer runtime context harness must match the Assignment recipe")
+    prompt_binding = RuntimeBinding(
+        role=binding.role,
+        herdr_executable=binding.herdr_executable,
+        herdr_socket_endpoint=binding.herdr_socket_endpoint,
+        helper=binding.helper,
+        project_root=binding.project_root,
+        herdr_pane_id=binding.herdr_pane_id,
+        assignment_id=assignment.assignment_id,
+        owner=assignment.owner,
+    )
+    try:
+        runtime_projection = adapter.render_runtime_binding(prompt_binding)
+    except HarnessError as exc:
+        raise HelperError(str(exc)) from exc
     profile = _safe_text(_read(Path(args.role_profile), "role profile"), "role profile")
     protocol = _safe_text(_read(Path(args.applicable_protocol), "applicable protocol projection"), "applicable protocol projection")
     headings = [int(match.group(1)) for match in re.finditer(r"(?m)^##\s+(\d+)\.", protocol)]
     if headings == list(range(1, 13)):
         raise HelperError("Peer applicable protocol projection must not be the full Workspace Protocol")
-    rendered = f"# Role Profile\n\n{profile}\n\n# Applicable Protocol Constraints\n\n{protocol}\n\n# Assignment\n\n```json\n{json.dumps(_assignment_document(assignment), ensure_ascii=False, indent=2)}\n```\n\n# Adapter Runtime Context\n\n{context['runtime_projection']}\nReturn a structured handback with this exact assignment_id. Its JSON object has exactly assignment_id, outcome, evidence, impact, and need; every value is a non-empty string; prompt delivery and Herdr lifecycle are not assignment completion.\n"
+    rendered = f"# Role Profile\n\n{profile}\n\n# Applicable Protocol Constraints\n\n{protocol}\n\n# Assignment\n\n```json\n{json.dumps(_assignment_document(assignment), ensure_ascii=False, indent=2)}\n```\n\n# Adapter Runtime Context\n\n{runtime_projection}\nReturn a structured handback with this exact assignment_id. Its JSON object has exactly assignment_id, outcome, evidence, impact, and need; every value is a non-empty string; prompt delivery and Herdr lifecycle are not assignment completion.\n"
+    return assignment, adapter.kind, rendered.encode()
+
+
+def command_render_assignment(args: argparse.Namespace) -> dict[str, Any]:
+    assignment, harness, rendered = _compose_assignment_prompt(args)
     output = Path(args.output).expanduser()
     expected_parent = Path(assignment.project_root) / ".orchestration" / "prompts"
     if not output.is_absolute():
@@ -1876,8 +1937,26 @@ def command_render_assignment(args: argparse.Namespace) -> dict[str, Any]:
     if output.parent != expected_parent:
         raise HelperError("rendered Assignment output must be directly inside <project_root>/.orchestration/prompts")
     expected_parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    _atomic_write(output, rendered.encode(), args.replace)
-    return {"schema_version": ASSIGNMENT_SCHEMA_VERSION, "command": "render-assignment", "assignment_id": assignment.assignment_id, "harness": adapter.kind, "path": str(Path(args.output).resolve()), "sha256": _sha256(rendered.encode())}
+    _atomic_write(output, rendered, args.replace)
+    return {"schema_version": ASSIGNMENT_SCHEMA_VERSION, "command": "render-assignment", "assignment_id": assignment.assignment_id, "harness": harness, "path": str(Path(args.output).resolve()), "sha256": _sha256(rendered)}
+
+
+def command_submit_assignment(args: argparse.Namespace) -> dict[str, Any]:
+    """Validate, compose, and submit one Assignment without a prompt artifact."""
+    assignment, harness, rendered = _compose_assignment_prompt(args)
+    submitted = _submit_prompt_data(
+        agent=args.agent,
+        project_root=Path(assignment.project_root),
+        prompt_data=rendered,
+        allowed_roles=frozenset({"lead"}),
+    )
+    return {
+        **submitted,
+        "schema_version": ASSIGNMENT_SCHEMA_VERSION,
+        "command": "submit-assignment",
+        "assignment_id": assignment.assignment_id,
+        "harness": harness,
+    }
 
 
 def _scopes_overlap(left: str, right: str) -> bool:
@@ -2830,9 +2909,27 @@ def build_parser() -> argparse.ArgumentParser:
     control_prompt.add_argument("--output", required=True)
     control_prompt.add_argument("--replace", action="store_true")
     control_prompt.set_defaults(handler=command_render_control_prompt)
+    submit_control = commands.add_parser("submit-control-prompt")
+    submit_control.add_argument("--agent", required=True)
+    submit_control.add_argument("--project-root", required=True)
+    submit_control.add_argument("--role", choices=("lead", "supervisor"), required=True)
+    submit_control.add_argument("--payload", required=True)
+    submit_control.add_argument("--runtime-context", required=True)
+    submit_control.add_argument("--cost-approval")
+    submit_control.add_argument("--attached-lead-name")
+    submit_control.add_argument("--attached-lead-pane")
+    submit_control.add_argument("--include-protocol", action="store_true")
+    submit_control.set_defaults(handler=command_submit_control_prompt)
     render = commands.add_parser("render-assignment")
     render.add_argument("--assignment", required=True); render.add_argument("--role-profile", required=True); render.add_argument("--applicable-protocol", required=True); render.add_argument("--runtime-context", required=True); render.add_argument("--output", required=True); render.add_argument("--replace", action="store_true")
     render.set_defaults(handler=command_render_assignment)
+    submit_assignment = commands.add_parser("submit-assignment")
+    submit_assignment.add_argument("--agent", required=True)
+    submit_assignment.add_argument("--assignment", required=True)
+    submit_assignment.add_argument("--role-profile", required=True)
+    submit_assignment.add_argument("--applicable-protocol", required=True)
+    submit_assignment.add_argument("--runtime-context", required=True)
+    submit_assignment.set_defaults(handler=command_submit_assignment)
     delegation = commands.add_parser("validate-delegation")
     delegation.add_argument("--assignment", action="append", required=True)
     delegation.add_argument("--worktree-list")

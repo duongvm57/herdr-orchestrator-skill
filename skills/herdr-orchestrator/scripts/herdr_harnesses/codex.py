@@ -106,13 +106,22 @@ def validate_role_environment(args: list[str], location: str) -> None:
 
 def render_runtime_binding(binding: RuntimeBinding) -> str:
     """Render literal native commands because Codex subprocesses drop ambient role env."""
+    if (binding.assignment_id is None) != (binding.owner is None):
+        raise HarnessError("Codex runtime binding requires Assignment id and owner together")
     environment = (
         ("HERDR_ENV", "1"),
         ("HERDR_SOCKET_PATH", str(binding.herdr_socket_endpoint)),
+        ("HERDR_PANE_ID", binding.herdr_pane_id),
         ("HERDR_ORCHESTRATOR_PANE_ID", binding.herdr_pane_id),
         ("HERDR_ORCHESTRATOR_PROJECT_ROOT", str(binding.project_root)),
         ("HERDR_ORCHESTRATOR_HELPER", str(binding.helper)),
         ("HERDR_ORCHESTRATOR_ROLE", binding.role),
+        *(
+            (("HERDR_ORCHESTRATOR_ASSIGNMENT_ID", binding.assignment_id),
+             ("HERDR_ORCHESTRATOR_OWNER", binding.owner))
+            if binding.assignment_id is not None and binding.owner is not None
+            else ()
+        ),
     )
     prefix = "env " + " ".join(
         f"{key}={shlex.quote(value)}" for key, value in environment

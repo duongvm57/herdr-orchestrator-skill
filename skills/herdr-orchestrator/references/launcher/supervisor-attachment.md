@@ -1,15 +1,16 @@
 # Supervisor attachment
 
-Read `references/launcher/preflight.md` completely first. Run this branch only
-when the Human explicitly asks for a Supervisor. This is a Human/Launcher
-governance attachment, not Lead or Peer work.
+Enter this route either from default task launch after its preflight, or from an
+explicit Human request after reading `references/launcher/preflight.md`
+completely. This is a Human/Launcher governance attachment, not Lead or Peer
+work.
 
 Continuous supervision additionally requires installed Herdr's native
 event-to-prompt wake capability with an explicit Lead–Supervisor attachment and
 opaque task/Assignment correlation. This repository does not emulate it with a
 wrapper, polling loop, or inferred pane parentage. If that native capability is
-absent, return `DEPENDENCY_REQUEST`; offer one-shot on-demand observation only
-when the Human explicitly chooses it, and never label it continuous.
+absent, return `DEPENDENCY_REQUEST` for a requested continuous mode; the default
+remains one bounded observation and is never labelled continuous.
 This repository has no native-wake proof bundled with it: do not enable or
 dogfood continuous supervision until the matching Herdr release supplies and
 live-proves that capability.
@@ -38,21 +39,36 @@ herdr pane split --pane <attached-lead-pane-id> --direction <right-or-down> --cw
 Compile the configured launch manifest with `prepare-control-role-launch`, then
 execute its unmodified `herdr_argv`. Compile the returned Supervisor pane with
 `compile-runtime` as specified in `references/launcher/runtime-binding.md`.
-Write the Human mandate unchanged to a temporary UTF-8 file and render it:
+Use the task's unique run scratch. For a default attachment, write this canonical
+mandate unchanged to `<run-scratch>/mandate.txt`:
 
 ```text
-<canonical-helper> render-control-prompt --project-root <root> --role supervisor \
-  --payload <mandate-file> --runtime-context <supervisor-runtime.json> \
-  --attached-lead-name <lead-name> --attached-lead-pane <lead-pane> \
-  --output <prompt-file>
+Observe the exact attached Lead for one bounded settled turn. Then inspect its
+transcript and relevant Peer lifecycle evidence. Report launcher, delegation,
+review, handback, and acceptance friction with exact evidence. Do not poll,
+write project files, direct roles, accept work, or send prompts.
 ```
 
-Add `--include-protocol` only for a protocol audit/update proposal. The renderer
-binds the exact Lead attachment and governance-only authority. Submit through
-`<adapter-runtime-bound-helper> submit-prompt`; no mandate text enters a shell.
+For an explicit Human attachment, write the Human mandate unchanged instead.
+Compose and submit it in one call:
+
+```text
+<adapter-runtime-bound-helper> submit-control-prompt --agent <supervisor-name> \
+  --project-root <root> --role supervisor --payload <run-scratch>/mandate.txt \
+  --runtime-context <run-scratch>/supervisor-runtime.json \
+  --attached-lead-name <lead-name> --attached-lead-pane <lead-pane>
+```
+
+Add `--include-protocol` only for a protocol audit/update proposal. The command
+binds the exact Lead attachment and governance-only authority, submits through
+native Herdr without a prompt transport file, and never places mandate text in
+a shell.
 
 Keep the Supervisor in the background unless the Human explicitly requests
-focus. For an installed native continuous attachment, its bridge filters,
+focus. The default mandate performs one native wait for the attached Lead's
+current turn to settle, one bounded inspection, and one report; it does not poll
+or promise whole-task coverage. For an installed native continuous attachment,
+its bridge filters,
 correlates, and prompts only on relevant status/exit/blocked/settled transitions
 with transition deduplication; it does not reason, route Assignments, accept,
 or detect silence. While active, it may use native `agent wait`, `agent read`, and inspect

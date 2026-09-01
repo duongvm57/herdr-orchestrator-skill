@@ -2,7 +2,7 @@
   "encoding": "o200k_base",
   "routes": {
     "skill": {"files": ["skills/herdr-orchestrator/SKILL.md"], "hard_limit": 700, "baseline": 600},
-    "setup_launcher": {"files": ["skills/herdr-orchestrator/SKILL.md", "skills/herdr-orchestrator/references/launcher/setup.md", "skills/herdr-orchestrator/references/launcher/workspace-protocol-authoring.md", "skills/herdr-orchestrator/assets/config.toml", "skills/herdr-orchestrator/assets/workspace-protocol-template.md"], "hard_limit": 3500, "baseline": 3300},
+    "setup_launcher": {"files": ["skills/herdr-orchestrator/SKILL.md", "skills/herdr-orchestrator/references/launcher/setup.md", "skills/herdr-orchestrator/references/launcher/workspace-protocol-authoring.md", "skills/herdr-orchestrator/assets/config.toml", "skills/herdr-orchestrator/assets/workspace-protocol-template.md", "skills/herdr-orchestrator/assets/orchestration.gitignore"], "hard_limit": 3500, "baseline": 3300},
     "task_launcher": {"files": ["skills/herdr-orchestrator/SKILL.md", "skills/herdr-orchestrator/references/launcher/preflight.md", "skills/herdr-orchestrator/references/launcher/task-launch.md"], "hard_limit": 4500, "baseline": 2500},
     "supervisor_attachment": {"files": ["skills/herdr-orchestrator/SKILL.md", "skills/herdr-orchestrator/references/launcher/preflight.md", "skills/herdr-orchestrator/references/launcher/supervisor-attachment.md"], "hard_limit": 3500, "baseline": 2200},
     "lead_profile": {"files": ["skills/herdr-orchestrator/references/roles/lead.md"], "hard_limit": 900, "baseline": 830},

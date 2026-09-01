@@ -43,20 +43,24 @@ class InstructionArchitectureTests(unittest.TestCase):
 
         self.assertIn("HERDR_ORCHESTRATOR_ROLE=lead", launch)
         self.assertIn("--no-focus", launch)
-        self.assertIn("submit-prompt --agent <unique-lead-name> --prompt-file <prompt-file>", launch)
+        self.assertIn("submit-control-prompt --agent <unique-lead-name>", launch)
         self.assertIn("--project-root <root>", launch)
         self.assertIn("prepare-control-role-launch", launch)
-        self.assertIn("render-control-prompt", launch)
+        self.assertNotIn("render-control-prompt", launch)
         self.assertIn("verbatim Human decision", launch)
         self.assertIn("payload hash", launch)
-        self.assertIn("<adapter-runtime-bound-helper> submit-prompt", launch)
+        self.assertIn("<adapter-runtime-bound-helper> submit-control-prompt", launch)
         self.assertIn("direct subprocess argv", launch)
-        self.assertIn("preserve the task bytes", launch)
+        self.assertIn("exact bytes", launch)
+        self.assertIn("unique run-scoped scratch directory", launch)
+        self.assertIn("no rendered prompt transport file", launch)
         self.assertIn("agent_not_ready", launch)
         self.assertIn("surface the exact native question to the Human", launch)
         self.assertIn("continue with that same Lead and pane", launch)
         self.assertIn("do not blind-retry", launch)
         self.assertIn("never change pre-existing topology", launch)
+        self.assertIn("Every task launch requires this attachment", launch)
+        self.assertIn("failed Supervisor launch is a `DEPENDENCY_REQUEST`", launch)
 
     def test_launcher_creates_a_task_workspace_and_supervisor_splits_the_attached_lead(self) -> None:
         launch = read("references/launcher/task-launch.md")
@@ -72,6 +76,9 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertNotIn("herdr pane current --current", supervisor)
         self.assertNotIn("herdr pane split --current", supervisor)
         self.assertNotIn("HERDR_PANE_ID", supervisor)
+        self.assertIn("default task launch", supervisor)
+        self.assertIn("one native wait", supervisor)
+        self.assertIn("it does not poll", supervisor)
 
     def test_setup_uses_current_validation_and_approval_policy_boundary(self) -> None:
         setup = read("references/launcher/setup.md")
@@ -87,8 +94,14 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("committed files", setup)
         self.assertIn("global `herdr` skill", setup)
         self.assertIn("No install/check enters task launch", setup)
+        self.assertIn("assets/orchestration.gitignore", setup)
+        self.assertIn("active-flow artifacts remain readable", setup)
+        ignore = read("assets/orchestration.gitignore")
+        for generated in ("/candidates/", "/prompts/", "/current-candidate.json", "/*-assignment.json", "/*-handback.json"):
+            self.assertIn(generated, ignore)
         self.assertNotIn("shell_environment_policy", setup)
         self.assertIn("Recreate the session", setup)
+        self.assertIn("one `[roles.lead]` and one `[roles.supervisor]`", setup)
 
     def test_task_preflight_does_not_repeat_setup_doctor_or_native_discovery(self) -> None:
         preflight = read("references/launcher/preflight.md")
@@ -132,7 +145,8 @@ class InstructionArchitectureTests(unittest.TestCase):
 
         self.assertIn("return `DEPENDENCY_REQUEST`", attachment)
         self.assertIn("no native-wake proof bundled", attachment)
-        self.assertIn("On-demand Supervisor and topology dogfood", scenarios)
+        self.assertIn("Bounded Supervisor and topology dogfood", scenarios)
+        self.assertIn("Every task launches a bounded Human/Launcher-attached Supervisor", scenarios)
         self.assertIn("continuous supervision remains a DEPENDENCY_REQUEST", scenarios)
 
     def test_lead_wires_assignment_and_bounded_protocol_context(self) -> None:
@@ -141,7 +155,7 @@ class InstructionArchitectureTests(unittest.TestCase):
         supervisor = read("references/roles/supervisor.md")
         lead_words = " ".join(lead.split())
 
-        self.assertIn("construct, validate, and render the canonical Assignment", lead)
+        self.assertIn("construct, validate, and submit the canonical Assignment", lead)
         self.assertIn("Do not parse prose back into an Assignment", lead_words)
         self.assertIn("bounded protocol constraints", lifecycle)
         self.assertIn("--applicable-protocol <bounded-constraints.md>", lifecycle)
@@ -158,7 +172,9 @@ class InstructionArchitectureTests(unittest.TestCase):
         for managed in ("HERDR_ENV", "HERDR_SOCKET_PATH", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID"):
             self.assertIn(managed, lifecycle)
         self.assertIn("not a separate runtime role", lifecycle)
-        self.assertIn("Send the rendered Assignment prompt once", lifecycle)
+        peer_words = " ".join(read("references/roles/peer.md").split())
+        self.assertIn("load and use `ocr-peer-reviewer` when available before inspecting candidate files", peer_words)
+        self.assertIn("Submit the Assignment once", lifecycle)
         self.assertIn("native `agent wait`\nwithout a short default timeout", lifecycle)
         self.assertIn("Do not repeat that\nwait or send another prompt until new state or evidence appears", lifecycle)
         self.assertIn("one bounded native `agent get` or `agent read` observation", lifecycle)
@@ -220,7 +236,7 @@ class InstructionArchitectureTests(unittest.TestCase):
         lead = read("references/roles/lead.md")
         candidate = read("references/lead/candidate-and-verdict.md")
 
-        self.assertIn("render-control-prompt", launch)
+        self.assertIn("submit-control-prompt", launch)
         self.assertIn("do not issue a project acceptance or Human-facing final\nverdict", lead)
         self.assertIn("exact stable candidate identity", lead)
         self.assertIn("actual diff/artifact", lead)
@@ -261,8 +277,8 @@ class InstructionArchitectureTests(unittest.TestCase):
         guarded = {
             "lead profile": ("start-peer", "freeze-candidate", "validate-acceptance"),
             "candidate card": ("freeze-candidate", "validate-acceptance"),
-            "peer lifecycle": ("start-peer",),
-            "task launch": ("submit-prompt", "validate-acceptance"),
+            "peer lifecycle": ("start-peer", "submit-assignment"),
+            "task launch": ("submit-control-prompt", "validate-acceptance"),
             "OCR Reviewer": ("materialize-candidate",),
         }
         for name, commands in guarded.items():
@@ -286,8 +302,8 @@ class InstructionArchitectureTests(unittest.TestCase):
         self.assertIn("HERDR_ORCHESTRATOR_HELPER=<canonical-helper-absolute-path>", launch)
         self.assertIn("canonical helper path in the workspace environment", launch)
         self.assertIn("Never guess consumer-root `scripts/`", lead)
-        self.assertIn("render-control-prompt", supervisor)
-        self.assertIn("<adapter-runtime-bound-helper> submit-prompt", supervisor)
+        self.assertIn("submit-control-prompt", supervisor)
+        self.assertIn("<adapter-runtime-bound-helper> submit-control-prompt", supervisor)
         self.assertIn("--project-root <root>", supervisor)
         self.assertIn("no native-wake proof bundled", supervisor)
         self.assertIn("do not depend on a final result from `agent prompt\n--wait`", launch)
