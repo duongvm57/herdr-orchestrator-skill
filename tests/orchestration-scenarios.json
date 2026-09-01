@@ -60,16 +60,16 @@
     },
     {
       "slug": "live-supervisor-and-topology",
-      "title": "On-demand Supervisor and topology dogfood",
+      "title": "Bounded Supervisor and topology dogfood",
       "verification": "live/dogfood",
       "invariants": [
-        {"id": "supervisor-routing", "spec": "Human-attached on-demand Supervisor routes bounded evidence-backed attention to its explicitly attached Lead without Lead or Peer wake responsibility; continuous supervision remains a DEPENDENCY_REQUEST without native proof."},
+        {"id": "supervisor-routing", "spec": "Every task launches a bounded Human/Launcher-attached Supervisor that observes its explicitly attached Lead without Lead or Peer wake responsibility; continuous supervision remains a DEPENDENCY_REQUEST without native proof."},
         {"id": "ownership-retention", "spec": "After intervening work and handbacks, an active Lead still rejects or reconciles overlapping write scope."},
         {"id": "approval-capability", "spec": "Approval-gated capability is tested under a compatible configured recipe policy before launch."},
         {"id": "decomposition", "spec": "A multi-scope request records coupling, dependency, and topology rationale, contrasting independent scopes with a tightly coupled bounded scope."}
       ],
       "sources": ["references/launcher/supervisor-attachment.md", "references/roles/supervisor.md", "references/lead/topology.md"],
-      "scenario": "Record governance attachment context, bounded on-demand Supervisor question, Lead response, topology rationale, ownership reconciliation, provider approval-policy behavior, and the DEPENDENCY_REQUEST for any continuous request; do not claim a wake bridge, router, plugin, or shared state service.",
+      "scenario": "Record the default governance attachment, bounded Supervisor observation, topology rationale, ownership reconciliation, provider approval-policy behavior, and the DEPENDENCY_REQUEST for any continuous request; do not claim a wake bridge, router, plugin, or shared state service.",
       "test_selectors": []
     }
     ,

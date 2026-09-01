@@ -38,6 +38,7 @@ class ProductionOperabilityTests(unittest.TestCase):
             "\n".join((
                 "version = 4", "assessment_after_cycles = 2", "",
                 "[roles.lead]", 'kind = "claude"', 'args = ["--model", "test"]', 'cost_class = "standard"', "",
+                "[roles.supervisor]", 'kind = "claude"', 'args = ["--model", "test"]', 'cost_class = "standard"', "",
                 "[peer_recipes.review]", 'description = "read-only review"', 'kind = "claude"', 'args = ["--model", "test"]', 'cost_class = "standard"', "",
                 "[routing.engineer]", 'default_recipe = "review"', 'allowed_recipes = ["review"]', "[routing.reviewer]", 'default_recipe = "review"', 'allowed_recipes = ["review"]', "[routing.architect]", 'default_recipe = "review"', 'allowed_recipes = ["review"]', "[routing.default]", 'default_recipe = "review"', 'allowed_recipes = ["review"]', "",
             )), encoding="utf-8"
@@ -77,6 +78,37 @@ class ProductionOperabilityTests(unittest.TestCase):
             env={**os.environ, "GIT_OBJECT_DIRECTORY": str(store), "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(git_dir / "objects")},
         )
         return completed.stdout.strip()
+
+    def test_orchestration_ignore_hides_active_flow_artifacts_only(self) -> None:
+        project = self.project("ignore-policy")
+        shutil.copyfile(
+            ROOT / "skills/herdr-orchestrator/assets/orchestration.gitignore",
+            project / ".orchestration/.gitignore",
+        )
+        self.git(project, "add", ".orchestration/.gitignore")
+        self.git(project, "commit", "--quiet", "-m", "install orchestration ignore")
+
+        generated = {
+            ".orchestration/candidates/candidate.diff": "diff\n",
+            ".orchestration/prompts/reviewer.md": "prompt\n",
+            ".orchestration/assignments/reviewer.json": "{}\n",
+            ".orchestration/handbacks/reviewer.json": "{}\n",
+            ".orchestration/constraints/reviewer.md": "constraints\n",
+            ".orchestration/current-candidate.json": "{}\n",
+            ".orchestration/current-acceptance.json": "{}\n",
+            ".orchestration/reviewer-assignment.json": "{}\n",
+            ".orchestration/reviewer-handback.json": "{}\n",
+            ".orchestration/reviewer-constraints.md": "constraints\n",
+        }
+        for relative, content in generated.items():
+            path = project / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+
+        self.assertEqual(self.git(project, "status", "--short"), "")
+        config = project / ".orchestration/herdr-orchestrator.toml"
+        config.write_text(config.read_text(encoding="utf-8") + "# changed\n", encoding="utf-8")
+        self.assertIn(".orchestration/herdr-orchestrator.toml", self.git(project, "status", "--short"))
 
     def acceptance_document(self, project: Path, candidate_document: dict[str, object], *, review: dict[str, object] | None = None) -> dict[str, object]:
         candidate = candidate_document["candidate"]

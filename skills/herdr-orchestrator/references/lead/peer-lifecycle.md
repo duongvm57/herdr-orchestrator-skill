@@ -1,7 +1,7 @@
 # Peer dispatch and results
 
 Use one bounded task with an exact configured Peer profile and only the
-applicable Workspace Protocol constraints. The task identifies the objective,
+applicable bounded protocol constraints. The task identifies the objective,
 owned and excluded scope, authority boundary, dependencies, verification, and
 the decision the result informs. Keep independent judgment neutral: supply
 facts and open questions without a preferred conclusion.
@@ -18,16 +18,16 @@ Choose the disposition independently from the profile:
 - **Other bounded Peer:** receives only the question, evidence boundary,
   exclusions, and decision it informs.
 
-Construct and validate the canonical Assignment first. Compile the pane launch,
-split it with native Herdr, then compile the returned Peer runtime and render
-the Assignment with its selected profile plus bounded protocol constraints.
-Submit through the recipe-bound helper to start and the official Herdr skill to
-prompt, wait, and read. Prompt submission and lifecycle settle are not Assignment completion: active Lead
+Construct the canonical Assignment first. Compile the pane launch, which
+validates its route before dispatch, split it with native Herdr, then compile
+the returned Peer runtime. Start through the recipe-bound helper; compose and
+submit the Assignment in memory through `submit-assignment`; use the official
+Herdr skill to wait and read. Prompt submission and lifecycle settle are not Assignment completion: active Lead
 collection inspects output and accepts only a structured handback with the
 matching `assignment_id`. The outcome is exactly `COMPLETE`, `REOPEN_REQUEST`,
 `DEPENDENCY_REQUEST`, or `BLOCKED`. A detached Lead is not automatically woken.
 
-Send the rendered Assignment prompt once, then use one native `agent wait`
+Submit the Assignment once, then use one native `agent wait`
 without a short default timeout. If a Human-selected bounded wait expires, do
 one bounded native `agent get` or `agent read` observation. Do not repeat that
 wait or send another prompt until new state or evidence appears. Only when the
@@ -45,14 +45,11 @@ A handback is a JSON object with exactly `assignment_id`, `outcome`,
 `evidence`, `impact`, and `need`; each is a non-empty string. Validate that
 object against its exact Assignment before routing it.
 
-Use the canonical helper for these contract boundaries and the one recipe-bound
-Peer start below; it has no generic Herdr lifecycle control:
+Use the canonical helper for the semantic validators below; it has no generic
+Herdr lifecycle control. Normal dispatch does not run standalone
+`validate-assignment` or create a rendered prompt file:
 
 ```text
-python3 "$HERDR_ORCHESTRATOR_HELPER" validate-assignment --assignment <assignment.json> --project-root <root>
-python3 "$HERDR_ORCHESTRATOR_HELPER" render-assignment --assignment <assignment.json> \
-  --role-profile <peer-profile.md> --applicable-protocol <bounded-constraints.md> \
-  --runtime-context <peer-runtime.json> --output <rendered-prompt.md>
 python3 "$HERDR_ORCHESTRATOR_HELPER" validate-delegation --assignment <active-peer.json> \
   --assignment <new-peer.json>
 python3 "$HERDR_ORCHESTRATOR_HELPER" validate-review --assignment <reviewer.json> \
@@ -63,8 +60,9 @@ python3 "$HERDR_ORCHESTRATOR_HELPER" validate-handback --assignment <peer.json> 
 
 Before pane creation, use `compile-runtime --target-role peer --assignment` from
 the Lead's exact pane. After split, compile a fresh `peer` context from the
-returned Peer pane. `render-assignment` validates and inserts that adapter
-context; no provider syntax is assembled in prose.
+returned Peer pane. `submit-assignment` validates and inserts that adapter
+context, submits exact bytes through native Herdr, and creates no prompt
+transport artifact; no provider syntax is assembled in prose.
 
 ## Herdr worktree allocation for concurrent writers
 
@@ -94,7 +92,7 @@ in the writer Assignment's `project_root`, and record the returned workspace ID
 plus canonical integration root in its `worktree`; use that checkout as `--cwd`.
 Compile the temporary pane launch from those facts, split the returned root
 pane, then compile the fresh Peer context from the resulting pane ID before
-rendering the prompt. This does not create a worktree
+submitting the Assignment. This does not create a worktree
 registry or a second lifecycle service.
 
 Before starting any concurrent writer, capture the authoritative native list
@@ -158,17 +156,21 @@ that pane may materialize the assigned candidate.
 
 Compile `<peer-runtime.json>` with `compile-runtime --role peer --pane-id
 <returned-peer-pane-id> --source-context <lead-runtime.json>` before calling
-`render-assignment`.
+`submit-assignment`.
 
-Start the named Peer through the recipe-bound helper, then pass the rendered
-prompt as one direct Herdr prompt value. The helper is the only canonical Peer
-start path: it validates the Assignment route and sends its configured native
-arguments unchanged after `--`; the Assignment supplies the name and only the
-target pane is a runtime launch input. Never freehand a `herdr agent start` command or add/translate a native
-argument, including for a Reviewer:
+Start the named Peer through the recipe-bound helper, then call
+`submit-assignment` once. `start-peer` is the only canonical Peer start path: it
+validates the Assignment route and sends its configured native arguments
+unchanged after `--`; the Assignment supplies the name and only the target pane
+is a runtime launch input. Never freehand a `herdr agent start` command or
+add/translate a native argument, including for a Reviewer:
 
 ```text
 <adapter-runtime-bound-helper> start-peer --assignment <assignment.json> --pane <pane-id>
+<adapter-runtime-bound-helper> submit-assignment --agent <peer-name> \
+  --assignment <assignment.json> \
+  --role-profile <peer-profile.md> --applicable-protocol <bounded-constraints.md> \
+  --runtime-context <peer-runtime.json>
 ```
 
 Keep the Assignment as the inspectable source; do not reconstruct it from

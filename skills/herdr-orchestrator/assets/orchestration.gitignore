@@ -1,0 +1,10 @@
+/candidates/
+/prompts/
+/assignments/
+/handbacks/
+/constraints/
+/current-candidate.json
+/current-acceptance.json
+/*-assignment.json
+/*-handback.json
+/*-constraints.md

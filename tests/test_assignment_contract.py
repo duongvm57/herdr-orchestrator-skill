@@ -78,6 +78,8 @@ class AssignmentContractTests(unittest.TestCase):
                     "assessment_after_cycles = 2",
                     "", "[roles.lead]", 'kind = "pi"',
                     'args = ["--model", "test/model"]', 'cost_class = "standard"',
+                    "", "[roles.supervisor]", 'kind = "pi"',
+                    'args = ["--model", "test/model"]', 'cost_class = "standard"',
                     "", "[peer_recipes.review]", 'description = "Review recipe"',
                     'kind = "pi"', 'args = ["--model", "test/model"]',
                     'cost_class = "standard"',

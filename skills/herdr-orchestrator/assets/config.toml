@@ -18,7 +18,7 @@ args = ["<lead-native-arg>"]
 cost_class = "standard"
 # approval_required = true
 
-# Optional; it never authorizes or auto-launches a Supervisor.
+# Required for the default bounded observer; it grants no project authority.
 [roles.supervisor]
 kind = "<supervisor-kind>"
 args = ["<supervisor-native-arg>"]
